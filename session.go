@@ -5,9 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
-
-	"github.com/mirasurf/lepton/soothe-client-go/config"
-	"github.com/mirasurf/lepton/soothe-client-go/protocol"
 )
 
 // BootstrapNewThreadSession runs the daemon ready handshake → new_thread →
@@ -18,14 +15,14 @@ func BootstrapNewThreadSession(
 	client *Client,
 	eventCh <-chan interface{},
 	workspace string,
-	cfg *config.Config,
+	cfg *Config,
 ) (string, error) {
 	if cfg == nil {
-		cfg = config.DefaultConfig()
+		cfg = DefaultConfig()
 	}
 
 	// Step 1: daemon_ready handshake
-	if err := client.SendMessage(ctx, protocol.BaseMessage{Type: "daemon_ready"}); err != nil {
+	if err := client.SendMessage(ctx, BaseMessage{Type: "daemon_ready"}); err != nil {
 		return "", fmt.Errorf("daemon_ready: %w", err)
 	}
 	if err := WaitDaemonReady(ctx, eventCh, cfg.DaemonReadyTimeout); err != nil {
@@ -33,7 +30,7 @@ func BootstrapNewThreadSession(
 	}
 
 	// Step 2: new_thread
-	if err := client.SendMessage(ctx, protocol.NewNewThreadMessage(workspace)); err != nil {
+	if err := client.SendMessage(ctx, NewNewThreadMessage(workspace)); err != nil {
 		return "", fmt.Errorf("new_thread: %w", err)
 	}
 	status, err := WaitThreadStatusWithID(ctx, eventCh, cfg.ThreadStatusTimeout)
@@ -46,7 +43,7 @@ func BootstrapNewThreadSession(
 	}
 
 	// Step 3: subscribe_thread
-	if err := client.SendMessage(ctx, protocol.NewSubscribeThreadMessage(tid, cfg.VerbosityLevel)); err != nil {
+	if err := client.SendMessage(ctx, NewSubscribeThreadMessage(tid, cfg.VerbosityLevel)); err != nil {
 		return "", fmt.Errorf("subscribe_thread: %w", err)
 	}
 	if err := WaitSubscriptionConfirmed(ctx, eventCh, tid, cfg.VerbosityLevel, cfg.SubscriptionTimeout); err != nil {
@@ -64,14 +61,14 @@ func BootstrapResumeThreadSession(
 	eventCh <-chan interface{},
 	threadID string,
 	workspace string,
-	cfg *config.Config,
+	cfg *Config,
 ) (string, error) {
 	if cfg == nil {
-		cfg = config.DefaultConfig()
+		cfg = DefaultConfig()
 	}
 
 	// Step 1: daemon_ready handshake
-	if err := client.SendMessage(ctx, protocol.BaseMessage{Type: "daemon_ready"}); err != nil {
+	if err := client.SendMessage(ctx, BaseMessage{Type: "daemon_ready"}); err != nil {
 		return "", fmt.Errorf("daemon_ready: %w", err)
 	}
 	if err := WaitDaemonReady(ctx, eventCh, cfg.DaemonReadyTimeout); err != nil {
@@ -79,7 +76,7 @@ func BootstrapResumeThreadSession(
 	}
 
 	// Step 2: resume_thread
-	if err := client.SendMessage(ctx, protocol.NewResumeThreadMessage(threadID, workspace)); err != nil {
+	if err := client.SendMessage(ctx, NewResumeThreadMessage(threadID, workspace)); err != nil {
 		return "", fmt.Errorf("resume_thread: %w", err)
 	}
 	status, err := WaitThreadStatusWithID(ctx, eventCh, cfg.ThreadStatusTimeout)
@@ -92,7 +89,7 @@ func BootstrapResumeThreadSession(
 	}
 
 	// Step 3: subscribe_thread
-	if err := client.SendMessage(ctx, protocol.NewSubscribeThreadMessage(tid, cfg.VerbosityLevel)); err != nil {
+	if err := client.SendMessage(ctx, NewSubscribeThreadMessage(tid, cfg.VerbosityLevel)); err != nil {
 		return "", fmt.Errorf("subscribe_thread: %w", err)
 	}
 	if err := WaitSubscriptionConfirmed(ctx, eventCh, tid, cfg.VerbosityLevel, cfg.SubscriptionTimeout); err != nil {
@@ -124,7 +121,7 @@ func WaitDaemonReady(ctx context.Context, ch <-chan interface{}, timeout time.Du
 				continue
 			}
 			switch m := msg.(type) {
-			case protocol.DaemonReadyResponse:
+			case DaemonReadyResponse:
 				if m.State == "ready" {
 					return nil
 				}
@@ -142,8 +139,8 @@ func WaitDaemonReady(ctx context.Context, ch <-chan interface{}, timeout time.Du
 }
 
 // WaitThreadStatusWithID waits for type status with non-empty thread_id.
-func WaitThreadStatusWithID(ctx context.Context, ch <-chan interface{}, timeout time.Duration) (protocol.StatusResponse, error) {
-	var zero protocol.StatusResponse
+func WaitThreadStatusWithID(ctx context.Context, ch <-chan interface{}, timeout time.Duration) (StatusResponse, error) {
+	var zero StatusResponse
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
@@ -160,9 +157,9 @@ func WaitThreadStatusWithID(ctx context.Context, ch <-chan interface{}, timeout 
 				continue
 			}
 			switch m := msg.(type) {
-			case protocol.ErrorResponse:
+			case ErrorResponse:
 				return zero, fmt.Errorf("daemon error: %s: %s", m.Code, m.Message)
-			case protocol.StatusResponse:
+			case StatusResponse:
 				if m.ThreadID != "" {
 					return m, nil
 				}
@@ -178,11 +175,11 @@ func WaitThreadStatusWithID(ctx context.Context, ch <-chan interface{}, timeout 
 					if err != nil {
 						continue
 					}
-					decoded, err := protocol.DecodeMessage(raw)
+					decoded, err := DecodeMessage(raw)
 					if err != nil {
 						continue
 					}
-					if st, ok := decoded.(protocol.StatusResponse); ok && st.ThreadID != "" {
+					if st, ok := decoded.(StatusResponse); ok && st.ThreadID != "" {
 						return st, nil
 					}
 				}
@@ -210,7 +207,7 @@ func WaitSubscriptionConfirmed(ctx context.Context, ch <-chan interface{}, wantT
 				continue
 			}
 			switch m := msg.(type) {
-			case protocol.SubscriptionConfirmedResponse:
+			case SubscriptionConfirmedResponse:
 				if m.ThreadID == wantThreadID {
 					return nil
 				}

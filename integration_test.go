@@ -4,14 +4,11 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"github.com/mirasurf/lepton/soothe-client-go/config"
-	"github.com/mirasurf/lepton/soothe-client-go/protocol"
 )
 
 // integrationTestConfig returns config suitable for short integration runs.
-func integrationTestConfig() *config.Config {
-	c := config.DefaultConfig()
+func integrationTestConfig() *Config {
+	c := DefaultConfig()
 	c.DaemonReadyTimeout = 30 * time.Second
 	c.ThreadStatusTimeout = 60 * time.Second
 	c.SubscriptionTimeout = 30 * time.Second
@@ -124,7 +121,7 @@ func TestIntegration_InputMessage(t *testing.T) {
 	t.Logf("Thread ID: %s", threadID)
 
 	// Send input message
-	inputMsg := protocol.NewInputMessage("Hello, this is a test message from Go client", threadID)
+	inputMsg := NewInputMessage("Hello, this is a test message from Go client", threadID)
 	if err := client.SendMessage(ctx, inputMsg); err != nil {
 		t.Fatalf("InputMessage: %v", err)
 	}
@@ -144,9 +141,9 @@ func TestIntegration_InputMessage(t *testing.T) {
 			}
 			eventCount++
 			switch m := msg.(type) {
-			case protocol.EventMessage:
+			case EventMessage:
 				t.Logf("Event #%d: namespace=%s", eventCount, m.Namespace)
-			case protocol.ErrorResponse:
+			case ErrorResponse:
 				t.Logf("Error: code=%s, message=%s", m.Code, m.Message)
 			default:
 				t.Logf("Event #%d: type=%T", eventCount, msg)
@@ -330,7 +327,7 @@ func TestIntegration_FullConversation(t *testing.T) {
 	}
 	t.Logf("Thread ID: %s", threadID)
 
-	inputMsg := protocol.NewInputMessage("List all files in the current directory", threadID)
+	inputMsg := NewInputMessage("List all files in the current directory", threadID)
 	if err := client.SendMessage(ctx, inputMsg); err != nil {
 		t.Fatalf("Input: %v", err)
 	}
@@ -352,7 +349,7 @@ func TestIntegration_FullConversation(t *testing.T) {
 				continue
 			}
 			switch m := msg.(type) {
-			case protocol.EventMessage:
+			case EventMessage:
 				eventTypes[m.Namespace]++
 			default:
 				eventTypes["other"]++

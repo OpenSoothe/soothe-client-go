@@ -10,8 +10,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-
-	"github.com/mirasurf/lepton/soothe-client-go/protocol"
 )
 
 // ---------------------------------------------------------------------------
@@ -168,7 +166,7 @@ func TestClient_ConnectAndClose(t *testing.T) {
 
 func TestClient_SendNotConnected(t *testing.T) {
 	client := NewClient("ws://localhost:9999", nil)
-	err := client.SendMessage(context.Background(), protocol.BaseMessage{Type: "test"})
+	err := client.SendMessage(context.Background(), BaseMessage{Type: "test"})
 	if err == nil {
 		t.Error("expected error when sending on disconnected client")
 	}
@@ -261,7 +259,7 @@ func TestClient_NDJSONReceive(t *testing.T) {
 	}
 
 	// Trigger the NDJSON response
-	if err := client.SendMessage(ctx, protocol.BaseMessage{Type: "trigger"}); err != nil {
+	if err := client.SendMessage(ctx, BaseMessage{Type: "trigger"}); err != nil {
 		t.Fatalf("send: %v", err)
 	}
 

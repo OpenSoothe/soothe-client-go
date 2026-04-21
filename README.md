@@ -2,9 +2,11 @@
 
 WebSocket client in Go for soothe-daemon
 
+**Package:** https://github.com/OpenSoothe/soothe-client-go
+
 ## Package Structure
 
-The client is organized into logical components:
+The client uses a flat package structure with all code in the root `soothe` package:
 
 ```
 soothe-client-go/
@@ -14,16 +16,16 @@ soothe-client-go/
 ├── verbosity.go        - Verbosity types for event filtering
 ├── session.go          - Bootstrap helpers for thread creation/resumption
 ├── helpers.go          - RPC convenience functions
-├── config/             - Client configuration
-├── protocol/           - Wire protocol message types
-├── events/             - Event namespace constants and classification
-└── errors/             - Custom error types
+├── config.go           - Client configuration
+├── protocol.go         - Wire protocol message types
+├── events.go           - Event namespace constants and classification
+├── errors.go           - Custom error types
 ```
 
 ## Usage
 
 ```go
-import "github.com/mirasurf/lepton/soothe-client-go"
+import "github.com/OpenSoothe/soothe-client-go"
 
 // Create client
 client := soothe.NewClient("ws://localhost:8080", nil)

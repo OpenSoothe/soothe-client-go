@@ -1,6 +1,4 @@
-package events
-
-import "github.com/mirasurf/lepton/soothe-client-go"
+package soothe
 
 // Event namespace constants matching the Soothe daemon wire protocol.
 // Format: soothe.<domain>.<component>.<action>
@@ -97,7 +95,7 @@ func splitNamespace(ns string) []string {
 
 // ClassifyEventVerbosity returns the VerbosityTier for a given event type string.
 // This mirrors soothe_sdk.ux.classification.classify_event_to_tier.
-func ClassifyEventVerbosity(eventTypeOrNamespace string) soothe.VerbosityTier {
+func ClassifyEventVerbosity(eventTypeOrNamespace string) VerbosityTier {
 	domain, component, _, ok := ParseNamespace(eventTypeOrNamespace)
 	if !ok {
 		// Try matching on the full string
@@ -106,51 +104,51 @@ func ClassifyEventVerbosity(eventTypeOrNamespace string) soothe.VerbosityTier {
 	return classifyByDomainAndComponent(domain, component, eventTypeOrNamespace)
 }
 
-func classifyByDomainAndComponent(domain, component, full string) soothe.VerbosityTier {
+func classifyByDomainAndComponent(domain, component, full string) VerbosityTier {
 	switch domain {
 	case "lifecycle":
-		return soothe.TierDetailed
+		return TierDetailed
 	case "protocol":
-		return soothe.TierDetailed
+		return TierDetailed
 	case "cognition":
-		return soothe.TierNormal
+		return TierNormal
 	case "tool":
-		return soothe.TierInternal
+		return TierInternal
 	case "capability":
 		// Capability subagents: progress events -> NORMAL, others -> DETAILED
 		return classifyCapabilityEvent(full)
 	case "output":
-		return soothe.TierQuiet
+		return TierQuiet
 	default:
-		return soothe.TierNormal
+		return TierNormal
 	}
 }
 
-func classifyCapabilityEvent(full string) soothe.VerbosityTier {
+func classifyCapabilityEvent(full string) VerbosityTier {
 	_, _, action, _ := ParseNamespace(full)
 	switch action {
 	case "started", "completed":
-		return soothe.TierNormal
+		return TierNormal
 	default:
-		return soothe.TierDetailed
+		return TierDetailed
 	}
 }
 
-func classifyByEventTypeString(s string) soothe.VerbosityTier {
+func classifyByEventTypeString(s string) VerbosityTier {
 	switch s {
 	case EventChitchatResponse, EventFinalReport, EventThreadError:
-		return soothe.TierQuiet
+		return TierQuiet
 	case EventPlanCreated, EventPlanStepStarted, EventPlanStepCompleted,
 		EventAgentLoopStarted, EventAgentLoopIterated,
 		EventBrowserStarted, EventBrowserCompleted,
 		EventClaudeStarted, EventClaudeCompleted,
 		EventResearchStarted, EventResearchCompleted,
 		EventResearchJudgementReporting:
-		return soothe.TierNormal
+		return TierNormal
 	case EventAgentLoopCompleted:
-		return soothe.TierQuiet
+		return TierQuiet
 	default:
-		return soothe.TierNormal
+		return TierNormal
 	}
 }
 

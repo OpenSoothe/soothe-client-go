@@ -1,4 +1,4 @@
-package sootheerrors
+package soothe
 
 import "fmt"
 

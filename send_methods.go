@@ -1,10 +1,6 @@
 package soothe
 
-import (
-	"context"
-
-	"github.com/mirasurf/lepton/soothe-client-go/protocol"
-)
+import "context"
 
 // ---------------------------------------------------------------------------
 // High-level API methods (mirroring Python SDK WebSocketClient)
@@ -90,37 +86,37 @@ func WithModelParams(params map[string]interface{}) InputOption {
 
 // SendCommand sends a slash command to the daemon.
 func (c *Client) SendCommand(ctx context.Context, cmd string) error {
-	return c.SendMessage(ctx, protocol.CommandMessage{
-		BaseMessage: protocol.BaseMessage{Type: "command"},
+	return c.SendMessage(ctx, CommandMessage{
+		BaseMessage: BaseMessage{Type: "command"},
 		Cmd:         cmd,
 	})
 }
 
 // SendNewThread requests the daemon to start a new thread.
 func (c *Client) SendNewThread(ctx context.Context, workspace string) error {
-	return c.SendMessage(ctx, protocol.NewNewThreadMessage(workspace))
+	return c.SendMessage(ctx, NewNewThreadMessage(workspace))
 }
 
 // SendResumeThread requests the daemon to resume a specific thread.
 func (c *Client) SendResumeThread(ctx context.Context, threadID, workspace string) error {
-	return c.SendMessage(ctx, protocol.NewResumeThreadMessage(threadID, workspace))
+	return c.SendMessage(ctx, NewResumeThreadMessage(threadID, workspace))
 }
 
 // SendSubscribeThread subscribes to events for a thread.
 func (c *Client) SendSubscribeThread(ctx context.Context, threadID, verbosity string) error {
-	return c.SendMessage(ctx, protocol.NewSubscribeThreadMessage(threadID, verbosity))
+	return c.SendMessage(ctx, NewSubscribeThreadMessage(threadID, verbosity))
 }
 
 // SendDetach notifies the daemon that this client is detaching.
 func (c *Client) SendDetach(ctx context.Context) error {
-	return c.SendMessage(ctx, protocol.DetachMessage{
-		BaseMessage: protocol.BaseMessage{Type: "detach"},
+	return c.SendMessage(ctx, DetachMessage{
+		BaseMessage: BaseMessage{Type: "detach"},
 	})
 }
 
 // SendDaemonReady sends the daemon_ready handshake message.
 func (c *Client) SendDaemonReady(ctx context.Context) error {
-	return c.SendMessage(ctx, protocol.BaseMessage{Type: "daemon_ready"})
+	return c.SendMessage(ctx, BaseMessage{Type: "daemon_ready"})
 }
 
 // SendDaemonStatus requests daemon status check.
@@ -129,10 +125,10 @@ func (c *Client) SendDaemonStatus(ctx context.Context, requestID ...string) erro
 	if len(requestID) > 0 {
 		rid = requestID[0]
 	} else {
-		rid = protocol.NewRequestID()
+		rid = NewRequestID()
 	}
-	return c.SendMessage(ctx, protocol.DaemonStatusMessage{
-		BaseMessage: protocol.BaseMessage{RequestID: rid, Type: "daemon_status"},
+	return c.SendMessage(ctx, DaemonStatusMessage{
+		BaseMessage: BaseMessage{RequestID: rid, Type: "daemon_status"},
 	})
 }
 
@@ -142,10 +138,10 @@ func (c *Client) SendDaemonShutdown(ctx context.Context, requestID ...string) er
 	if len(requestID) > 0 {
 		rid = requestID[0]
 	} else {
-		rid = protocol.NewRequestID()
+		rid = NewRequestID()
 	}
-	return c.SendMessage(ctx, protocol.DaemonShutdownMessage{
-		BaseMessage: protocol.BaseMessage{RequestID: rid, Type: "daemon_shutdown"},
+	return c.SendMessage(ctx, DaemonShutdownMessage{
+		BaseMessage: BaseMessage{RequestID: rid, Type: "daemon_shutdown"},
 	})
 }
 
@@ -155,10 +151,10 @@ func (c *Client) SendConfigGet(ctx context.Context, section string, requestID ..
 	if len(requestID) > 0 {
 		rid = requestID[0]
 	} else {
-		rid = protocol.NewRequestID()
+		rid = NewRequestID()
 	}
-	return c.SendMessage(ctx, protocol.ConfigGetMessage{
-		BaseMessage: protocol.BaseMessage{RequestID: rid, Type: "config_get"},
+	return c.SendMessage(ctx, ConfigGetMessage{
+		BaseMessage: BaseMessage{RequestID: rid, Type: "config_get"},
 		Section:     section,
 	})
 }
@@ -169,10 +165,10 @@ func (c *Client) SendThreadList(ctx context.Context, filter map[string]interface
 	if len(requestID) > 0 {
 		rid = requestID[0]
 	} else {
-		rid = protocol.NewRequestID()
+		rid = NewRequestID()
 	}
-	return c.SendMessage(ctx, protocol.ThreadListMessage{
-		BaseMessage:        protocol.BaseMessage{RequestID: rid, Type: "thread_list"},
+	return c.SendMessage(ctx, ThreadListMessage{
+		BaseMessage:        BaseMessage{RequestID: rid, Type: "thread_list"},
 		Filter:             filter,
 		IncludeStats:       includeStats,
 		IncludeLastMessage: includeLastMessage,
@@ -185,10 +181,10 @@ func (c *Client) SendThreadGet(ctx context.Context, threadID string, requestID .
 	if len(requestID) > 0 {
 		rid = requestID[0]
 	} else {
-		rid = protocol.NewRequestID()
+		rid = NewRequestID()
 	}
-	return c.SendMessage(ctx, protocol.ThreadGetMessage{
-		BaseMessage: protocol.BaseMessage{RequestID: rid, Type: "thread_get"},
+	return c.SendMessage(ctx, ThreadGetMessage{
+		BaseMessage: BaseMessage{RequestID: rid, Type: "thread_get"},
 		ThreadID:    threadID,
 	})
 }
@@ -199,10 +195,10 @@ func (c *Client) SendThreadMessages(ctx context.Context, threadID string, limit,
 	if len(requestID) > 0 {
 		rid = requestID[0]
 	} else {
-		rid = protocol.NewRequestID()
+		rid = NewRequestID()
 	}
-	return c.SendMessage(ctx, protocol.ThreadMessagesMessage{
-		BaseMessage: protocol.BaseMessage{RequestID: rid, Type: "thread_messages"},
+	return c.SendMessage(ctx, ThreadMessagesMessage{
+		BaseMessage: BaseMessage{RequestID: rid, Type: "thread_messages"},
 		ThreadID:    threadID,
 		Limit:       limit,
 		Offset:      offset,
@@ -215,10 +211,10 @@ func (c *Client) SendThreadState(ctx context.Context, threadID string, requestID
 	if len(requestID) > 0 {
 		rid = requestID[0]
 	} else {
-		rid = protocol.NewRequestID()
+		rid = NewRequestID()
 	}
-	return c.SendMessage(ctx, protocol.ThreadStateMessage{
-		BaseMessage: protocol.BaseMessage{RequestID: rid, Type: "thread_state"},
+	return c.SendMessage(ctx, ThreadStateMessage{
+		BaseMessage: BaseMessage{RequestID: rid, Type: "thread_state"},
 		ThreadID:    threadID,
 	})
 }
@@ -229,10 +225,10 @@ func (c *Client) SendThreadUpdateState(ctx context.Context, threadID string, val
 	if len(requestID) > 0 {
 		rid = requestID[0]
 	} else {
-		rid = protocol.NewRequestID()
+		rid = NewRequestID()
 	}
-	return c.SendMessage(ctx, protocol.ThreadUpdateStateMessage{
-		BaseMessage: protocol.BaseMessage{RequestID: rid, Type: "thread_update_state"},
+	return c.SendMessage(ctx, ThreadUpdateStateMessage{
+		BaseMessage: BaseMessage{RequestID: rid, Type: "thread_update_state"},
 		ThreadID:    threadID,
 		Values:      values,
 	})
@@ -244,10 +240,10 @@ func (c *Client) SendThreadArchive(ctx context.Context, threadID string, request
 	if len(requestID) > 0 {
 		rid = requestID[0]
 	} else {
-		rid = protocol.NewRequestID()
+		rid = NewRequestID()
 	}
-	return c.SendMessage(ctx, protocol.ThreadArchiveMessage{
-		BaseMessage: protocol.BaseMessage{RequestID: rid, Type: "thread_archive"},
+	return c.SendMessage(ctx, ThreadArchiveMessage{
+		BaseMessage: BaseMessage{RequestID: rid, Type: "thread_archive"},
 		ThreadID:    threadID,
 	})
 }
@@ -258,10 +254,10 @@ func (c *Client) SendThreadDelete(ctx context.Context, threadID string, requestI
 	if len(requestID) > 0 {
 		rid = requestID[0]
 	} else {
-		rid = protocol.NewRequestID()
+		rid = NewRequestID()
 	}
-	return c.SendMessage(ctx, protocol.ThreadDeleteMessage{
-		BaseMessage: protocol.BaseMessage{RequestID: rid, Type: "thread_delete"},
+	return c.SendMessage(ctx, ThreadDeleteMessage{
+		BaseMessage: BaseMessage{RequestID: rid, Type: "thread_delete"},
 		ThreadID:    threadID,
 	})
 }
@@ -272,10 +268,10 @@ func (c *Client) SendThreadCreate(ctx context.Context, initialMessage string, me
 	if len(requestID) > 0 {
 		rid = requestID[0]
 	} else {
-		rid = protocol.NewRequestID()
+		rid = NewRequestID()
 	}
-	return c.SendMessage(ctx, protocol.ThreadCreateMessage{
-		BaseMessage:     protocol.BaseMessage{RequestID: rid, Type: "thread_create"},
+	return c.SendMessage(ctx, ThreadCreateMessage{
+		BaseMessage:     BaseMessage{RequestID: rid, Type: "thread_create"},
 		InitialMessage:  initialMessage,
 		Metadata:        metadata,
 	})
@@ -287,10 +283,10 @@ func (c *Client) SendThreadArtifacts(ctx context.Context, threadID string, reque
 	if len(requestID) > 0 {
 		rid = requestID[0]
 	} else {
-		rid = protocol.NewRequestID()
+		rid = NewRequestID()
 	}
-	return c.SendMessage(ctx, protocol.ThreadArtifactsMessage{
-		BaseMessage: protocol.BaseMessage{RequestID: rid, Type: "thread_artifacts"},
+	return c.SendMessage(ctx, ThreadArtifactsMessage{
+		BaseMessage: BaseMessage{RequestID: rid, Type: "thread_artifacts"},
 		ThreadID:    threadID,
 	})
 }
@@ -301,10 +297,10 @@ func (c *Client) SendResumeInterrupts(ctx context.Context, threadID string, resu
 	if len(requestID) > 0 {
 		rid = requestID[0]
 	} else {
-		rid = protocol.NewRequestID()
+		rid = NewRequestID()
 	}
-	return c.SendMessage(ctx, protocol.ResumeInterruptsMessage{
-		BaseMessage:    protocol.BaseMessage{RequestID: rid, Type: "resume_interrupts"},
+	return c.SendMessage(ctx, ResumeInterruptsMessage{
+		BaseMessage:    BaseMessage{RequestID: rid, Type: "resume_interrupts"},
 		ThreadID:       threadID,
 		ResumePayload:  resumePayload,
 	})
@@ -316,10 +312,10 @@ func (c *Client) SendSkillsList(ctx context.Context, requestID ...string) error 
 	if len(requestID) > 0 {
 		rid = requestID[0]
 	} else {
-		rid = protocol.NewRequestID()
+		rid = NewRequestID()
 	}
-	return c.SendMessage(ctx, protocol.SkillsListMessage{
-		BaseMessage: protocol.BaseMessage{RequestID: rid, Type: "skills_list"},
+	return c.SendMessage(ctx, SkillsListMessage{
+		BaseMessage: BaseMessage{RequestID: rid, Type: "skills_list"},
 	})
 }
 
@@ -329,10 +325,10 @@ func (c *Client) SendModelsList(ctx context.Context, requestID ...string) error 
 	if len(requestID) > 0 {
 		rid = requestID[0]
 	} else {
-		rid = protocol.NewRequestID()
+		rid = NewRequestID()
 	}
-	return c.SendMessage(ctx, protocol.ModelsListMessage{
-		BaseMessage: protocol.BaseMessage{RequestID: rid, Type: "models_list"},
+	return c.SendMessage(ctx, ModelsListMessage{
+		BaseMessage: BaseMessage{RequestID: rid, Type: "models_list"},
 	})
 }
 
@@ -342,10 +338,10 @@ func (c *Client) SendInvokeSkill(ctx context.Context, skill, args string, reques
 	if len(requestID) > 0 {
 		rid = requestID[0]
 	} else {
-		rid = protocol.NewRequestID()
+		rid = NewRequestID()
 	}
-	return c.SendMessage(ctx, protocol.InvokeSkillMessage{
-		BaseMessage: protocol.BaseMessage{RequestID: rid, Type: "invoke_skill"},
+	return c.SendMessage(ctx, InvokeSkillMessage{
+		BaseMessage: BaseMessage{RequestID: rid, Type: "invoke_skill"},
 		Skill:       skill,
 		Args:        args,
 	})

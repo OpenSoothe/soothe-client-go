@@ -1,4 +1,4 @@
-module github.com/mirasurf/lepton/soothe-client-go
+module github.com/OpenSoothe/soothe-client-go
 
 go 1.25.4
 

@@ -9,9 +9,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-
-	"github.com/mirasurf/lepton/soothe-client-go/config"
-	"github.com/mirasurf/lepton/soothe-client-go/protocol"
 )
 
 // Client manages a WebSocket session with the Soothe daemon.
@@ -19,15 +16,15 @@ import (
 // After Close(), a new Client must be created to reconnect.
 type Client struct {
 	url    string
-	config *config.Config
+	config *Config
 	conn   *websocket.Conn
 	mu     sync.Mutex // guards conn writes
 }
 
 // NewClient creates a new Soothe daemon WebSocket client.
-func NewClient(url string, cfg *config.Config) *Client {
+func NewClient(url string, cfg *Config) *Client {
 	if cfg == nil {
-		cfg = config.DefaultConfig()
+		cfg = DefaultConfig()
 	}
 	return &Client{url: url, config: cfg}
 }
@@ -99,8 +96,8 @@ func (c *Client) ReceiveMessages(ctx context.Context) (<-chan interface{}, error
 			if err != nil {
 				return
 			}
-			for _, frame := range protocol.SplitSootheWirePayload(data) {
-				msg, err := protocol.DecodeMessage(frame)
+			for _, frame := range SplitSootheWirePayload(data) {
+				msg, err := DecodeMessage(frame)
 				if err != nil || msg == nil {
 					continue
 				}
@@ -124,8 +121,8 @@ func (c *Client) ReadEvent() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, nil // connection closed
 	}
-	for _, frame := range protocol.SplitSootheWirePayload(data) {
-		msg, err := protocol.DecodeMessage(frame)
+	for _, frame := range SplitSootheWirePayload(data) {
+		msg, err := DecodeMessage(frame)
 		if err != nil || msg == nil {
 			continue
 		}

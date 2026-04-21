@@ -9,9 +9,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-
-	"github.com/mirasurf/lepton/soothe-client-go/config"
-	"github.com/mirasurf/lepton/soothe-client-go/protocol"
 )
 
 func TestBootstrapNewThreadSession(t *testing.T) {
@@ -48,7 +45,7 @@ func TestBootstrapNewThreadSession(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := NewClient(wsURL(ts.URL), config.DefaultConfig())
+	client := NewClient(wsURL(ts.URL), DefaultConfig())
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -62,7 +59,7 @@ func TestBootstrapNewThreadSession(t *testing.T) {
 		t.Fatalf("ReceiveMessages: %v", err)
 	}
 
-	threadID, err := BootstrapNewThreadSession(ctx, client, eventCh, "/tmp/ws", config.DefaultConfig())
+	threadID, err := BootstrapNewThreadSession(ctx, client, eventCh, "/tmp/ws", DefaultConfig())
 	if err != nil {
 		t.Fatalf("BootstrapNewThreadSession: %v", err)
 	}
@@ -106,7 +103,7 @@ func TestBootstrapResumeThreadSession(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := NewClient(wsURL(ts.URL), config.DefaultConfig())
+	client := NewClient(wsURL(ts.URL), DefaultConfig())
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -120,7 +117,7 @@ func TestBootstrapResumeThreadSession(t *testing.T) {
 		t.Fatalf("ReceiveMessages: %v", err)
 	}
 
-	threadID, err := BootstrapResumeThreadSession(ctx, client, eventCh, "existing-thread", "/tmp/ws", config.DefaultConfig())
+	threadID, err := BootstrapResumeThreadSession(ctx, client, eventCh, "existing-thread", "/tmp/ws", DefaultConfig())
 	if err != nil {
 		t.Fatalf("BootstrapResumeThreadSession: %v", err)
 	}
@@ -153,7 +150,7 @@ func TestWaitDaemonReady_ContextCancelled(t *testing.T) {
 
 func TestWaitDaemonReady_NotReady(t *testing.T) {
 	ch := make(chan interface{}, 1)
-	ch <- protocol.DaemonReadyResponse{BaseMessage: protocol.BaseMessage{Type: "daemon_ready"}, State: "initializing"}
+	ch <- DaemonReadyResponse{BaseMessage: BaseMessage{Type: "daemon_ready"}, State: "initializing"}
 
 	err := WaitDaemonReady(context.Background(), ch, 1*time.Second)
 	if err == nil {
@@ -163,7 +160,7 @@ func TestWaitDaemonReady_NotReady(t *testing.T) {
 
 func TestWaitDaemonReady_Ready(t *testing.T) {
 	ch := make(chan interface{}, 1)
-	ch <- protocol.DaemonReadyResponse{BaseMessage: protocol.BaseMessage{Type: "daemon_ready"}, State: "ready"}
+	ch <- DaemonReadyResponse{BaseMessage: BaseMessage{Type: "daemon_ready"}, State: "ready"}
 
 	err := WaitDaemonReady(context.Background(), ch, 1*time.Second)
 	if err != nil {
@@ -183,8 +180,8 @@ func TestWaitDaemonReady_RawMap(t *testing.T) {
 
 func TestWaitThreadStatusWithID(t *testing.T) {
 	ch := make(chan interface{}, 1)
-	ch <- protocol.StatusResponse{
-		BaseMessage: protocol.BaseMessage{Type: "status"},
+	ch <- StatusResponse{
+		BaseMessage: BaseMessage{Type: "status"},
 		ThreadID:    "thread-abc",
 	}
 
@@ -199,8 +196,8 @@ func TestWaitThreadStatusWithID(t *testing.T) {
 
 func TestWaitThreadStatusWithID_ErrorResponse(t *testing.T) {
 	ch := make(chan interface{}, 1)
-	ch <- protocol.ErrorResponse{
-		BaseMessage: protocol.BaseMessage{Type: "error"},
+	ch <- ErrorResponse{
+		BaseMessage: BaseMessage{Type: "error"},
 		Code:        "not_found",
 		Message:     "thread not found",
 	}
@@ -213,8 +210,8 @@ func TestWaitThreadStatusWithID_ErrorResponse(t *testing.T) {
 
 func TestWaitSubscriptionConfirmed(t *testing.T) {
 	ch := make(chan interface{}, 1)
-	ch <- protocol.SubscriptionConfirmedResponse{
-		BaseMessage: protocol.BaseMessage{Type: "subscription_confirmed"},
+	ch <- SubscriptionConfirmedResponse{
+		BaseMessage: BaseMessage{Type: "subscription_confirmed"},
 		ThreadID:    "thread-abc",
 		Verbosity:   "normal",
 	}
@@ -227,8 +224,8 @@ func TestWaitSubscriptionConfirmed(t *testing.T) {
 
 func TestWaitSubscriptionConfirmed_Mismatch(t *testing.T) {
 	ch := make(chan interface{}, 1)
-	ch <- protocol.SubscriptionConfirmedResponse{
-		BaseMessage: protocol.BaseMessage{Type: "subscription_confirmed"},
+	ch <- SubscriptionConfirmedResponse{
+		BaseMessage: BaseMessage{Type: "subscription_confirmed"},
 		ThreadID:    "different-thread",
 	}
 

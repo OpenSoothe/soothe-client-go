@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"time"
-
-	"github.com/mirasurf/lepton/soothe-client-go/protocol"
 )
 
 // ---------------------------------------------------------------------------
@@ -16,7 +14,7 @@ import (
 // for a response with a matching request_id and the expected response type.
 // Events not matching the request_id are skipped.
 func (c *Client) RequestResponse(ctx context.Context, payload map[string]interface{}, responseType string, timeout time.Duration) (map[string]interface{}, error) {
-	rid := protocol.NewRequestID()
+	rid := NewRequestID()
 	payload["request_id"] = rid
 
 	if err := c.SendMessage(ctx, payload); err != nil {
