@@ -1,4 +1,4 @@
-module github.com/OpenSoothe/soothe-client-go
+module github.com/mirasoth/soothe-client-go
 
 go 1.25.4
 

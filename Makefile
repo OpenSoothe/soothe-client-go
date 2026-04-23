@@ -1,7 +1,7 @@
 .PHONY: help build test test-short test-integration vet fmt lint clean install run deps
 
 # Project variables
-PACKAGE := github.com/OpenSoothe/soothe-client-go
+PACKAGE := github.com/mirasoth/soothe-client-go
 BINARY := soothe-client
 GO := go
 GOFLAGS :=

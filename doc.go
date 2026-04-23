@@ -14,5 +14,5 @@
 // All types are accessible directly without subpackage imports:
 // Config, Client, EventPlanCreated, ConnectionError, VerbosityLevel, etc.
 //
-// Package: https://github.com/OpenSoothe/soothe-client-go
+// Package: https://github.com/mirasoth/soothe-client-go
 package soothe

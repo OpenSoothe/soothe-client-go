@@ -2,7 +2,7 @@
 
 WebSocket client in Go for soothe-daemon
 
-**Package:** https://github.com/OpenSoothe/soothe-client-go
+**Package:** https://github.com/mirasoth/soothe-client-go
 
 ## Package Structure
 
@@ -25,7 +25,7 @@ soothe-client-go/
 ## Usage
 
 ```go
-import "github.com/OpenSoothe/soothe-client-go"
+import "github.com/mirasoth/soothe-client-go"
 
 // Create client
 client := soothe.NewClient("ws://localhost:8080", nil)
