@@ -244,8 +244,8 @@ type LoopNewMessage struct {
 // LoopInputMessage sends input to a loop (RFC-503).
 type LoopInputMessage struct {
 	BaseMessage
-	LoopID  string                 `json:"loop_id"`
-	Content map[string]interface{} `json:"content"`
+	LoopID  string `json:"loop_id"`
+	Content string `json:"content"`
 }
 
 // ---------------------------------------------------------------------------

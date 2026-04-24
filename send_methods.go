@@ -508,7 +508,7 @@ func (c *Client) SendLoopNew(ctx context.Context, requestID ...string) error {
 }
 
 // SendLoopInput sends input to a loop (RFC-503).
-func (c *Client) SendLoopInput(ctx context.Context, loopID string, content map[string]interface{}, requestID ...string) error {
+func (c *Client) SendLoopInput(ctx context.Context, loopID string, content string, requestID ...string) error {
 	rid := ""
 	if len(requestID) > 0 {
 		rid = requestID[0]
