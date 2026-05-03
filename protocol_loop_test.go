@@ -2,6 +2,21 @@ package soothe
 
 import "testing"
 
+func TestDecodeMessage_Input_LegacySubagent(t *testing.T) {
+	raw := []byte(`{"type":"input","text":"x","subagent":"legacy-name"}`)
+	decoded, err := DecodeMessage(raw)
+	if err != nil {
+		t.Fatalf("DecodeMessage: %v", err)
+	}
+	im, ok := decoded.(InputMessage)
+	if !ok {
+		t.Fatalf("expected InputMessage, got %T", decoded)
+	}
+	if im.PreferredSubagent != "legacy-name" {
+		t.Fatalf("PreferredSubagent: got %q", im.PreferredSubagent)
+	}
+}
+
 func TestDecodeMessage_EventWithLoopAIMessage(t *testing.T) {
 	raw := []byte(`{"type":"event","thread_id":"t-1","namespace":[],"mode":"messages","data":[{"type":"AIMessageChunk","content":[{"text":"hello"}],"phase":"goal_completion"},{}]}`)
 	decoded, err := DecodeMessage(raw)

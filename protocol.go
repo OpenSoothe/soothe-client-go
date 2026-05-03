@@ -27,14 +27,15 @@ type BaseMessage struct {
 // InputMessage represents user input to the agent.
 type InputMessage struct {
 	BaseMessage
-	Text          string                 `json:"text"`
-	ThreadID      string                 `json:"thread_id,omitempty"`
-	Autonomous    bool                   `json:"autonomous,omitempty"`
-	MaxIterations *int                   `json:"max_iterations,omitempty"`
-	Subagent      string                 `json:"subagent,omitempty"`
-	Interactive   bool                   `json:"interactive,omitempty"`
-	Model         string                 `json:"model,omitempty"`
-	ModelParams   map[string]interface{} `json:"model_params,omitempty"`
+	Text              string                   `json:"text"`
+	ThreadID          string                   `json:"thread_id,omitempty"`
+	Autonomous        bool                     `json:"autonomous,omitempty"`
+	MaxIterations     *int                     `json:"max_iterations,omitempty"`
+	PreferredSubagent string                   `json:"preferred_subagent,omitempty"`
+	Interactive       bool                     `json:"interactive,omitempty"`
+	Model             string                   `json:"model,omitempty"`
+	ModelParams       map[string]interface{}   `json:"model_params,omitempty"`
+	Attachments       []map[string]interface{} `json:"attachments,omitempty"`
 }
 
 // CommandMessage represents a slash command sent to the daemon.
@@ -542,6 +543,14 @@ func DecodeMessage(data []byte) (interface{}, error) {
 		var msg InputMessage
 		if err := json.Unmarshal(data, &msg); err != nil {
 			return nil, err
+		}
+		if msg.PreferredSubagent == "" {
+			var legacy struct {
+				Subagent string `json:"subagent"`
+			}
+			if err := json.Unmarshal(data, &legacy); err == nil && legacy.Subagent != "" {
+				msg.PreferredSubagent = legacy.Subagent
+			}
 		}
 		return msg, nil
 

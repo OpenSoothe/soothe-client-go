@@ -20,8 +20,11 @@ func (c *Client) SendInput(ctx context.Context, text string, opts ...InputOption
 	if o.maxIterations != nil {
 		payload["max_iterations"] = *o.maxIterations
 	}
-	if o.subagent != "" {
-		payload["subagent"] = o.subagent
+	if o.preferredSubagent != "" {
+		payload["preferred_subagent"] = o.preferredSubagent
+	}
+	if o.attachments != nil {
+		payload["attachments"] = o.attachments
 	}
 	if o.interactive {
 		payload["interactive"] = true
@@ -42,13 +45,14 @@ func (c *Client) SendInput(ctx context.Context, text string, opts ...InputOption
 type InputOption func(*inputOptions)
 
 type inputOptions struct {
-	threadID      string
-	autonomous    bool
-	maxIterations *int
-	subagent      string
-	interactive   bool
-	model         string
-	modelParams   map[string]interface{}
+	threadID          string
+	autonomous        bool
+	maxIterations     *int
+	preferredSubagent string
+	interactive       bool
+	model             string
+	modelParams       map[string]interface{}
+	attachments       []map[string]interface{}
 }
 
 // WithThreadID sets the thread ID for the input message.
@@ -64,9 +68,14 @@ func WithAutonomous(maxIterations *int) InputOption {
 	}
 }
 
-// WithSubagent routes the query to a specific subagent.
+// WithSubagent sets the preferred_subagent hint (mirrors soothe-sdk send_input).
 func WithSubagent(name string) InputOption {
-	return func(o *inputOptions) { o.subagent = name }
+	return func(o *inputOptions) { o.preferredSubagent = name }
+}
+
+// WithAttachments sets optional image attachments (mime_type + base64 data); see IG-327.
+func WithAttachments(attachments []map[string]interface{}) InputOption {
+	return func(o *inputOptions) { o.attachments = attachments }
 }
 
 // WithInteractive enables interactive mode.

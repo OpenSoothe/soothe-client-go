@@ -449,6 +449,59 @@ func TestClient_SendInput(t *testing.T) {
 	}
 }
 
+func TestClient_SendInput_PreferredSubagent(t *testing.T) {
+	ts := newTestServer(testEchoHandler)
+	defer ts.Close()
+
+	client := NewClient(wsURL(ts.URL), nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer client.Close()
+
+	err := client.SendInput(ctx, "hello", WithSubagent("research"))
+	if err != nil {
+		t.Fatalf("SendInput: %v", err)
+	}
+
+	ev, err := client.ReadEvent()
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if ev["preferred_subagent"] != "research" {
+		t.Errorf("preferred_subagent: %v", ev["preferred_subagent"])
+	}
+}
+
+func TestClient_RequestResponse_PreservesRequestID(t *testing.T) {
+	ts := newTestServer(testRequestResponseHandler)
+	defer ts.Close()
+
+	client := NewClient(wsURL(ts.URL), nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer client.Close()
+
+	fixed := "fixed-rid-abc"
+	resp, err := client.RequestResponse(ctx, map[string]interface{}{
+		"type":       "daemon_status",
+		"request_id": fixed,
+	}, "daemon_status_response", 3*time.Second)
+	if err != nil {
+		t.Fatalf("RequestResponse: %v", err)
+	}
+	if got, _ := resp["request_id"].(string); got != fixed {
+		t.Errorf("request_id: got %q want %q", got, fixed)
+	}
+}
+
 func TestClient_SendInput_Autonomous(t *testing.T) {
 	ts := newTestServer(testEchoHandler)
 	defer ts.Close()

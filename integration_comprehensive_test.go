@@ -42,23 +42,18 @@ func TestIntegration_ThreadCreate(t *testing.T) {
 		t.Fatalf("Daemon not ready: %v", err)
 	}
 
-	// Create a persisted thread
-	requestID := NewRequestID()
-	if err := client.SendThreadCreate(ctx, "Initial test message", map[string]interface{}{
-		"test":       true,
-		"created_by": "integration_test",
-	}, requestID); err != nil {
-		t.Fatalf("Failed to send thread_create: %v", err)
-	}
-
-	// Wait for thread_list_response or status
 	response, err := client.RequestResponse(ctx, map[string]interface{}{
-		"type":       "thread_create",
-		"request_id": requestID,
-	}, "thread_list_response", 10*time.Second)
+		"type":            "thread_create",
+		"initial_message": "Initial test message",
+		"metadata": map[string]interface{}{
+			"test":       true,
+			"created_by": "integration_test",
+		},
+	}, "thread_created", 10*time.Second)
 
 	if err != nil {
 		t.Logf("Thread create response: %v (may timeout for persisted threads)", err)
+		return
 	}
 
 	if response != nil {
@@ -85,15 +80,10 @@ func TestIntegration_ThreadList(t *testing.T) {
 		t.Fatalf("Daemon not ready: %v", err)
 	}
 
-	// Request thread list
-	requestID := NewRequestID()
-	if err := client.SendThreadList(ctx, nil, false, false, requestID); err != nil {
-		t.Fatalf("Failed to send thread_list: %v", err)
-	}
-
 	response, err := client.RequestResponse(ctx, map[string]interface{}{
-		"type":       "thread_list",
-		"request_id": requestID,
+		"type":                 "thread_list",
+		"include_stats":        false,
+		"include_last_message": false,
 	}, "thread_list_response", 10*time.Second)
 
 	if err != nil {
@@ -134,17 +124,12 @@ func TestIntegration_ThreadGet(t *testing.T) {
 		t.Skip("Could not create test thread")
 	}
 
-	// Get thread metadata
 	requestID := NewRequestID()
-	if err := client.SendThreadGet(ctx, threadID, requestID); err != nil {
-		t.Fatalf("Failed to send thread_get: %v", err)
-	}
-
 	response, err := client.RequestResponse(ctx, map[string]interface{}{
 		"type":       "thread_get",
 		"request_id": requestID,
 		"thread_id":  threadID,
-	}, "thread_list_response", 10*time.Second)
+	}, "thread_get_response", 10*time.Second)
 
 	if err != nil {
 		t.Logf("Thread get response error: %v", err)
@@ -173,17 +158,14 @@ func TestIntegration_ThreadMessages(t *testing.T) {
 		t.Skip("Could not create test thread")
 	}
 
-	// Request thread messages
 	requestID := NewRequestID()
-	if err := client.SendThreadMessages(ctx, threadID, 10, 0, requestID); err != nil {
-		t.Fatalf("Failed to send thread_messages: %v", err)
-	}
-
 	response, err := client.RequestResponse(ctx, map[string]interface{}{
 		"type":       "thread_messages",
 		"request_id": requestID,
 		"thread_id":  threadID,
-	}, "thread_list_response", 10*time.Second)
+		"limit":      10,
+		"offset":     0,
+	}, "thread_messages_response", 10*time.Second)
 
 	if err != nil {
 		t.Logf("Thread messages response: %v", err)
@@ -212,17 +194,12 @@ func TestIntegration_ThreadState(t *testing.T) {
 		t.Skip("Could not create test thread")
 	}
 
-	// Request thread state
 	requestID := NewRequestID()
-	if err := client.SendThreadState(ctx, threadID, requestID); err != nil {
-		t.Fatalf("Failed to send thread_state: %v", err)
-	}
-
 	response, err := client.RequestResponse(ctx, map[string]interface{}{
 		"type":       "thread_state",
 		"request_id": requestID,
 		"thread_id":  threadID,
-	}, "thread_list_response", 10*time.Second)
+	}, "thread_state_response", 10*time.Second)
 
 	if err != nil {
 		t.Logf("Thread state response: %v", err)
@@ -258,16 +235,12 @@ func TestIntegration_ThreadUpdateState(t *testing.T) {
 		"test_data":  12345,
 	}
 
-	if err := client.SendThreadUpdateState(ctx, threadID, values, requestID); err != nil {
-		t.Fatalf("Failed to send thread_update_state: %v", err)
-	}
-
 	response, err := client.RequestResponse(ctx, map[string]interface{}{
 		"type":       "thread_update_state",
 		"request_id": requestID,
 		"thread_id":  threadID,
 		"values":     values,
-	}, "thread_list_response", 10*time.Second)
+	}, "thread_update_state_response", 10*time.Second)
 
 	if err != nil {
 		t.Logf("Thread update state response: %v", err)
@@ -296,17 +269,12 @@ func TestIntegration_ThreadArchive(t *testing.T) {
 		t.Skip("Could not create test thread")
 	}
 
-	// Archive thread
 	requestID := NewRequestID()
-	if err := client.SendThreadArchive(ctx, threadID, requestID); err != nil {
-		t.Fatalf("Failed to send thread_archive: %v", err)
-	}
-
 	response, err := client.RequestResponse(ctx, map[string]interface{}{
 		"type":       "thread_archive",
 		"request_id": requestID,
 		"thread_id":  threadID,
-	}, "thread_list_response", 10*time.Second)
+	}, "thread_operation_ack", 10*time.Second)
 
 	if err != nil {
 		t.Logf("Thread archive response: %v", err)
@@ -335,17 +303,12 @@ func TestIntegration_ThreadArtifacts(t *testing.T) {
 		t.Skip("Could not create test thread")
 	}
 
-	// Request thread artifacts
 	requestID := NewRequestID()
-	if err := client.SendThreadArtifacts(ctx, threadID, requestID); err != nil {
-		t.Fatalf("Failed to send thread_artifacts: %v", err)
-	}
-
 	response, err := client.RequestResponse(ctx, map[string]interface{}{
 		"type":       "thread_artifacts",
 		"request_id": requestID,
 		"thread_id":  threadID,
-	}, "thread_list_response", 15*time.Second)
+	}, "thread_artifacts_response", 15*time.Second)
 
 	if err != nil {
 		t.Logf("Thread artifacts response: %v", err)
@@ -653,29 +616,30 @@ func createTestThread(t *testing.T, client *Client, ctx context.Context) string 
 		return ""
 	}
 
-	// Use ReadEvent (single-threaded read) to wait for the status response
-	deadline := time.After(10 * time.Second)
-	for {
-		select {
-		case <-deadline:
-			t.Log("Timeout waiting for thread status")
-			return ""
-		default:
+	// Wait for status (bounded reads so we do not block forever without daemon traffic)
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if client.conn != nil {
+			client.conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 		}
 		ev, err := client.ReadEvent()
 		if err != nil {
-			t.Logf("ReadEvent error: %v", err)
-			return ""
+			continue
 		}
 		if ev == nil {
 			continue
 		}
 		threadID, ok := ExtractSootheThreadID(ev)
 		if ok && threadID != "" {
+			if client.conn != nil {
+				client.conn.SetReadDeadline(time.Time{})
+			}
 			t.Logf("Created test thread: %s", threadID)
 			return threadID
 		}
 	}
+	t.Log("Timeout waiting for thread status")
+	return ""
 }
 
 func TestIntegration_LongRunningConversation(t *testing.T) {

@@ -10,12 +10,16 @@ import (
 // Request-Response pattern (mirrors Python SDK request_response)
 // ---------------------------------------------------------------------------
 
-// RequestResponse sends a request payload with a unique request_id and waits
-// for a response with a matching request_id and the expected response type.
+// RequestResponse sends a request payload with a request_id and waits for a
+// response with a matching request_id and the expected response type.
+// If payload does not already set a non-empty request_id, one is generated.
 // Events not matching the request_id are skipped.
 func (c *Client) RequestResponse(ctx context.Context, payload map[string]interface{}, responseType string, timeout time.Duration) (map[string]interface{}, error) {
-	rid := NewRequestID()
-	payload["request_id"] = rid
+	rid, _ := payload["request_id"].(string)
+	if rid == "" {
+		rid = NewRequestID()
+		payload["request_id"] = rid
+	}
 
 	if err := c.SendMessage(ctx, payload); err != nil {
 		return nil, fmt.Errorf("send request: %w", err)
@@ -326,7 +330,8 @@ func (c *Client) LoopNew(ctx context.Context, timeout time.Duration) (map[string
 }
 
 // LoopInput sends input to a loop and waits for the response (RFC-503).
-func (c *Client) LoopInput(ctx context.Context, loopID string, content map[string]interface{}, timeout time.Duration) (map[string]interface{}, error) {
+// Content is the user prompt text (same wire shape as Python send_loop_input).
+func (c *Client) LoopInput(ctx context.Context, loopID string, content string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 60 * time.Second
 	}

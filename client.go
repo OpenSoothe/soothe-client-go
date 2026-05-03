@@ -3,7 +3,9 @@ package soothe
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -222,13 +224,17 @@ func (c *Client) ReceiveMessages(ctx context.Context) (<-chan interface{}, error
 	return ch, nil
 }
 
-// ReadEvent reads a single event from the daemon. Returns nil on connection close.
+// ReadEvent reads a single event from the daemon. Returns nil, nil on normal connection close.
 func (c *Client) ReadEvent() (map[string]interface{}, error) {
 	if c.conn == nil {
 		return nil, fmt.Errorf("soothe: not connected")
 	}
 	_, data, err := c.conn.ReadMessage()
 	if err != nil {
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
+			return nil, fmt.Errorf("websocket read timed out: %w", err)
+		}
 		return nil, nil // connection closed
 	}
 	for _, frame := range SplitSootheWirePayload(data) {
