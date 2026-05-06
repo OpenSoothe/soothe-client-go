@@ -195,6 +195,17 @@ func (c *Client) ThreadStatus(ctx context.Context, threadID string, timeout time
 	}, "thread_status_response", timeout)
 }
 
+// ThreadStats requests thread execution statistics and waits for the response.
+func (c *Client) ThreadStats(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	return c.RequestResponse(ctx, map[string]interface{}{
+		"type":      "thread_stats",
+		"thread_id": threadID,
+	}, "thread_stats_response", timeout)
+}
+
 // LoopList requests the loop list and waits for the response.
 func (c *Client) LoopList(ctx context.Context, filter map[string]interface{}, limit int, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
@@ -325,4 +336,105 @@ func (c *Client) LoopInput(ctx context.Context, loopID string, content map[strin
 		"content": content,
 	}
 	return c.RequestResponse(ctx, payload, "loop_input_response", timeout)
+}
+
+// ---------------------------------------------------------------------------
+// RPC Command convenience methods (RFC-404)
+// These wrap CommandRequest for common daemon slash commands
+// ---------------------------------------------------------------------------
+
+// CommandClear clears thread history.
+func (c *Client) CommandClear(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	return c.CommandRequest(ctx, "clear", threadID, nil, timeout)
+}
+
+// CommandExit stops thread and marks for exit.
+func (c *Client) CommandExit(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	return c.CommandRequest(ctx, "exit", threadID, nil, timeout)
+}
+
+// CommandQuit stops thread and marks for exit (alias for exit).
+func (c *Client) CommandQuit(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	return c.CommandRequest(ctx, "quit", threadID, nil, timeout)
+}
+
+// CommandDetach marks thread as detached (continues running).
+func (c *Client) CommandDetach(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	return c.CommandRequest(ctx, "detach", threadID, nil, timeout)
+}
+
+// CommandCancel cancels running query.
+func (c *Client) CommandCancel(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	return c.CommandRequest(ctx, "cancel", threadID, nil, timeout)
+}
+
+// CommandMemory queries memory stats.
+func (c *Client) CommandMemory(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	return c.CommandRequest(ctx, "memory", threadID, nil, timeout)
+}
+
+// CommandPolicy queries policy profile.
+func (c *Client) CommandPolicy(ctx context.Context, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	return c.CommandRequest(ctx, "policy", "", nil, timeout)
+}
+
+// CommandHistory queries input history.
+func (c *Client) CommandHistory(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	return c.CommandRequest(ctx, "history", threadID, nil, timeout)
+}
+
+// CommandConfig queries configuration.
+func (c *Client) CommandConfig(ctx context.Context, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	return c.CommandRequest(ctx, "config", "", nil, timeout)
+}
+
+// CommandReview queries conversation history.
+func (c *Client) CommandReview(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	return c.CommandRequest(ctx, "review", threadID, nil, timeout)
+}
+
+// CommandPlan queries current plan.
+func (c *Client) CommandPlan(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	return c.CommandRequest(ctx, "plan", threadID, nil, timeout)
+}
+
+// CommandAutopilotDashboard shows autopilot dashboard.
+func (c *Client) CommandAutopilotDashboard(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	return c.CommandRequest(ctx, "autopilot_dashboard", threadID, nil, timeout)
 }

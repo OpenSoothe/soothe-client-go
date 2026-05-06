@@ -377,6 +377,20 @@ func (c *Client) SendThreadStatus(ctx context.Context, threadID string, requestI
 	})
 }
 
+// SendThreadStats requests thread execution statistics.
+func (c *Client) SendThreadStats(ctx context.Context, threadID string, requestID ...string) error {
+	rid := ""
+	if len(requestID) > 0 {
+		rid = requestID[0]
+	} else {
+		rid = NewRequestID()
+	}
+	return c.SendMessage(ctx, ThreadStatsMessage{
+		BaseMessage: BaseMessage{RequestID: rid, Type: "thread_stats"},
+		ThreadID:    threadID,
+	})
+}
+
 // SendLoopList requests the list of AgentLoop instances.
 func (c *Client) SendLoopList(ctx context.Context, filter map[string]interface{}, limit int, requestID ...string) error {
 	rid := ""

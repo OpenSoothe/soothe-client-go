@@ -183,6 +183,12 @@ type ThreadStatusMessage struct {
 	ThreadID string `json:"thread_id"`
 }
 
+// ThreadStatsMessage requests thread execution statistics.
+type ThreadStatsMessage struct {
+	BaseMessage
+	ThreadID string `json:"thread_id"`
+}
+
 // LoopListMessage requests the list of AgentLoop instances.
 type LoopListMessage struct {
 	BaseMessage
@@ -408,6 +414,20 @@ type ThreadStatusResponse struct {
 	ThreadID       string `json:"thread_id"`
 	State          string `json:"state"`
 	HasActiveQuery bool   `json:"has_active_query"`
+}
+
+// ThreadStatsResponse represents thread execution statistics.
+type ThreadStatsResponse struct {
+	BaseMessage
+	ThreadID         string  `json:"thread_id"`
+	MessageCount     int     `json:"message_count"`
+	EventCount       int     `json:"event_count"`
+	ArtifactCount    int     `json:"artifact_count"`
+	TotalTokensUsed  int     `json:"total_tokens_used"`
+	TotalCost        float64 `json:"total_cost"`
+	AvgResponseTime  float64 `json:"avg_response_time_ms"`
+	ErrorCount       int     `json:"error_count"`
+	LastError        string  `json:"last_error,omitempty"`
 }
 
 // ThreadStateResponse represents raw checkpoint state.
@@ -686,6 +706,13 @@ func DecodeMessage(data []byte) (interface{}, error) {
 		}
 		return msg, nil
 
+	case "thread_stats":
+		var msg ThreadStatsMessage
+		if err := json.Unmarshal(data, &msg); err != nil {
+			return nil, err
+		}
+		return msg, nil
+
 	case "loop_list":
 		var msg LoopListMessage
 		if err := json.Unmarshal(data, &msg); err != nil {
@@ -901,6 +928,13 @@ func DecodeMessage(data []byte) (interface{}, error) {
 
 	case "thread_status_response":
 		var msg ThreadStatusResponse
+		if err := json.Unmarshal(data, &msg); err != nil {
+			return nil, err
+		}
+		return msg, nil
+
+	case "thread_stats_response":
+		var msg ThreadStatsResponse
 		if err := json.Unmarshal(data, &msg); err != nil {
 			return nil, err
 		}
