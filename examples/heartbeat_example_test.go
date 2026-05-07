@@ -8,9 +8,9 @@ import (
 	soothe "github.com/mirasoth/soothe-client-go"
 )
 
-// ExampleHeartbeatTracking demonstrates how to use heartbeat tracking
+// Example_heartbeatTracking demonstrates how to use heartbeat tracking
 // to monitor daemon health and prevent timeouts during long operations.
-func ExampleHeartbeatTracking() {
+func Example_heartbeatTracking() {
 	// Create client with heartbeat tracking enabled
 	client := soothe.NewClientWithHeartbeat("ws://localhost:8765", nil)
 
@@ -76,8 +76,8 @@ func ExampleHeartbeatTracking() {
 	}
 }
 
-// ExampleWaitForDaemonAlive demonstrates waiting for daemon to be alive before proceeding.
-func ExampleWaitForDaemonAlive() {
+// Example_waitForDaemonAlive demonstrates waiting for daemon to be alive before proceeding.
+func Example_waitForDaemonAlive() {
 	client := soothe.NewClientWithHeartbeat("ws://localhost:8765", nil)
 
 	ctx := context.Background()
@@ -115,8 +115,8 @@ func ExampleWaitForDaemonAlive() {
 	fmt.Printf("Thread ID: %s\n", threadID)
 }
 
-// ExampleCustomHeartbeatThreshold demonstrates using a custom alive threshold.
-func ExampleCustomHeartbeatThreshold() {
+// Example_customHeartbeatThreshold demonstrates using a custom alive threshold.
+func Example_customHeartbeatThreshold() {
 	// Create client with custom heartbeat threshold (25 seconds instead of default 15)
 	client := soothe.NewClient("ws://localhost:8765", nil)
 	client.EnableHeartbeatTrackingWithThreshold(25 * time.Second)
@@ -137,8 +137,8 @@ func ExampleCustomHeartbeatThreshold() {
 	}
 }
 
-// ExampleHeartbeatStateMonitoring demonstrates monitoring daemon state changes.
-func ExampleHeartbeatStateMonitoring() {
+// Example_heartbeatStateMonitoring demonstrates monitoring daemon state changes.
+func Example_heartbeatStateMonitoring() {
 	client := soothe.NewClientWithHeartbeat("ws://localhost:8765", nil)
 
 	ctx := context.Background()
