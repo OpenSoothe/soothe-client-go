@@ -106,7 +106,7 @@ The soothe-client-go project includes comprehensive integration tests covering a
 | `DecodeMessage` | ✅ Full coverage | `helpers_test.go:TestDecodeMessage` |
 | `EncodeMessage` | ✅ Full coverage | `helpers_test.go:TestEncodeMessage` |
 | `SplitSootheWirePayload` | ✅ Full coverage | `helpers_test.go:TestSplitSootheWirePayload` |
-| `ExtractSootheThreadID` | ✅ Full coverage | `helpers_test.go:TestExtractSootheThreadID` |
+| `ExtractSootheLoopID` | integration tests | `integration_comprehensive_test.go` |
 | `EventType` | ✅ Full coverage | `protocol_loop_test.go:TestEventType_CustomAndLegacyFallback` |
 | `LoopAIMessage` | ✅ Full coverage | `protocol_loop_test.go:TestDecodeMessage_EventWithLoopAIMessage` |
 | `NDJSON handling` | ✅ Full coverage | `client_test.go:TestClient_NDJSONReceive` |

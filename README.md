@@ -78,7 +78,7 @@ if _, err := client.WaitForDaemonReady(10*time.Second); err != nil {
 }
 
 // Send input
-if err := client.SendInput(ctx, "Hello", soothe.WithThreadID("thread-123")); err != nil {
+if err := client.SendInput(ctx, "Hello", soothe.WithLoopID("loop-123")); err != nil {
     log.Fatal(err)
 }
 

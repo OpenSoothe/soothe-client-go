@@ -425,7 +425,7 @@ func TestClient_SendInput(t *testing.T) {
 	}
 	defer client.Close()
 
-	err := client.SendInput(ctx, "hello", WithThreadID("t1"), WithModel("openai:gpt-4"))
+	err := client.SendInput(ctx, "hello", WithLoopID("t1"), WithModel("openai:gpt-4"))
 	if err != nil {
 		t.Fatalf("SendInput: %v", err)
 	}
@@ -435,14 +435,14 @@ func TestClient_SendInput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if ev["type"] != "input" {
+	if ev["type"] != "loop_input" {
 		t.Errorf("type: %v", ev["type"])
 	}
-	if ev["text"] != "hello" {
-		t.Errorf("text: %v", ev["text"])
+	if ev["content"] != "hello" {
+		t.Errorf("content: %v", ev["content"])
 	}
-	if ev["thread_id"] != "t1" {
-		t.Errorf("thread_id: %v", ev["thread_id"])
+	if ev["loop_id"] != "t1" {
+		t.Errorf("loop_id: %v", ev["loop_id"])
 	}
 	if ev["model"] != "openai:gpt-4" {
 		t.Errorf("model: %v", ev["model"])
@@ -462,7 +462,7 @@ func TestClient_SendInput_PreferredSubagent(t *testing.T) {
 	}
 	defer client.Close()
 
-	err := client.SendInput(ctx, "hello", WithSubagent("research"))
+	err := client.SendInput(ctx, "hello", WithLoopID("t1"), WithSubagent("research"))
 	if err != nil {
 		t.Fatalf("SendInput: %v", err)
 	}
@@ -516,7 +516,7 @@ func TestClient_SendInput_Autonomous(t *testing.T) {
 	defer client.Close()
 
 	maxIter := 5
-	err := client.SendInput(ctx, "do stuff", WithAutonomous(&maxIter))
+	err := client.SendInput(ctx, "do stuff", WithLoopID("t1"), WithAutonomous(&maxIter))
 	if err != nil {
 		t.Fatalf("SendInput: %v", err)
 	}

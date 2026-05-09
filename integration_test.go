@@ -83,16 +83,16 @@ func TestIntegration_NewThreadCreation(t *testing.T) {
 	defer client.Close()
 
 	wsDir := t.TempDir()
-	eventCh, err := client.ReceiveMessages(ctx)
+	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
+	if err != nil {
+		t.Fatalf("BootstrapLoopSession: %v", err)
+	}
+	t.Logf("Created new loop: %s", loopID)
+
+	_, err = client.ReceiveMessages(ctx)
 	if err != nil {
 		t.Fatalf("ReceiveMessages: %v", err)
 	}
-
-	threadID, err := BootstrapNewThreadSession(ctx, client, eventCh, wsDir, cfg)
-	if err != nil {
-		t.Fatalf("BootstrapNewThreadSession: %v", err)
-	}
-	t.Logf("Created new thread: %s", threadID)
 }
 
 func TestIntegration_InputMessage(t *testing.T) {
@@ -109,21 +109,19 @@ func TestIntegration_InputMessage(t *testing.T) {
 	defer client.Close()
 
 	wsDir := t.TempDir()
+	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
+	if err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	t.Logf("Loop ID: %s", loopID)
+
 	eventCh, err := client.ReceiveMessages(ctx)
 	if err != nil {
 		t.Fatalf("ReceiveMessages: %v", err)
 	}
 
-	threadID, err := BootstrapNewThreadSession(ctx, client, eventCh, wsDir, cfg)
-	if err != nil {
-		t.Fatalf("Bootstrap: %v", err)
-	}
-	t.Logf("Thread ID: %s", threadID)
-
-	// Send input message
-	inputMsg := NewInputMessage("Hello, this is a test message from Go client", threadID)
-	if err := client.SendMessage(ctx, inputMsg); err != nil {
-		t.Fatalf("InputMessage: %v", err)
+	if err := client.SendInput(ctx, "Hello, this is a test message from Go client", WithLoopID(loopID)); err != nil {
+		t.Fatalf("SendInput: %v", err)
 	}
 	t.Log("Sent input message")
 
@@ -316,19 +314,18 @@ func TestIntegration_FullConversation(t *testing.T) {
 	defer client.Close()
 
 	wsDir := t.TempDir()
+	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
+	if err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	t.Logf("Loop ID: %s", loopID)
+
 	eventCh, err := client.ReceiveMessages(ctx)
 	if err != nil {
 		t.Fatalf("ReceiveMessages: %v", err)
 	}
 
-	threadID, err := BootstrapNewThreadSession(ctx, client, eventCh, wsDir, cfg)
-	if err != nil {
-		t.Fatalf("Bootstrap: %v", err)
-	}
-	t.Logf("Thread ID: %s", threadID)
-
-	inputMsg := NewInputMessage("List all files in the current directory", threadID)
-	if err := client.SendMessage(ctx, inputMsg); err != nil {
+	if err := client.SendInput(ctx, "List all files in the current directory", WithLoopID(loopID)); err != nil {
 		t.Fatalf("Input: %v", err)
 	}
 

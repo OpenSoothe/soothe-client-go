@@ -4,99 +4,64 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
-// BootstrapNewThreadSession runs the daemon ready handshake → new_thread →
-// subscribe_thread flow, returning the thread ID on success.
-// This mirrors soothe_sdk.client.session.bootstrap_thread_session.
-func BootstrapNewThreadSession(
+// BootstrapLoopSession runs daemon_ready → (loop_new or reuse resumeLoopID) → loop_subscribe.
+// It mirrors soothe_sdk.client.session.bootstrap_loop_session and returns the loop id.
+// Call this before starting a concurrent ReceiveMessages reader on the same connection.
+func BootstrapLoopSession(
 	ctx context.Context,
 	client *Client,
-	eventCh <-chan interface{},
+	resumeLoopID string,
 	workspace string,
 	cfg *Config,
 ) (string, error) {
+	_ = workspace
 	if cfg == nil {
 		cfg = DefaultConfig()
 	}
 
-	// Step 1: daemon_ready handshake
 	if err := client.SendMessage(ctx, BaseMessage{Type: "daemon_ready"}); err != nil {
 		return "", fmt.Errorf("daemon_ready: %w", err)
 	}
-	if err := WaitDaemonReady(ctx, eventCh, cfg.DaemonReadyTimeout); err != nil {
+	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
 		return "", err
 	}
 
-	// Step 2: new_thread
-	if err := client.SendMessage(ctx, NewNewThreadMessage(workspace)); err != nil {
-		return "", fmt.Errorf("new_thread: %w", err)
+	loopID := strings.TrimSpace(resumeLoopID)
+	if loopID == "" {
+		resp, err := client.RequestResponse(
+			ctx,
+			map[string]interface{}{"type": "loop_new"},
+			"loop_new_response",
+			cfg.ThreadStatusTimeout,
+		)
+		if err != nil {
+			return "", fmt.Errorf("loop_new: %w", err)
+		}
+		lid, _ := resp["loop_id"].(string)
+		loopID = strings.TrimSpace(lid)
+		if loopID == "" {
+			return "", fmt.Errorf("loop_new_response missing loop_id")
+		}
 	}
-	status, err := WaitThreadStatusWithID(ctx, eventCh, cfg.ThreadStatusTimeout)
+
+	subPayload := map[string]interface{}{
+		"type":      "loop_subscribe",
+		"loop_id":   loopID,
+		"verbosity": cfg.VerbosityLevel,
+	}
+	subResp, err := client.RequestResponse(ctx, subPayload, "loop_subscribe_response", cfg.SubscriptionTimeout)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("loop_subscribe: %w", err)
 	}
-	tid := status.ThreadID
-	if tid == "" {
-		return "", fmt.Errorf("empty thread_id in status response")
-	}
-
-	// Step 3: subscribe_thread
-	if err := client.SendMessage(ctx, NewSubscribeThreadMessage(tid, cfg.VerbosityLevel)); err != nil {
-		return "", fmt.Errorf("subscribe_thread: %w", err)
-	}
-	if err := WaitSubscriptionConfirmed(ctx, eventCh, tid, cfg.VerbosityLevel, cfg.SubscriptionTimeout); err != nil {
-		return "", err
+	if ok, has := subResp["success"].(bool); has && !ok {
+		return "", fmt.Errorf("loop_subscribe failed: %v", subResp)
 	}
 
-	return tid, nil
-}
-
-// BootstrapResumeThreadSession runs the daemon ready handshake → resume_thread →
-// subscribe_thread flow, returning the thread ID on success.
-func BootstrapResumeThreadSession(
-	ctx context.Context,
-	client *Client,
-	eventCh <-chan interface{},
-	threadID string,
-	workspace string,
-	cfg *Config,
-) (string, error) {
-	if cfg == nil {
-		cfg = DefaultConfig()
-	}
-
-	// Step 1: daemon_ready handshake
-	if err := client.SendMessage(ctx, BaseMessage{Type: "daemon_ready"}); err != nil {
-		return "", fmt.Errorf("daemon_ready: %w", err)
-	}
-	if err := WaitDaemonReady(ctx, eventCh, cfg.DaemonReadyTimeout); err != nil {
-		return "", err
-	}
-
-	// Step 2: resume_thread
-	if err := client.SendMessage(ctx, NewResumeThreadMessage(threadID, workspace)); err != nil {
-		return "", fmt.Errorf("resume_thread: %w", err)
-	}
-	status, err := WaitThreadStatusWithID(ctx, eventCh, cfg.ThreadStatusTimeout)
-	if err != nil {
-		return "", err
-	}
-	tid := status.ThreadID
-	if tid == "" {
-		return "", fmt.Errorf("empty thread_id in status response")
-	}
-
-	// Step 3: subscribe_thread
-	if err := client.SendMessage(ctx, NewSubscribeThreadMessage(tid, cfg.VerbosityLevel)); err != nil {
-		return "", fmt.Errorf("subscribe_thread: %w", err)
-	}
-	if err := WaitSubscriptionConfirmed(ctx, eventCh, tid, cfg.VerbosityLevel, cfg.SubscriptionTimeout); err != nil {
-		return "", err
-	}
-
-	return tid, nil
+	return loopID, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -138,7 +103,7 @@ func WaitDaemonReady(ctx context.Context, ch <-chan interface{}, timeout time.Du
 	}
 }
 
-// WaitThreadStatusWithID waits for type status with non-empty thread_id.
+// WaitThreadStatusWithID waits for type status with non-empty loop_id or legacy thread_id.
 func WaitThreadStatusWithID(ctx context.Context, ch <-chan interface{}, timeout time.Duration) (StatusResponse, error) {
 	var zero StatusResponse
 	if timeout <= 0 {
@@ -151,7 +116,7 @@ func WaitThreadStatusWithID(ctx context.Context, ch <-chan interface{}, timeout 
 		case <-ctx.Done():
 			return zero, ctx.Err()
 		case <-deadline.C:
-			return zero, fmt.Errorf("timeout after %v waiting for status with thread_id", timeout)
+			return zero, fmt.Errorf("timeout after %v waiting for status with loop_id", timeout)
 		case msg := <-ch:
 			if msg == nil {
 				continue
@@ -160,7 +125,7 @@ func WaitThreadStatusWithID(ctx context.Context, ch <-chan interface{}, timeout 
 			case ErrorResponse:
 				return zero, fmt.Errorf("daemon error: %s: %s", m.Code, m.Message)
 			case StatusResponse:
-				if m.ThreadID != "" {
+				if m.LoopID != "" || m.ThreadID != "" {
 					return m, nil
 				}
 			case map[string]interface{}:
@@ -179,7 +144,7 @@ func WaitThreadStatusWithID(ctx context.Context, ch <-chan interface{}, timeout 
 					if err != nil {
 						continue
 					}
-					if st, ok := decoded.(StatusResponse); ok && st.ThreadID != "" {
+					if st, ok := decoded.(StatusResponse); ok && (st.LoopID != "" || st.ThreadID != "") {
 						return st, nil
 					}
 				}
@@ -188,8 +153,8 @@ func WaitThreadStatusWithID(ctx context.Context, ch <-chan interface{}, timeout 
 	}
 }
 
-// WaitSubscriptionConfirmed waits for subscription_confirmed matching thread_id.
-func WaitSubscriptionConfirmed(ctx context.Context, ch <-chan interface{}, wantThreadID, wantVerbosity string, timeout time.Duration) error {
+// WaitSubscriptionConfirmed waits for subscription_confirmed or loop_subscribe_response matching loopID.
+func WaitSubscriptionConfirmed(ctx context.Context, ch <-chan interface{}, wantLoopID, wantVerbosity string, timeout time.Duration) error {
 	_ = wantVerbosity
 	if timeout <= 0 {
 		timeout = 5 * time.Second
@@ -201,21 +166,31 @@ func WaitSubscriptionConfirmed(ctx context.Context, ch <-chan interface{}, wantT
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-deadline.C:
-			return fmt.Errorf("timeout after %v waiting for subscription_confirmed", timeout)
+			return fmt.Errorf("timeout after %v waiting for subscription confirmation", timeout)
 		case msg := <-ch:
 			if msg == nil {
 				continue
 			}
 			switch m := msg.(type) {
 			case SubscriptionConfirmedResponse:
-				if m.ThreadID == wantThreadID {
+				if m.LoopID == wantLoopID || (m.LoopID == "" && m.ThreadID == wantLoopID) {
 					return nil
 				}
 			case map[string]interface{}:
-				if t, _ := m["type"].(string); t == "subscription_confirmed" {
+				t, _ := m["type"].(string)
+				if t == "subscription_confirmed" {
+					lid, _ := m["loop_id"].(string)
 					tid, _ := m["thread_id"].(string)
-					if tid == wantThreadID {
+					if lid == wantLoopID || tid == wantLoopID {
 						return nil
+					}
+				}
+				if t == "loop_subscribe_response" {
+					if ok, _ := m["success"].(bool); ok {
+						lid, _ := m["loop_id"].(string)
+						if lid == wantLoopID {
+							return nil
+						}
 					}
 				}
 			}

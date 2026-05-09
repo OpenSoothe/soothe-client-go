@@ -134,9 +134,9 @@ func (c *Client) WaitForDaemonReady(timeout time.Duration) (map[string]interface
 	}
 }
 
-// WaitForSubscriptionConfirmed waits for a subscription_confirmed matching the thread_id.
-func (c *Client) WaitForSubscriptionConfirmed(threadID string, verbosity string, timeout time.Duration) error {
-	_ = verbosity // soothe-sdk logs a warning on mismatch; we only require thread_id
+// WaitForSubscriptionConfirmed waits for subscription confirmation matching loopID.
+func (c *Client) WaitForSubscriptionConfirmed(loopID string, verbosity string, timeout time.Duration) error {
+	_ = verbosity
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
@@ -161,17 +161,29 @@ func (c *Client) WaitForSubscriptionConfirmed(threadID string, verbosity string,
 		if ev == nil {
 			return fmt.Errorf("connection closed waiting for subscription_confirmed")
 		}
-		if typ, _ := ev["type"].(string); typ != "subscription_confirmed" {
+		typ, _ := ev["type"].(string)
+		if typ == "loop_subscribe_response" {
+			if ok, _ := ev["success"].(bool); ok {
+				if lid, _ := ev["loop_id"].(string); lid == loopID {
+					return nil
+				}
+			}
 			continue
 		}
-		if tid, _ := ev["thread_id"].(string); tid == threadID {
+		if typ != "subscription_confirmed" {
+			continue
+		}
+		if lid, _ := ev["loop_id"].(string); lid == loopID {
+			return nil
+		}
+		if tid, _ := ev["thread_id"].(string); tid == loopID {
 			return nil
 		}
 	}
 }
 
 // CommandRequest sends a structured RPC command and waits for the response (RFC-404).
-func (c *Client) CommandRequest(ctx context.Context, command, threadID string, params map[string]interface{}, timeout time.Duration) (map[string]interface{}, error) {
+func (c *Client) CommandRequest(ctx context.Context, command, loopID string, params map[string]interface{}, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
@@ -179,8 +191,8 @@ func (c *Client) CommandRequest(ctx context.Context, command, threadID string, p
 		"type":    "command_request",
 		"command": command,
 	}
-	if threadID != "" {
-		payload["thread_id"] = threadID
+	if loopID != "" {
+		payload["loop_id"] = loopID
 	}
 	if params != nil {
 		payload["params"] = params

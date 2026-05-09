@@ -30,14 +30,14 @@ func Example_heartbeatTracking() {
 		return
 	}
 
-	// Bootstrap thread session
-	threadID, err := soothe.BootstrapNewThreadSession(ctx, client, eventCh, "/tmp/workspace", nil)
+	// Bootstrap loop session (call before relying on ReceiveMessages for app events)
+	loopID, err := soothe.BootstrapLoopSession(ctx, client, "", "/tmp/workspace", nil)
 	if err != nil {
 		fmt.Printf("Bootstrap error: %v\n", err)
 		return
 	}
 
-	fmt.Printf("Thread ID: %s\n", threadID)
+	fmt.Printf("Loop ID: %s\n", loopID)
 
 	// Check daemon health before sending a long-running query
 	health := client.GetDaemonHealth()
@@ -48,7 +48,7 @@ func Example_heartbeatTracking() {
 	}
 
 	// Send input that might take a long time to process
-	if err := client.SendMessage(ctx, soothe.NewInputMessage("Analyze this large codebase", threadID)); err != nil {
+	if err := client.SendInput(ctx, "Analyze this large codebase", soothe.WithLoopID(loopID)); err != nil {
 		fmt.Printf("Send error: %v\n", err)
 		return
 	}
@@ -106,13 +106,14 @@ func Example_waitForDaemonAlive() {
 	}
 
 	// Bootstrap and proceed with normal operations
-	threadID, err := soothe.BootstrapNewThreadSession(ctx, client, eventCh, "/tmp/workspace", nil)
+	loopID, err := soothe.BootstrapLoopSession(ctx, client, "", "/tmp/workspace", nil)
 	if err != nil {
 		fmt.Printf("Bootstrap error: %v\n", err)
 		return
 	}
+	_ = eventCh // background reader for heartbeat traffic
 
-	fmt.Printf("Thread ID: %s\n", threadID)
+	fmt.Printf("Loop ID: %s\n", loopID)
 }
 
 // Example_customHeartbeatThreshold demonstrates using a custom alive threshold.

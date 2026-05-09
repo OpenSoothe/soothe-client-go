@@ -1,6 +1,10 @@
 package soothe
 
-import "context"
+import (
+	"context"
+	"fmt"
+	"strings"
+)
 
 // ---------------------------------------------------------------------------
 // High-level API methods (mirroring Python SDK WebSocketClient)
@@ -12,9 +16,13 @@ func (c *Client) SendInput(ctx context.Context, text string, opts ...InputOption
 	for _, opt := range opts {
 		opt(o)
 	}
+	if strings.TrimSpace(o.loopID) == "" {
+		return fmt.Errorf("SendInput requires WithLoopID(loopID)")
+	}
 	payload := map[string]interface{}{
-		"type":       "input",
-		"text":       text,
+		"type":       "loop_input",
+		"loop_id":    strings.TrimSpace(o.loopID),
+		"content":    text,
 		"autonomous": o.autonomous,
 	}
 	if o.maxIterations != nil {
@@ -35,9 +43,6 @@ func (c *Client) SendInput(ctx context.Context, text string, opts ...InputOption
 	if o.modelParams != nil {
 		payload["model_params"] = o.modelParams
 	}
-	if o.threadID != "" {
-		payload["thread_id"] = o.threadID
-	}
 	return c.SendMessage(ctx, payload)
 }
 
@@ -45,7 +50,7 @@ func (c *Client) SendInput(ctx context.Context, text string, opts ...InputOption
 type InputOption func(*inputOptions)
 
 type inputOptions struct {
-	threadID          string
+	loopID            string
 	autonomous        bool
 	maxIterations     *int
 	preferredSubagent string
@@ -55,9 +60,9 @@ type inputOptions struct {
 	attachments       []map[string]interface{}
 }
 
-// WithThreadID sets the thread ID for the input message.
-func WithThreadID(threadID string) InputOption {
-	return func(o *inputOptions) { o.threadID = threadID }
+// WithLoopID sets the subscribed loop id for loop_input.
+func WithLoopID(loopID string) InputOption {
+	return func(o *inputOptions) { o.loopID = loopID }
 }
 
 // WithAutonomous enables autonomous mode.
@@ -300,8 +305,8 @@ func (c *Client) SendThreadArtifacts(ctx context.Context, threadID string, reque
 	})
 }
 
-// SendResumeInterrupts sends interactive continuation payload for a paused thread.
-func (c *Client) SendResumeInterrupts(ctx context.Context, threadID string, resumePayload map[string]interface{}, requestID ...string) error {
+// SendResumeInterrupts sends interactive continuation payload for a paused turn (loop-scoped).
+func (c *Client) SendResumeInterrupts(ctx context.Context, loopID string, resumePayload map[string]interface{}, requestID ...string) error {
 	rid := ""
 	if len(requestID) > 0 {
 		rid = requestID[0]
@@ -310,7 +315,7 @@ func (c *Client) SendResumeInterrupts(ctx context.Context, threadID string, resu
 	}
 	return c.SendMessage(ctx, ResumeInterruptsMessage{
 		BaseMessage:   BaseMessage{RequestID: rid, Type: "resume_interrupts"},
-		ThreadID:      threadID,
+		LoopID:        loopID,
 		ResumePayload: resumePayload,
 	})
 }

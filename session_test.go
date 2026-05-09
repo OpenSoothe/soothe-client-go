@@ -3,6 +3,7 @@ package soothe
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,7 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func TestBootstrapNewThreadSession(t *testing.T) {
+func TestBootstrapLoopSession_newLoop(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -33,11 +34,22 @@ func TestBootstrapNewThreadSession(t *testing.T) {
 			switch typ {
 			case "daemon_ready":
 				conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"daemon_ready","state":"ready"}`))
-			case "new_thread":
-				conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"status","state":"idle","thread_id":"test-thread-456","workspace":"/tmp/ws","new_thread":true}`))
-			case "subscribe_thread":
-				tid, _ := m["thread_id"].(string)
-				conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"subscription_confirmed","thread_id":"`+tid+`","client_id":"c1","verbosity":"normal"}`))
+			case "loop_new":
+				rid, _ := m["request_id"].(string)
+				out := fmt.Sprintf(
+					`{"type":"loop_new_response","request_id":%q,"loop_id":"test-loop-456"}`,
+					rid,
+				)
+				conn.WriteMessage(websocket.TextMessage, []byte(out))
+			case "loop_subscribe":
+				rid, _ := m["request_id"].(string)
+				lid, _ := m["loop_id"].(string)
+				out := fmt.Sprintf(
+					`{"type":"loop_subscribe_response","request_id":%q,"loop_id":%q,"success":true}`,
+					rid,
+					lid,
+				)
+				conn.WriteMessage(websocket.TextMessage, []byte(out))
 			default:
 				conn.WriteMessage(websocket.TextMessage, msg)
 			}
@@ -54,21 +66,16 @@ func TestBootstrapNewThreadSession(t *testing.T) {
 	}
 	defer client.Close()
 
-	eventCh, err := client.ReceiveMessages(ctx)
+	loopID, err := BootstrapLoopSession(ctx, client, "", "/tmp/ws", DefaultConfig())
 	if err != nil {
-		t.Fatalf("ReceiveMessages: %v", err)
+		t.Fatalf("BootstrapLoopSession: %v", err)
 	}
-
-	threadID, err := BootstrapNewThreadSession(ctx, client, eventCh, "/tmp/ws", DefaultConfig())
-	if err != nil {
-		t.Fatalf("BootstrapNewThreadSession: %v", err)
-	}
-	if threadID != "test-thread-456" {
-		t.Errorf("thread_id: %s", threadID)
+	if loopID != "test-loop-456" {
+		t.Errorf("loop_id: %s", loopID)
 	}
 }
 
-func TestBootstrapResumeThreadSession(t *testing.T) {
+func TestBootstrapLoopSession_resumeLoop(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -90,12 +97,15 @@ func TestBootstrapResumeThreadSession(t *testing.T) {
 			switch typ {
 			case "daemon_ready":
 				conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"daemon_ready","state":"ready"}`))
-			case "resume_thread":
-				tid, _ := m["thread_id"].(string)
-				conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"status","state":"idle","thread_id":"`+tid+`","workspace":"/tmp/ws","thread_resumed":true}`))
-			case "subscribe_thread":
-				tid, _ := m["thread_id"].(string)
-				conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"subscription_confirmed","thread_id":"`+tid+`","client_id":"c1","verbosity":"normal"}`))
+			case "loop_subscribe":
+				rid, _ := m["request_id"].(string)
+				lid, _ := m["loop_id"].(string)
+				out := fmt.Sprintf(
+					`{"type":"loop_subscribe_response","request_id":%q,"loop_id":%q,"success":true}`,
+					rid,
+					lid,
+				)
+				conn.WriteMessage(websocket.TextMessage, []byte(out))
 			default:
 				conn.WriteMessage(websocket.TextMessage, msg)
 			}
@@ -112,17 +122,12 @@ func TestBootstrapResumeThreadSession(t *testing.T) {
 	}
 	defer client.Close()
 
-	eventCh, err := client.ReceiveMessages(ctx)
+	loopID, err := BootstrapLoopSession(ctx, client, "existing-thread", "/tmp/ws", DefaultConfig())
 	if err != nil {
-		t.Fatalf("ReceiveMessages: %v", err)
+		t.Fatalf("BootstrapLoopSession: %v", err)
 	}
-
-	threadID, err := BootstrapResumeThreadSession(ctx, client, eventCh, "existing-thread", "/tmp/ws", DefaultConfig())
-	if err != nil {
-		t.Fatalf("BootstrapResumeThreadSession: %v", err)
-	}
-	if threadID != "existing-thread" {
-		t.Errorf("thread_id: %s", threadID)
+	if loopID != "existing-thread" {
+		t.Errorf("loop_id: %s", loopID)
 	}
 }
 
@@ -212,7 +217,7 @@ func TestWaitSubscriptionConfirmed(t *testing.T) {
 	ch := make(chan interface{}, 1)
 	ch <- SubscriptionConfirmedResponse{
 		BaseMessage: BaseMessage{Type: "subscription_confirmed"},
-		ThreadID:    "thread-abc",
+		LoopID:      "thread-abc",
 		Verbosity:   "normal",
 	}
 

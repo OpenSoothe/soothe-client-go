@@ -117,17 +117,17 @@ if tracker != nil {
 }
 
 // Proceed with normal operations
-threadID, err := soothe.BootstrapNewThreadSession(ctx, client, eventCh, "/workspace", nil)
+loopID, err := soothe.BootstrapLoopSession(ctx, client, "", "/workspace", nil)
 ```
 
 ### Pattern 2: Monitor During Long Operations
 
 ```go
 client := soothe.NewClientWithHeartbeat("ws://localhost:8765", nil)
-// ... setup connection and thread ...
+// ... setup connection and loop (BootstrapLoopSession) ...
 
 // Send a potentially long-running query
-client.SendMessage(ctx, soothe.NewInputMessage("Analyze this large codebase", threadID))
+client.SendInput(ctx, "Analyze this large codebase", soothe.WithLoopID(loopID))
 
 // Process events while monitoring health
 tracker := client.GetHeartbeatTracker()

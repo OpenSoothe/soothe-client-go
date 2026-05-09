@@ -629,7 +629,7 @@ func createTestThread(t *testing.T, client *Client, ctx context.Context) string 
 		if ev == nil {
 			continue
 		}
-		threadID, ok := ExtractSootheThreadID(ev)
+		threadID, ok := ExtractSootheLoopID(ev)
 		if ok && threadID != "" {
 			if client.conn != nil {
 				client.conn.SetReadDeadline(time.Time{})
@@ -653,19 +653,19 @@ func TestIntegration_LongRunningConversation(t *testing.T) {
 	}
 	defer client.Close()
 
-	// Start receiving messages before bootstrapping so we don't miss the daemon_ready response
-	eventCh, err := client.ReceiveMessages(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start receiving messages: %v", err)
-	}
-
-	// Bootstrap a new thread session (includes daemon_ready handshake)
-	threadID, err := BootstrapNewThreadSession(ctx, client, eventCh, "/tmp/soothe-test-ws", integrationTestConfig())
+	// Bootstrap first (uses request/response; do not start ReceiveMessages yet).
+	loopID, err := BootstrapLoopSession(ctx, client, "", "/tmp/soothe-test-ws", integrationTestConfig())
 	if err != nil {
 		t.Fatalf("Failed to bootstrap session: %v", err)
 	}
 
-	t.Logf("Started long conversation in thread: %s", threadID)
+	eventCh, err := client.ReceiveMessages(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start receiving messages: %v", err)
+	}
+	_ = eventCh
+
+	t.Logf("Started long conversation in loop: %s", loopID)
 
 	// Send multiple inputs
 	inputs := []string{
@@ -677,7 +677,7 @@ func TestIntegration_LongRunningConversation(t *testing.T) {
 	for i, input := range inputs {
 		t.Logf("Sending input %d: %s", i+1, input)
 
-		if err := client.SendInput(ctx, input, WithThreadID(threadID)); err != nil {
+		if err := client.SendInput(ctx, input, WithLoopID(loopID)); err != nil {
 			t.Errorf("Failed to send input %d: %v", i+1, err)
 			continue
 		}

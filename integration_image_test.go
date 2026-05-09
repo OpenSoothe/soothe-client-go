@@ -45,23 +45,23 @@ func TestIntegration_ImageUnderstanding(t *testing.T) {
 	defer client.Close()
 
 	wsDir := t.TempDir()
+	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
+	if err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	t.Logf("Loop ID: %s", loopID)
+
 	eventCh, err := client.ReceiveMessages(ctx)
 	if err != nil {
 		t.Fatalf("ReceiveMessages: %v", err)
 	}
-
-	threadID, err := BootstrapNewThreadSession(ctx, client, eventCh, wsDir, cfg)
-	if err != nil {
-		t.Fatalf("Bootstrap: %v", err)
-	}
-	t.Logf("Thread ID: %s", threadID)
 
 	// Load and encode test image
 	imgData, mimeType := loadTestImage(t)
 
 	// Send input with image attachment
 	err = client.SendInput(ctx, "Describe what you see in this image in one sentence.",
-		WithThreadID(threadID),
+		WithLoopID(loopID),
 		WithAttachments([]map[string]interface{}{
 			{
 				"mime_type": mimeType,
@@ -131,23 +131,23 @@ func TestIntegration_ImageAttachmentPayload(t *testing.T) {
 	defer client.Close()
 
 	wsDir := t.TempDir()
+	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
+	if err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	t.Logf("Loop ID: %s", loopID)
+
 	eventCh, err := client.ReceiveMessages(ctx)
 	if err != nil {
 		t.Fatalf("ReceiveMessages: %v", err)
 	}
-
-	threadID, err := BootstrapNewThreadSession(ctx, client, eventCh, wsDir, cfg)
-	if err != nil {
-		t.Fatalf("Bootstrap: %v", err)
-	}
-	t.Logf("Thread ID: %s", threadID)
 
 	// Load and encode test image
 	imgData, mimeType := loadTestImage(t)
 
 	// Send input with image attachment using the high-level API
 	err = client.SendInput(ctx, "What is in this image?",
-		WithThreadID(threadID),
+		WithLoopID(loopID),
 		WithAttachments([]map[string]interface{}{
 			{
 				"mime_type": mimeType,
@@ -211,22 +211,22 @@ func TestIntegration_MultipleImageAttachments(t *testing.T) {
 	defer client.Close()
 
 	wsDir := t.TempDir()
+	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
+	if err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	t.Logf("Loop ID: %s", loopID)
+
 	eventCh, err := client.ReceiveMessages(ctx)
 	if err != nil {
 		t.Fatalf("ReceiveMessages: %v", err)
 	}
 
-	threadID, err := BootstrapNewThreadSession(ctx, client, eventCh, wsDir, cfg)
-	if err != nil {
-		t.Fatalf("Bootstrap: %v", err)
-	}
-	t.Logf("Thread ID: %s", threadID)
-
 	imgData, mimeType := loadTestImage(t)
 
 	// Send same image twice to test multiple attachments
 	err = client.SendInput(ctx, "Compare these two images.",
-		WithThreadID(threadID),
+		WithLoopID(loopID),
 		WithAttachments([]map[string]interface{}{
 			{"mime_type": mimeType, "data": imgData},
 			{"mime_type": mimeType, "data": imgData},

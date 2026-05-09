@@ -48,6 +48,7 @@ type CommandMessage struct {
 type CommandRequestMessage struct {
 	BaseMessage
 	Command  string                 `json:"command"`
+	LoopID   string                 `json:"loop_id,omitempty"`
 	ThreadID string                 `json:"thread_id,omitempty"`
 	Params   map[string]interface{} `json:"params,omitempty"`
 }
@@ -152,7 +153,7 @@ type ThreadArtifactsMessage struct {
 // ResumeInterruptsMessage sends interactive continuation payload.
 type ResumeInterruptsMessage struct {
 	BaseMessage
-	ThreadID      string                 `json:"thread_id"`
+	LoopID        string                 `json:"loop_id"`
 	ResumePayload map[string]interface{} `json:"resume_payload"`
 }
 
@@ -234,7 +235,8 @@ type LoopReattachMessage struct {
 // LoopSubscribeMessage subscribes to loop events (RFC-503).
 type LoopSubscribeMessage struct {
 	BaseMessage
-	LoopID string `json:"loop_id"`
+	LoopID    string `json:"loop_id"`
+	Verbosity string `json:"verbosity,omitempty"`
 }
 
 // LoopDetachMessage detaches from a loop (RFC-503).
@@ -251,8 +253,15 @@ type LoopNewMessage struct {
 // LoopInputMessage sends input to a loop (RFC-503).
 type LoopInputMessage struct {
 	BaseMessage
-	LoopID  string `json:"loop_id"`
-	Content string `json:"content"`
+	LoopID            string                   `json:"loop_id"`
+	Content           string                   `json:"content"`
+	Autonomous        bool                     `json:"autonomous,omitempty"`
+	MaxIterations     *int                     `json:"max_iterations,omitempty"`
+	PreferredSubagent string                   `json:"preferred_subagent,omitempty"`
+	Interactive       bool                     `json:"interactive,omitempty"`
+	Model             string                   `json:"model,omitempty"`
+	ModelParams       map[string]interface{}   `json:"model_params,omitempty"`
+	Attachments       []map[string]interface{} `json:"attachments,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -262,6 +271,7 @@ type LoopInputMessage struct {
 // EventMessage represents a streaming event from the agent.
 type EventMessage struct {
 	BaseMessage
+	LoopID    string      `json:"loop_id,omitempty"`
 	ThreadID  string      `json:"thread_id,omitempty"`
 	Namespace interface{} `json:"namespace,omitempty"`
 	Mode      string      `json:"mode,omitempty"`
@@ -281,7 +291,8 @@ type LoopAIMessage struct {
 type StatusResponse struct {
 	BaseMessage
 	State               string        `json:"state"`
-	ThreadID            string        `json:"thread_id"`
+	LoopID              string        `json:"loop_id,omitempty"`
+	ThreadID            string        `json:"thread_id,omitempty"`
 	Workspace           string        `json:"workspace"`
 	InputHistory        []string      `json:"input_history,omitempty"`
 	ConversationHistory []interface{} `json:"conversation_history,omitempty"`
@@ -292,7 +303,8 @@ type StatusResponse struct {
 // SubscriptionConfirmedResponse represents a subscription acknowledgment.
 type SubscriptionConfirmedResponse struct {
 	BaseMessage
-	ThreadID  string `json:"thread_id"`
+	LoopID    string `json:"loop_id,omitempty"`
+	ThreadID  string `json:"thread_id,omitempty"`
 	ClientID  string `json:"client_id"`
 	Verbosity string `json:"verbosity"`
 }
@@ -805,7 +817,15 @@ func DecodeMessage(data []byte) (interface{}, error) {
 		if err := json.Unmarshal(data, &msg); err != nil {
 			return nil, err
 		}
-		// Some daemon builds emit camelCase for thread id
+		// Some daemon builds emit camelCase ids
+		if msg.LoopID == "" {
+			var altLoop struct {
+				LoopID string `json:"loopId"`
+			}
+			if err := json.Unmarshal(data, &altLoop); err == nil && altLoop.LoopID != "" {
+				msg.LoopID = altLoop.LoopID
+			}
+		}
 		if msg.ThreadID == "" {
 			var alt struct {
 				ThreadID string `json:"threadId"`
@@ -1043,18 +1063,30 @@ func DecodeMessage(data []byte) (interface{}, error) {
 	}
 }
 
-// ExtractSootheThreadID returns a non-empty Soothe thread id when present in a daemon message.
-func ExtractSootheThreadID(msg interface{}) (string, bool) {
+// ExtractSootheLoopID returns a non-empty loop or checkpoint id when present in a daemon message.
+func ExtractSootheLoopID(msg interface{}) (string, bool) {
 	switch m := msg.(type) {
 	case StatusResponse:
+		if m.LoopID != "" {
+			return m.LoopID, true
+		}
 		if m.ThreadID != "" {
 			return m.ThreadID, true
 		}
 	case EventMessage:
+		if m.LoopID != "" {
+			return m.LoopID, true
+		}
 		if m.ThreadID != "" {
 			return m.ThreadID, true
 		}
 		if dataMap, ok := m.Data.(map[string]interface{}); ok && dataMap != nil {
+			if s, ok := dataMap["loop_id"].(string); ok && s != "" {
+				return s, true
+			}
+			if s, ok := dataMap["loopId"].(string); ok && s != "" {
+				return s, true
+			}
 			if s, ok := dataMap["thread_id"].(string); ok && s != "" {
 				return s, true
 			}
@@ -1099,6 +1131,12 @@ func ExtractSootheThreadID(msg interface{}) (string, bool) {
 			return m.ThreadID, true
 		}
 	case map[string]interface{}:
+		if s, ok := m["loop_id"].(string); ok && s != "" {
+			return s, true
+		}
+		if s, ok := m["loopId"].(string); ok && s != "" {
+			return s, true
+		}
 		if s, ok := m["thread_id"].(string); ok && s != "" {
 			return s, true
 		}
