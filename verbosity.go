@@ -4,11 +4,9 @@ package soothe
 type VerbosityLevel string
 
 const (
-	VerbosityQuiet    VerbosityLevel = "quiet"
-	VerbosityMinimal  VerbosityLevel = "minimal"
-	VerbosityNormal   VerbosityLevel = "normal"
-	VerbosityDetailed VerbosityLevel = "detailed"
-	VerbosityDebug    VerbosityLevel = "debug"
+	VerbosityQuiet  VerbosityLevel = "quiet"
+	VerbosityNormal VerbosityLevel = "normal"
+	VerbosityDebug  VerbosityLevel = "debug"
 )
 
 // VerbosityTier represents the minimum verbosity level at which content is visible.
@@ -25,11 +23,9 @@ const (
 
 // verbosityLevelValues maps VerbosityLevel strings to their integer values.
 var verbosityLevelValues = map[VerbosityLevel]int{
-	VerbosityQuiet:    0,
-	VerbosityMinimal:  1,
-	VerbosityNormal:   1,
-	VerbosityDetailed: 2,
-	VerbosityDebug:    3,
+	VerbosityQuiet:  0,
+	VerbosityNormal: 1,
+	VerbosityDebug:  3,
 }
 
 // ShouldShow returns true if content at the given tier is visible at the given verbosity.

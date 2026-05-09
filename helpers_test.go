@@ -27,7 +27,7 @@ func TestCheckDaemonStatus(t *testing.T) {
 		json.Unmarshal(msg, &m)
 		rid, _ := m["request_id"].(string)
 
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"daemon_status_response","request_id":"`+rid+`","running":true,"port_live":true,"active_threads":5}`))
+		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"daemon_status_response","request_id":"`+rid+`","running":true,"port_live":true,"active_loops":5}`))
 	}))
 	defer ts.Close()
 
@@ -61,7 +61,7 @@ func TestIsDaemonLive_Success(t *testing.T) {
 		var m map[string]interface{}
 		json.Unmarshal(msg, &m)
 		rid, _ := m["request_id"].(string)
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"daemon_status_response","request_id":"`+rid+`","running":true,"port_live":true,"active_threads":0}`))
+		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"daemon_status_response","request_id":"`+rid+`","running":true,"port_live":true,"active_loops":0}`))
 	}))
 	defer ts.Close()
 

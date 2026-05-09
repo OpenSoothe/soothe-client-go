@@ -10,7 +10,7 @@ import (
 func integrationTestConfig() *Config {
 	c := DefaultConfig()
 	c.DaemonReadyTimeout = 30 * time.Second
-	c.ThreadStatusTimeout = 60 * time.Second
+	c.LoopStatusTimeout = 60 * time.Second
 	c.SubscriptionTimeout = 30 * time.Second
 	return c
 }
@@ -20,6 +20,20 @@ func skipIfShort(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Integration test requires running Soothe daemon")
 	}
+}
+
+// skipIfNoDaemon skips integration tests if daemon is not running.
+func skipIfNoDaemon(t *testing.T) {
+	skipIfShort(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	client := NewClient("ws://localhost:8765", DefaultConfig())
+	if err := client.Connect(ctx); err != nil {
+		t.Skip("Soothe daemon not running at ws://localhost:8765")
+	}
+	client.Close()
 }
 
 // ---------------------------------------------------------------------------
@@ -69,7 +83,7 @@ func TestIntegration_DaemonReady(t *testing.T) {
 	t.Logf("Daemon is ready: %v", ev)
 }
 
-func TestIntegration_NewThreadCreation(t *testing.T) {
+func TestIntegration_NewLoopCreation(t *testing.T) {
 	skipIfShort(t)
 	cfg := integrationTestConfig()
 	client := NewClient(cfg.DaemonURL, cfg)
@@ -177,8 +191,8 @@ func TestIntegration_DaemonStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RequestResponse daemon_status: %v", err)
 	}
-	t.Logf("Daemon status: running=%v, port_live=%v, active_threads=%v",
-		resp["running"], resp["port_live"], resp["active_threads"])
+	t.Logf("Daemon status: running=%v, port_live=%v, active_loops=%v",
+		resp["running"], resp["port_live"], resp["active_loops"])
 }
 
 func TestIntegration_SkillsList(t *testing.T) {

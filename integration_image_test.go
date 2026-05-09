@@ -184,7 +184,7 @@ func TestIntegration_ImageAttachmentPayload(t *testing.T) {
 				t.Logf("Error from daemon: code=%s message=%s", m.Code, m.Message)
 				gotError = true
 			case StatusResponse:
-				t.Logf("Thread state: %s", m.State)
+				t.Logf("Status state: %s", m.State)
 				gotStatus = true
 			case EventMessage:
 				t.Logf("Event: %s", m.EventType())

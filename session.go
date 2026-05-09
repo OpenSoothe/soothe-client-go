@@ -36,7 +36,7 @@ func BootstrapLoopSession(
 			ctx,
 			map[string]interface{}{"type": "loop_new"},
 			"loop_new_response",
-			cfg.ThreadStatusTimeout,
+			cfg.LoopStatusTimeout,
 		)
 		if err != nil {
 			return "", fmt.Errorf("loop_new: %w", err)
@@ -103,8 +103,8 @@ func WaitDaemonReady(ctx context.Context, ch <-chan interface{}, timeout time.Du
 	}
 }
 
-// WaitThreadStatusWithID waits for type status with non-empty loop_id or legacy thread_id.
-func WaitThreadStatusWithID(ctx context.Context, ch <-chan interface{}, timeout time.Duration) (StatusResponse, error) {
+// WaitLoopStatusWithID waits for type status with non-empty loop_id.
+func WaitLoopStatusWithID(ctx context.Context, ch <-chan interface{}, timeout time.Duration) (StatusResponse, error) {
 	var zero StatusResponse
 	if timeout <= 0 {
 		timeout = 5 * time.Second
@@ -125,7 +125,7 @@ func WaitThreadStatusWithID(ctx context.Context, ch <-chan interface{}, timeout 
 			case ErrorResponse:
 				return zero, fmt.Errorf("daemon error: %s: %s", m.Code, m.Message)
 			case StatusResponse:
-				if m.LoopID != "" || m.ThreadID != "" {
+				if m.LoopID != "" {
 					return m, nil
 				}
 			case map[string]interface{}:
@@ -144,7 +144,7 @@ func WaitThreadStatusWithID(ctx context.Context, ch <-chan interface{}, timeout 
 					if err != nil {
 						continue
 					}
-					if st, ok := decoded.(StatusResponse); ok && (st.LoopID != "" || st.ThreadID != "") {
+					if st, ok := decoded.(StatusResponse); ok && st.LoopID != "" {
 						return st, nil
 					}
 				}
@@ -173,15 +173,14 @@ func WaitSubscriptionConfirmed(ctx context.Context, ch <-chan interface{}, wantL
 			}
 			switch m := msg.(type) {
 			case SubscriptionConfirmedResponse:
-				if m.LoopID == wantLoopID || (m.LoopID == "" && m.ThreadID == wantLoopID) {
+				if m.LoopID == wantLoopID {
 					return nil
 				}
 			case map[string]interface{}:
 				t, _ := m["type"].(string)
 				if t == "subscription_confirmed" {
 					lid, _ := m["loop_id"].(string)
-					tid, _ := m["thread_id"].(string)
-					if lid == wantLoopID || tid == wantLoopID {
+					if lid == wantLoopID {
 						return nil
 					}
 				}

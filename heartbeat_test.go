@@ -1,6 +1,7 @@
 package soothe
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -16,8 +17,8 @@ func TestHeartbeatTracker_New(t *testing.T) {
 	if health.State != "" {
 		t.Errorf("expected empty initial state, got %q", health.State)
 	}
-	if health.ThreadID != "" {
-		t.Errorf("expected empty initial thread ID, got %q", health.ThreadID)
+	if health.LoopID != "" {
+		t.Errorf("expected empty initial loop ID, got %q", health.LoopID)
 	}
 
 	// Should be alive during grace period (first 20 seconds)
@@ -35,8 +36,8 @@ func TestHeartbeatTracker_NewWithThreshold(t *testing.T) {
 
 	// Check that custom threshold is applied
 	tracker.Update(map[string]interface{}{
-		"state":     "running",
-		"thread_id": "thread-123",
+		"state":    "running",
+		"loop_id": "loop-123",
 	})
 
 	// Wait for just over the grace period (20 seconds)
@@ -63,8 +64,8 @@ func TestHeartbeatTracker_Update(t *testing.T) {
 	tracker := NewHeartbeatTracker()
 
 	heartbeatData := map[string]interface{}{
-		"state":     "running",
-		"thread_id": "thread-456",
+		"state":    "running",
+		"loop_id": "loop-456",
 		"timestamp": "2024-01-01T00:00:00Z",
 	}
 
@@ -74,8 +75,8 @@ func TestHeartbeatTracker_Update(t *testing.T) {
 	if health.State != "running" {
 		t.Errorf("expected state 'running', got %q", health.State)
 	}
-	if health.ThreadID != "thread-456" {
-		t.Errorf("expected thread_id 'thread-456', got %q", health.ThreadID)
+	if health.LoopID != "loop-456" {
+		t.Errorf("expected loop_id 'loop-456', got %q", health.LoopID)
 	}
 	if health.LastHeartbeat.IsZero() {
 		t.Error("expected last heartbeat timestamp to be set")
@@ -90,8 +91,8 @@ func TestHeartbeatTracker_StateMethods(t *testing.T) {
 
 	// Test idle state
 	tracker.Update(map[string]interface{}{
-		"state":     "idle",
-		"thread_id": "",
+		"state":   "idle",
+		"loop_id": "",
 	})
 
 	if !tracker.IsIdle() {
@@ -106,8 +107,8 @@ func TestHeartbeatTracker_StateMethods(t *testing.T) {
 
 	// Test running state
 	tracker.Update(map[string]interface{}{
-		"state":     "running",
-		"thread_id": "thread-789",
+		"state":    "running",
+		"loop_id": "loop-789",
 	})
 
 	if tracker.IsIdle() {
@@ -119,8 +120,8 @@ func TestHeartbeatTracker_StateMethods(t *testing.T) {
 	if tracker.GetState() != "running" {
 		t.Errorf("expected GetState to return 'running', got %q", tracker.GetState())
 	}
-	if tracker.GetThreadID() != "thread-789" {
-		t.Errorf("expected GetThreadID to return 'thread-789', got %q", tracker.GetThreadID())
+	if tracker.GetLoopID() != "loop-789" {
+		t.Errorf("expected GetLoopID to return 'loop-789', got %q", tracker.GetLoopID())
 	}
 }
 
@@ -129,8 +130,8 @@ func TestHeartbeatTracker_ProcessHeartbeatEvent(t *testing.T) {
 
 	// Test non-event message
 	regularMsg := map[string]interface{}{
-		"type":      "status",
-		"thread_id": "thread-123",
+		"type":    "status",
+		"loop_id": "loop-123",
 	}
 	if tracker.ProcessHeartbeatEvent(regularMsg) {
 		t.Error("expected ProcessHeartbeatEvent to return false for non-event message")
@@ -140,7 +141,7 @@ func TestHeartbeatTracker_ProcessHeartbeatEvent(t *testing.T) {
 	otherEvent := map[string]interface{}{
 		"type": "event",
 		"data": map[string]interface{}{
-			"type": "soothe.lifecycle.thread.started",
+			"type": EventLoopStarted,
 		},
 	}
 	if tracker.ProcessHeartbeatEvent(otherEvent) {
@@ -149,15 +150,15 @@ func TestHeartbeatTracker_ProcessHeartbeatEvent(t *testing.T) {
 
 	// Test heartbeat event
 	heartbeatEvent := map[string]interface{}{
-		"type":       "event",
-		"thread_id":  "thread-123",
-		"namespace":  []string{},
-		"mode":       "custom",
+		"type":      "event",
+		"loop_id":   "loop-123",
+		"namespace": []string{},
+		"mode":      "custom",
 		"data": map[string]interface{}{
-			"type":       EventDaemonHeartbeat,
-			"thread_id":  "thread-123",
-			"timestamp":  "2024-01-01T00:00:00Z",
-			"state":      "running",
+			"type":      EventDaemonHeartbeat,
+			"loop_id":   "loop-123",
+			"timestamp": "2024-01-01T00:00:00Z",
+			"state":     "running",
 		},
 	}
 	if !tracker.ProcessHeartbeatEvent(heartbeatEvent) {
@@ -169,8 +170,8 @@ func TestHeartbeatTracker_ProcessHeartbeatEvent(t *testing.T) {
 	if health.State != "running" {
 		t.Errorf("expected state 'running', got %q", health.State)
 	}
-	if health.ThreadID != "thread-123" {
-		t.Errorf("expected thread_id 'thread-123', got %q", health.ThreadID)
+	if health.LoopID != "loop-123" {
+		t.Errorf("expected loop_id 'loop-123', got %q", health.LoopID)
 	}
 }
 
@@ -179,8 +180,8 @@ func TestHeartbeatTracker_Reset(t *testing.T) {
 
 	// Update with some data
 	tracker.Update(map[string]interface{}{
-		"state":     "running",
-		"thread_id": "thread-123",
+		"state":    "running",
+		"loop_id": "loop-123",
 	})
 
 	// Reset
@@ -190,8 +191,8 @@ func TestHeartbeatTracker_Reset(t *testing.T) {
 	if health.State != "" {
 		t.Errorf("expected empty state after reset, got %q", health.State)
 	}
-	if health.ThreadID != "" {
-		t.Errorf("expected empty thread_id after reset, got %q", health.ThreadID)
+	if health.LoopID != "" {
+		t.Errorf("expected empty loop_id after reset, got %q", health.LoopID)
 	}
 	// Should be alive again during grace period
 	if !health.IsAlive {
@@ -240,8 +241,8 @@ func TestHeartbeatTracker_ConcurrentAccess(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func(id int) {
 			tracker.Update(map[string]interface{}{
-				"state":     "running",
-				"thread_id": string(rune('A' + id)),
+				"state":    "running",
+				"loop_id": fmt.Sprintf("loop-%d", id),
 			})
 			_ = tracker.GetHealth()
 			_ = tracker.GetHealth().IsAlive

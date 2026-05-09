@@ -49,17 +49,6 @@ const (
 	EventResearchInternalLLM        = "soothe.capability.research.internal_llm.run"
 )
 
-// Thread lifecycle events
-const (
-	EventThreadStarted   = "soothe.lifecycle.thread.started"
-	EventThreadResumed   = "soothe.lifecycle.thread.resumed"
-	EventThreadSaved     = "soothe.lifecycle.thread.saved"
-	EventThreadEnded     = "soothe.lifecycle.thread.ended"
-	EventThreadSwitched  = "soothe.lifecycle.thread.switched"
-	EventThreadCompleted = "soothe.lifecycle.thread.completed"
-	EventThreadError     = "soothe.lifecycle.thread.error"
-)
-
 // Iteration lifecycle events
 const (
 	EventIterationStarted   = "soothe.lifecycle.iteration.started"
@@ -220,7 +209,7 @@ func classifyLifecycleEvent(full string) VerbosityTier {
 	switch action {
 	case "completed", "ended", "error":
 		return TierQuiet
-	case "started", "switched":
+	case "started", "reattached":
 		return TierNormal
 	default:
 		return TierDetailed
@@ -251,7 +240,7 @@ func classifyCapabilityEvent(full string) VerbosityTier {
 
 func classifyByEventTypeString(s string) VerbosityTier {
 	switch s {
-	case EventChitchatResponse, EventFinalReport, EventThreadError,
+	case EventChitchatResponse, EventFinalReport,
 		EventGeneralFailed, EventGoalFailed, EventPlanStepFailed:
 		return TierQuiet
 	case EventPlanCreated, EventPlanStepStarted, EventPlanStepCompleted,
@@ -263,9 +252,7 @@ func classifyByEventTypeString(s string) VerbosityTier {
 		EventBrowserStarted, EventBrowserCompleted,
 		EventClaudeStarted, EventClaudeCompleted,
 		EventResearchStarted, EventResearchCompleted,
-		EventResearchJudgementReporting,
-		EventThreadStarted, EventThreadResumed, EventThreadEnded,
-		EventThreadSwitched, EventThreadSaved:
+		EventResearchJudgementReporting:
 		return TierNormal
 	case EventAgentLoopCompleted:
 		return TierQuiet
@@ -286,13 +273,13 @@ func classifyByEventTypeString(s string) VerbosityTier {
 	}
 }
 
-// IsCompletionEvent checks if an event namespace signals thread completion.
+// IsCompletionEvent checks if an event namespace signals loop/run completion.
 func IsCompletionEvent(namespace string) bool {
 	_, _, action, ok := ParseNamespace(namespace)
 	if !ok {
 		return false
 	}
-	return action == "completed" || namespace == EventThreadCompleted || namespace == EventThreadEnded
+	return action == "completed" || namespace == EventLoopCompleted
 }
 
 // IsSubagentProgressEvent checks if an event is a subagent progress event.
@@ -310,9 +297,7 @@ func IsSubagentProgressEvent(namespace string) bool {
 
 // EssentialEventTypes are always processed regardless of verbosity.
 var EssentialEventTypes = map[string]bool{
-	EventThreadCompleted:            true,
-	EventThreadEnded:                true,
-	EventThreadError:                true,
+	EventLoopCompleted:              true,
 	EventChitchatResponse:           true,
 	EventFinalReport:                true,
 	EventPlanCreated:                true,

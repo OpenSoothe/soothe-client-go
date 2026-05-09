@@ -56,14 +56,16 @@ func testFullBootstrapHandler(w http.ResponseWriter, r *http.Request) {
 		switch typ {
 		case "daemon_ready":
 			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"daemon_ready","state":"ready"}`))
-		case "new_thread":
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"status","state":"idle","thread_id":"test-thread-123","workspace":"/tmp","new_thread":true}`))
-		case "resume_thread":
-			tid, _ := m["thread_id"].(string)
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"status","state":"idle","thread_id":"`+tid+`","workspace":"/tmp","thread_resumed":true}`))
-		case "subscribe_thread":
-			tid, _ := m["thread_id"].(string)
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"subscription_confirmed","thread_id":"`+tid+`","client_id":"c1","verbosity":"normal"}`))
+		case "loop_new":
+			rid, _ := m["request_id"].(string)
+			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"loop_new_response","request_id":"`+rid+`","loop_id":"test-loop-123","success":true}`))
+		case "loop_subscribe":
+			rid, _ := m["request_id"].(string)
+			lid, _ := m["loop_id"].(string)
+			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"loop_subscribe_response","request_id":"`+rid+`","loop_id":"`+lid+`","success":true}`))
+		case "loop_reattach":
+			lid, _ := m["loop_id"].(string)
+			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"status","state":"idle","loop_id":"`+lid+`","workspace":"/tmp"}`))
 		default:
 			conn.WriteMessage(websocket.TextMessage, msg)
 		}
@@ -79,8 +81,8 @@ func testNDJSONHandler(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 	conn.ReadMessage() // consume one message
 	conn.WriteMessage(websocket.TextMessage, []byte(
-		`{"type":"event","thread_id":"ndjson-thread","namespace":[],"mode":"messages","data":[{"type":"AIMessageChunk","content":"hello","phase":"chitchat"},{}]}`+"\n"+
-			`{"type":"status","state":"idle","thread_id":"ndjson-thread"}`,
+		`{"type":"event","loop_id":"ndjson-loop","namespace":[],"mode":"messages","data":[{"type":"AIMessageChunk","content":"hello","phase":"chitchat"},{}]}`+"\n"+
+			`{"type":"status","state":"idle","loop_id":"ndjson-loop"}`,
 	))
 }
 
@@ -106,7 +108,7 @@ func testRequestResponseHandler(w http.ResponseWriter, r *http.Request) {
 
 		switch typ {
 		case "daemon_status":
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"daemon_status_response","request_id":"`+rid+`","running":true,"port_live":true,"active_threads":2}`))
+			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"daemon_status_response","request_id":"`+rid+`","running":true,"port_live":true,"active_loops":2}`))
 		case "skills_list":
 			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"skills_list_response","request_id":"`+rid+`","skills":[{"name":"research"},{"name":"browser"}]}`))
 		case "models_list":
@@ -116,8 +118,8 @@ func testRequestResponseHandler(w http.ResponseWriter, r *http.Request) {
 			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"config_get_response","request_id":"`+rid+`","`+section+`":{"key":"value"}}`))
 		case "daemon_shutdown":
 			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"shutdown_ack","request_id":"`+rid+`","status":"acknowledged"}`))
-		case "thread_list":
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"thread_list_response","request_id":"`+rid+`","threads":[{"thread_id":"t1"},{"thread_id":"t2"}]}`))
+		case "loop_list":
+			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"loop_list_response","request_id":"`+rid+`","loops":[{"loop_id":"l1"},{"loop_id":"l2"}],"total":2}`))
 		case "invoke_skill":
 			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"invoke_skill_response","request_id":"`+rid+`","skill":"test","status":"ok"}`))
 		case "error_test":
@@ -556,33 +558,6 @@ func TestClient_SendCommand(t *testing.T) {
 	}
 	if ev["type"] != "command" || ev["cmd"] != "/help" {
 		t.Errorf("unexpected: %v", ev)
-	}
-}
-
-func TestClient_SendNewThread(t *testing.T) {
-	ts := newTestServer(testFullBootstrapHandler)
-	defer ts.Close()
-
-	client := NewClient(wsURL(ts.URL), nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := client.Connect(ctx); err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer client.Close()
-
-	if err := client.SendNewThread(ctx, "/tmp/workspace"); err != nil {
-		t.Fatalf("SendNewThread: %v", err)
-	}
-
-	// The test server responds to new_thread with a status response
-	ev, err := client.ReadEvent()
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	if ev["type"] != "status" {
-		t.Errorf("expected status response, got type: %v", ev["type"])
 	}
 }
 

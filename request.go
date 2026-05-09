@@ -176,9 +176,6 @@ func (c *Client) WaitForSubscriptionConfirmed(loopID string, verbosity string, t
 		if lid, _ := ev["loop_id"].(string); lid == loopID {
 			return nil
 		}
-		if tid, _ := ev["thread_id"].(string); tid == loopID {
-			return nil
-		}
 	}
 }
 
@@ -198,28 +195,6 @@ func (c *Client) CommandRequest(ctx context.Context, command, loopID string, par
 		payload["params"] = params
 	}
 	return c.RequestResponse(ctx, payload, "command_response", timeout)
-}
-
-// ThreadStatus requests runtime status for a thread and waits for the response.
-func (c *Client) ThreadStatus(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
-	if timeout <= 0 {
-		timeout = 10 * time.Second
-	}
-	return c.RequestResponse(ctx, map[string]interface{}{
-		"type":      "thread_status",
-		"thread_id": threadID,
-	}, "thread_status_response", timeout)
-}
-
-// ThreadStats requests thread execution statistics and waits for the response.
-func (c *Client) ThreadStats(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
-	if timeout <= 0 {
-		timeout = 10 * time.Second
-	}
-	return c.RequestResponse(ctx, map[string]interface{}{
-		"type":      "thread_stats",
-		"thread_id": threadID,
-	}, "thread_stats_response", timeout)
 }
 
 // LoopList requests the loop list and waits for the response.
@@ -310,14 +285,19 @@ func (c *Client) LoopReattach(ctx context.Context, loopID string, timeout time.D
 }
 
 // LoopSubscribe subscribes to loop events and waits for the response (RFC-503).
-func (c *Client) LoopSubscribe(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
+// Pass empty verbosity to omit the field (daemon default).
+func (c *Client) LoopSubscribe(ctx context.Context, loopID string, verbosity string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
-	return c.RequestResponse(ctx, map[string]interface{}{
+	payload := map[string]interface{}{
 		"type":    "loop_subscribe",
 		"loop_id": loopID,
-	}, "loop_subscribe_response", timeout)
+	}
+	if verbosity != "" {
+		payload["verbosity"] = verbosity
+	}
+	return c.RequestResponse(ctx, payload, "loop_subscribe_response", timeout)
 }
 
 // LoopDetach detaches from a loop and waits for the response (RFC-503).
@@ -360,52 +340,52 @@ func (c *Client) LoopInput(ctx context.Context, loopID string, content string, t
 // These wrap CommandRequest for common daemon slash commands
 // ---------------------------------------------------------------------------
 
-// CommandClear clears thread history.
-func (c *Client) CommandClear(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+// CommandClear clears loop conversation history.
+func (c *Client) CommandClear(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
-	return c.CommandRequest(ctx, "clear", threadID, nil, timeout)
+	return c.CommandRequest(ctx, "clear", loopID, nil, timeout)
 }
 
-// CommandExit stops thread and marks for exit.
-func (c *Client) CommandExit(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+// CommandExit stops the loop and marks for exit.
+func (c *Client) CommandExit(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
-	return c.CommandRequest(ctx, "exit", threadID, nil, timeout)
+	return c.CommandRequest(ctx, "exit", loopID, nil, timeout)
 }
 
-// CommandQuit stops thread and marks for exit (alias for exit).
-func (c *Client) CommandQuit(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+// CommandQuit stops the loop and marks for exit (alias for exit).
+func (c *Client) CommandQuit(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
-	return c.CommandRequest(ctx, "quit", threadID, nil, timeout)
+	return c.CommandRequest(ctx, "quit", loopID, nil, timeout)
 }
 
-// CommandDetach marks thread as detached (continues running).
-func (c *Client) CommandDetach(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+// CommandDetach marks the loop as detached (continues running).
+func (c *Client) CommandDetach(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
-	return c.CommandRequest(ctx, "detach", threadID, nil, timeout)
+	return c.CommandRequest(ctx, "detach", loopID, nil, timeout)
 }
 
 // CommandCancel cancels running query.
-func (c *Client) CommandCancel(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+func (c *Client) CommandCancel(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
-	return c.CommandRequest(ctx, "cancel", threadID, nil, timeout)
+	return c.CommandRequest(ctx, "cancel", loopID, nil, timeout)
 }
 
 // CommandMemory queries memory stats.
-func (c *Client) CommandMemory(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+func (c *Client) CommandMemory(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
-	return c.CommandRequest(ctx, "memory", threadID, nil, timeout)
+	return c.CommandRequest(ctx, "memory", loopID, nil, timeout)
 }
 
 // CommandPolicy queries policy profile.
@@ -417,11 +397,11 @@ func (c *Client) CommandPolicy(ctx context.Context, timeout time.Duration) (map[
 }
 
 // CommandHistory queries input history.
-func (c *Client) CommandHistory(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+func (c *Client) CommandHistory(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
-	return c.CommandRequest(ctx, "history", threadID, nil, timeout)
+	return c.CommandRequest(ctx, "history", loopID, nil, timeout)
 }
 
 // CommandConfig queries configuration.
@@ -433,25 +413,25 @@ func (c *Client) CommandConfig(ctx context.Context, timeout time.Duration) (map[
 }
 
 // CommandReview queries conversation history.
-func (c *Client) CommandReview(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+func (c *Client) CommandReview(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
-	return c.CommandRequest(ctx, "review", threadID, nil, timeout)
+	return c.CommandRequest(ctx, "review", loopID, nil, timeout)
 }
 
 // CommandPlan queries current plan.
-func (c *Client) CommandPlan(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+func (c *Client) CommandPlan(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
-	return c.CommandRequest(ctx, "plan", threadID, nil, timeout)
+	return c.CommandRequest(ctx, "plan", loopID, nil, timeout)
 }
 
 // CommandAutopilotDashboard shows autopilot dashboard.
-func (c *Client) CommandAutopilotDashboard(ctx context.Context, threadID string, timeout time.Duration) (map[string]interface{}, error) {
+func (c *Client) CommandAutopilotDashboard(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
-	return c.CommandRequest(ctx, "autopilot_dashboard", threadID, nil, timeout)
+	return c.CommandRequest(ctx, "autopilot_dashboard", loopID, nil, timeout)
 }

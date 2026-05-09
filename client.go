@@ -225,18 +225,36 @@ func (c *Client) ReceiveMessages(ctx context.Context) (<-chan interface{}, error
 }
 
 // ReadEvent reads a single event from the daemon. Returns nil, nil on normal connection close.
+// After a timeout error, the connection enters a failed state and subsequent reads will panic.
+// Callers should NOT retry ReadEvent after receiving a timeout error.
 func (c *Client) ReadEvent() (map[string]interface{}, error) {
 	if c.conn == nil {
 		return nil, fmt.Errorf("soothe: not connected")
 	}
-	_, data, err := c.conn.ReadMessage()
-	if err != nil {
+
+	// Recover from potential panic on failed websocket connection
+	var data []byte
+	var readErr error
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				// Connection was in failed state - treat as connection closed
+				readErr = fmt.Errorf("websocket connection failed: %v", r)
+			}
+		}()
+		_, rd, err := c.conn.ReadMessage()
+		data = rd
+		readErr = err
+	}()
+
+	if readErr != nil {
 		var netErr net.Error
-		if errors.As(err, &netErr) && netErr.Timeout() {
-			return nil, fmt.Errorf("websocket read timed out: %w", err)
+		if errors.As(readErr, &netErr) && netErr.Timeout() {
+			return nil, fmt.Errorf("websocket read timed out: %w", readErr)
 		}
-		return nil, nil // connection closed
+		return nil, nil // connection closed or failed
 	}
+
 	for _, frame := range SplitSootheWirePayload(data) {
 		msg, err := DecodeMessage(frame)
 		if err != nil || msg == nil {

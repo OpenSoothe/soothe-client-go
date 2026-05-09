@@ -9,7 +9,7 @@ The Soothe daemon broadcasts heartbeat events every 5 seconds when actively proc
 1. **Monitor daemon health** - Know if the daemon is alive and responding
 2. **Detect daemon state** - Distinguish between "idle" and "running" states
 3. **Prevent timeouts** - Avoid disconnecting during long LLM operations
-4. **Track processing thread** - Know which thread the daemon is currently working on
+4. **Track active loop** - Know which loop the daemon is currently working on
 
 ## Quick Start
 
@@ -33,7 +33,7 @@ if health != nil {
     fmt.Printf("Daemon alive: %v\n", health.IsAlive)
     fmt.Printf("Daemon state: %s\n", health.State) // "running" or "idle"
     fmt.Printf("Last heartbeat: %v\n", health.LastHeartbeat)
-    fmt.Printf("Processing thread: %s\n", health.ThreadID)
+    fmt.Printf("Processing loop: %s\n", health.LoopID)
 }
 
 // Quick check if daemon is alive
@@ -50,7 +50,7 @@ if tracker != nil {
     // Check if daemon is actively processing
     if tracker.IsProcessing() {
         fmt.Println("Daemon is processing a query")
-        fmt.Printf("Thread ID: %s\n", tracker.GetThreadID())
+        fmt.Printf("Loop ID: %s\n", tracker.GetLoopID())
     }
 
     // Check if daemon is idle
@@ -72,12 +72,12 @@ The daemon sends heartbeat events with the following structure:
 ```json
 {
   "type": "event",
-  "thread_id": "thread-123",
+  "loop_id": "loop-123",
   "data": {
     "type": "soothe.system.daemon.heartbeat",
-    "thread_id": "thread-123",
+    "loop_id": "loop-123",
     "timestamp": "2024-01-01T00:00:00Z",
-    "state": "running"  // or "idle"
+    "state": "running"
   }
 }
 ```
@@ -86,7 +86,7 @@ The daemon sends heartbeat events with the following structure:
 
 The `HeartbeatTracker` type manages heartbeat state:
 
-- **Thread-safe**: Safe for concurrent access from multiple goroutines
+- **Concurrency-safe**: Safe for concurrent access from multiple goroutines (`sync.RWMutex`)
 - **Automatic processing**: Heartbeats are automatically processed when receiving messages
 - **Grace period**: 20-second initial grace period for cold-start scenarios
 - **Alive threshold**: Configurable threshold (default: 15 seconds) to determine if daemon is alive
@@ -247,7 +247,7 @@ isAlive := client.IsDaemonAlive()
 // State queries
 health := tracker.GetHealth()
 state := tracker.GetState()
-threadID := tracker.GetThreadID()
+loopID := tracker.GetLoopID()
 lastHB := tracker.GetLastHeartbeat()
 
 // Boolean checks
@@ -271,7 +271,7 @@ tracker.WaitForAlive(timeout time.Duration) error
 type DaemonHealth struct {
     LastHeartbeat time.Time  // Last heartbeat timestamp
     State         string     // "running" or "idle"
-    ThreadID      string     // Current thread being processed
+    LoopID        string     // Current loop being processed
     IsAlive       bool       // True if daemon is alive
 }
 ```
@@ -346,9 +346,9 @@ for {
 
 ## Implementation Details
 
-### Thread Safety
+### Concurrency
 
-All tracker methods are thread-safe:
+All tracker methods are safe for concurrent use:
 
 - Uses `sync.RWMutex` for concurrent access
 - Safe to call from multiple goroutines

@@ -181,7 +181,7 @@ func TestIntegration_LoopSubscribeDetach(t *testing.T) {
 	}
 
 	// Subscribe to loop events
-	response, err := client.LoopSubscribe(ctx, loopID, 10*time.Second)
+	response, err := client.LoopSubscribe(ctx, loopID, "", 10*time.Second)
 	if err != nil {
 		t.Logf("LoopSubscribe error: %v", err)
 		return
@@ -237,7 +237,7 @@ func TestIntegration_LoopInput(t *testing.T) {
 	}
 
 	// Subscribe to loop
-	if _, err := client.LoopSubscribe(ctx, loopID, 10*time.Second); err != nil {
+	if _, err := client.LoopSubscribe(ctx, loopID, "", 10*time.Second); err != nil {
 		t.Logf("Could not subscribe to loop: %v", err)
 	}
 
@@ -249,9 +249,8 @@ func TestIntegration_LoopInput(t *testing.T) {
 
 	t.Logf("LoopInput response: %v", response)
 
-	threadID, _ := response["thread_id"].(string)
-	if threadID != "" {
-		t.Logf("Loop input created/used thread: %s", threadID)
+	if lid, _ := response["loop_id"].(string); lid != "" {
+		t.Logf("Loop input ack loop_id: %s", lid)
 	}
 
 	// Collect some events
@@ -420,82 +419,8 @@ func TestIntegration_SendLoopMethods(t *testing.T) {
 }
 
 // =============================================================================
-// THREAD STATUS AND COMMAND REQUEST API TESTS
+// COMMAND REQUEST API TESTS (RFC-404)
 // =============================================================================
-
-func TestIntegration_ThreadStatusAPI(t *testing.T) {
-	skipIfNoDaemon(t)
-
-	ctx := context.Background()
-	client := NewClient("ws://localhost:8765", integrationTestConfig())
-
-	if err := client.Connect(ctx); err != nil {
-		t.Fatalf("Failed to connect: %v", err)
-	}
-	defer client.Close()
-
-	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
-		t.Fatalf("Daemon not ready: %v", err)
-	}
-
-	// Create a thread
-	threadID := createTestThread(t, client, ctx)
-	if threadID == "" {
-		t.Skip("Could not create test thread")
-	}
-
-	// Request thread status using convenience method
-	response, err := client.ThreadStatus(ctx, threadID, 10*time.Second)
-	if err != nil {
-		t.Logf("ThreadStatus error: %v", err)
-		return
-	}
-
-	t.Logf("ThreadStatus response: %v", response)
-
-	state, _ := response["state"].(string)
-	hasActiveQuery, _ := response["has_active_query"].(bool)
-	t.Logf("Thread %s: state=%s, has_active_query=%v", threadID, state, hasActiveQuery)
-}
-
-func TestIntegration_SendThreadStatus(t *testing.T) {
-	skipIfNoDaemon(t)
-
-	ctx := context.Background()
-	client := NewClient("ws://localhost:8765", integrationTestConfig())
-
-	if err := client.Connect(ctx); err != nil {
-		t.Fatalf("Failed to connect: %v", err)
-	}
-	defer client.Close()
-
-	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
-		t.Fatalf("Daemon not ready: %v", err)
-	}
-
-	threadID := createTestThread(t, client, ctx)
-	if threadID == "" {
-		t.Skip("Could not create test thread")
-	}
-
-	requestID := NewRequestID()
-	ev, err := client.RequestResponse(ctx, map[string]interface{}{
-		"type":       "thread_status",
-		"request_id": requestID,
-		"thread_id":  threadID,
-	}, "thread_status_response", 10*time.Second)
-	if err != nil {
-		t.Logf("thread_status: %v", err)
-		return
-	}
-
-	typ, _ := ev["type"].(string)
-	if typ == "thread_status_response" {
-		t.Logf("Received thread_status_response: %v", ev)
-	} else if typ == "error" {
-		t.Logf("Received error response: %v", ev)
-	}
-}
 
 func TestIntegration_CommandRequest(t *testing.T) {
 	skipIfNoDaemon(t)
@@ -512,9 +437,9 @@ func TestIntegration_CommandRequest(t *testing.T) {
 		t.Fatalf("Daemon not ready: %v", err)
 	}
 
-	threadID := createTestThread(t, client, ctx)
-	if threadID == "" {
-		t.Skip("Could not create test thread")
+	loopID := createTestLoop(t, client, ctx)
+	if loopID == "" {
+		t.Skip("Could not create test loop")
 	}
 
 	// Send a command request using convenience method
@@ -522,7 +447,7 @@ func TestIntegration_CommandRequest(t *testing.T) {
 		"detail_level": "summary",
 	}
 
-	response, err := client.CommandRequest(ctx, "thread_info", threadID, params, 15*time.Second)
+	response, err := client.CommandRequest(ctx, "plan", loopID, params, 15*time.Second)
 	if err != nil {
 		t.Logf("CommandRequest error: %v", err)
 		return
@@ -549,16 +474,16 @@ func TestIntegration_SendCommandRequest(t *testing.T) {
 		t.Fatalf("Daemon not ready: %v", err)
 	}
 
-	threadID := createTestThread(t, client, ctx)
-	if threadID == "" {
-		t.Skip("Could not create test thread")
+	loopID := createTestLoop(t, client, ctx)
+	if loopID == "" {
+		t.Skip("Could not create test loop")
 	}
 
 	params := map[string]interface{}{
 		"action": "pause",
 	}
 
-	ev, err := client.CommandRequest(ctx, "thread_control", threadID, params, 15*time.Second)
+	ev, err := client.CommandRequest(ctx, "cancel", loopID, params, 15*time.Second)
 	if err != nil {
 		t.Logf("CommandRequest: %v", err)
 		return
@@ -586,9 +511,9 @@ func TestIntegration_SendResumeInterrupts(t *testing.T) {
 		t.Fatalf("Daemon not ready: %v", err)
 	}
 
-	threadID := createTestThread(t, client, ctx)
-	if threadID == "" {
-		t.Skip("Could not create test thread")
+	loopID := createTestLoop(t, client, ctx)
+	if loopID == "" {
+		t.Skip("Could not create test loop")
 	}
 
 	// Send resume_interrupts (normally used for interactive mode continuation)
@@ -598,7 +523,7 @@ func TestIntegration_SendResumeInterrupts(t *testing.T) {
 		"approved":      true,
 	}
 
-	if err := client.SendResumeInterrupts(ctx, threadID, resumePayload, requestID); err != nil {
+	if err := client.SendResumeInterrupts(ctx, loopID, resumePayload, requestID); err != nil {
 		t.Logf("SendResumeInterrupts error: %v", err)
 		return
 	}
@@ -664,9 +589,9 @@ func TestIntegration_SendDaemonStatus(t *testing.T) {
 	if typ == "daemon_status_response" {
 		running, _ := ev["running"].(bool)
 		portLive, _ := ev["port_live"].(bool)
-		activeThreads, _ := ev["active_threads"].(float64)
-		t.Logf("Daemon status: running=%v, port_live=%v, active_threads=%v",
-			running, portLive, int(activeThreads))
+		activeLoops, _ := ev["active_loops"].(float64)
+		t.Logf("Daemon status: running=%v, port_live=%v, active_loops=%v",
+			running, portLive, int(activeLoops))
 	}
 }
 

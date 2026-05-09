@@ -8,8 +8,7 @@ WebSocket client in Go for soothe-daemon
 
 This client implements the WebSocket protocol for Soothe daemon, providing full access to:
 
-- Thread lifecycle APIs (create, resume, list, get, messages, artifacts, status, state)
-- Loop management APIs (RFC-503, RFC-504: list, get, tree, prune, delete, subscribe, detach, new, input)
+- Loop lifecycle APIs (RFC-503, RFC-504: new, list, get, tree, prune, delete, reattach, subscribe, detach, input)
 - Skills/models discovery APIs
 - Daemon control APIs (status, shutdown, health monitoring)
 - Input/command APIs with autonomous mode support
@@ -32,13 +31,13 @@ The daemon only exposes these through HTTP REST transport (`http_rest.py`). To u
 **WebSocket** (this client):
 - Real-time event streaming
 - Interactive query execution
-- Thread/loop lifecycle operations
+- Loop lifecycle operations
 - Bidirectional communication for autonomous agents
 
 **HTTP REST** (not implemented):
 - Autopilot goal management
 - Enhanced health metrics with queue depths
-- Thread statistics endpoint (`/api/v1/threads/{id}/stats` - partially covered via WebSocket `thread_stats`)
+- Loop or run statistics and other CRUD may be available only on HTTP REST (not implemented in this WebSocket client)
 - RESTful CRUD operations
 
 ## Package Structure
@@ -51,7 +50,7 @@ soothe-client-go/
 ├── send_methods.go     - High-level Send* API methods
 ├── request.go          - Request-response pattern methods
 ├── verbosity.go        - Verbosity types for event filtering
-├── session.go          - Bootstrap helpers for thread creation/resumption
+├── session.go          - Bootstrap helpers for loop session (daemon_ready, loop_new, loop_subscribe)
 ├── helpers.go          - RPC convenience functions
 ├── config.go           - Client configuration
 ├── protocol.go         - Wire protocol message types

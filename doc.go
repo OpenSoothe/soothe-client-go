@@ -1,7 +1,7 @@
 // Package soothe provides a Go client for the Soothe daemon WebSocket API.
 //
 // The client implements the same protocol as the Python soothe-sdk, providing
-// full access to the Soothe daemon's capabilities including thread management,
+// full access to the Soothe daemon's capabilities including loop lifecycle,
 // event streaming, skills/models discovery, and daemon control.
 //
 // This package uses a flat structure with all functionality in the root soothe package:

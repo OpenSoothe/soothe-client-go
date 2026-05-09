@@ -9,7 +9,7 @@ import (
 type DaemonHealth struct {
 	LastHeartbeat time.Time // Timestamp of last received heartbeat
 	State         string    // Daemon state: "running" or "idle"
-	ThreadID      string    // Thread ID the daemon is currently processing (if running)
+	LoopID        string    // Loop ID the daemon is currently processing (if running)
 	IsAlive       bool      // True if heartbeat received within the alive threshold
 }
 
@@ -18,8 +18,8 @@ type DaemonHealth struct {
 type HeartbeatTracker struct {
 	mu                sync.RWMutex
 	lastHeartbeat     time.Time
-	daemonState       string
-	heartbeatThreadID string
+	daemonState     string
+	heartbeatLoopID string
 	aliveThreshold    time.Duration // Max time since last heartbeat to consider daemon alive
 	startTime         time.Time     // When tracking started (for initial grace period)
 }
@@ -54,9 +54,8 @@ func (t *HeartbeatTracker) Update(heartbeatData map[string]interface{}) {
 		t.daemonState = state
 	}
 
-	// Extract thread ID
-	if threadID, ok := heartbeatData["thread_id"].(string); ok {
-		t.heartbeatThreadID = threadID
+	if loopID, ok := heartbeatData["loop_id"].(string); ok {
+		t.heartbeatLoopID = loopID
 	}
 }
 
@@ -78,7 +77,7 @@ func (t *HeartbeatTracker) GetHealth() *DaemonHealth {
 	return &DaemonHealth{
 		LastHeartbeat: t.lastHeartbeat,
 		State:         t.daemonState,
-		ThreadID:      t.heartbeatThreadID,
+		LoopID:        t.heartbeatLoopID,
 		IsAlive:       isAlive,
 	}
 }
@@ -104,11 +103,11 @@ func (t *HeartbeatTracker) GetState() string {
 	return t.daemonState
 }
 
-// GetThreadID returns the thread ID the daemon is currently processing.
-func (t *HeartbeatTracker) GetThreadID() string {
+// GetLoopID returns the loop ID the daemon is currently processing.
+func (t *HeartbeatTracker) GetLoopID() string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	return t.heartbeatThreadID
+	return t.heartbeatLoopID
 }
 
 // GetLastHeartbeat returns the timestamp of the last received heartbeat.
@@ -132,7 +131,7 @@ func (t *HeartbeatTracker) Reset() {
 	defer t.mu.Unlock()
 	t.lastHeartbeat = time.Time{}
 	t.daemonState = ""
-	t.heartbeatThreadID = ""
+	t.heartbeatLoopID = ""
 	t.startTime = time.Now()
 }
 

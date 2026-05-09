@@ -106,21 +106,6 @@ func (c *Client) SendCommand(ctx context.Context, cmd string) error {
 	})
 }
 
-// SendNewThread requests the daemon to start a new thread.
-func (c *Client) SendNewThread(ctx context.Context, workspace string) error {
-	return c.SendMessage(ctx, NewNewThreadMessage(workspace))
-}
-
-// SendResumeThread requests the daemon to resume a specific thread.
-func (c *Client) SendResumeThread(ctx context.Context, threadID, workspace string) error {
-	return c.SendMessage(ctx, NewResumeThreadMessage(threadID, workspace))
-}
-
-// SendSubscribeThread subscribes to events for a thread.
-func (c *Client) SendSubscribeThread(ctx context.Context, threadID, verbosity string) error {
-	return c.SendMessage(ctx, NewSubscribeThreadMessage(threadID, verbosity))
-}
-
 // SendDetach notifies the daemon that this client is detaching.
 func (c *Client) SendDetach(ctx context.Context) error {
 	return c.SendMessage(ctx, DetachMessage{
@@ -170,138 +155,6 @@ func (c *Client) SendConfigGet(ctx context.Context, section string, requestID ..
 	return c.SendMessage(ctx, ConfigGetMessage{
 		BaseMessage: BaseMessage{RequestID: rid, Type: "config_get"},
 		Section:     section,
-	})
-}
-
-// SendThreadList requests the persisted thread list.
-func (c *Client) SendThreadList(ctx context.Context, filter map[string]interface{}, includeStats bool, includeLastMessage bool, requestID ...string) error {
-	rid := ""
-	if len(requestID) > 0 {
-		rid = requestID[0]
-	} else {
-		rid = NewRequestID()
-	}
-	return c.SendMessage(ctx, ThreadListMessage{
-		BaseMessage:        BaseMessage{RequestID: rid, Type: "thread_list"},
-		Filter:             filter,
-		IncludeStats:       includeStats,
-		IncludeLastMessage: includeLastMessage,
-	})
-}
-
-// SendThreadGet requests metadata for a specific thread.
-func (c *Client) SendThreadGet(ctx context.Context, threadID string, requestID ...string) error {
-	rid := ""
-	if len(requestID) > 0 {
-		rid = requestID[0]
-	} else {
-		rid = NewRequestID()
-	}
-	return c.SendMessage(ctx, ThreadGetMessage{
-		BaseMessage: BaseMessage{RequestID: rid, Type: "thread_get"},
-		ThreadID:    threadID,
-	})
-}
-
-// SendThreadMessages requests paginated thread messages.
-func (c *Client) SendThreadMessages(ctx context.Context, threadID string, limit, offset int, requestID ...string) error {
-	rid := ""
-	if len(requestID) > 0 {
-		rid = requestID[0]
-	} else {
-		rid = NewRequestID()
-	}
-	return c.SendMessage(ctx, ThreadMessagesMessage{
-		BaseMessage: BaseMessage{RequestID: rid, Type: "thread_messages"},
-		ThreadID:    threadID,
-		Limit:       limit,
-		Offset:      offset,
-	})
-}
-
-// SendThreadState requests raw checkpoint state for a thread.
-func (c *Client) SendThreadState(ctx context.Context, threadID string, requestID ...string) error {
-	rid := ""
-	if len(requestID) > 0 {
-		rid = requestID[0]
-	} else {
-		rid = NewRequestID()
-	}
-	return c.SendMessage(ctx, ThreadStateMessage{
-		BaseMessage: BaseMessage{RequestID: rid, Type: "thread_state"},
-		ThreadID:    threadID,
-	})
-}
-
-// SendThreadUpdateState persists partial state values for a thread.
-func (c *Client) SendThreadUpdateState(ctx context.Context, threadID string, values map[string]interface{}, requestID ...string) error {
-	rid := ""
-	if len(requestID) > 0 {
-		rid = requestID[0]
-	} else {
-		rid = NewRequestID()
-	}
-	return c.SendMessage(ctx, ThreadUpdateStateMessage{
-		BaseMessage: BaseMessage{RequestID: rid, Type: "thread_update_state"},
-		ThreadID:    threadID,
-		Values:      values,
-	})
-}
-
-// SendThreadArchive requests thread archival.
-func (c *Client) SendThreadArchive(ctx context.Context, threadID string, requestID ...string) error {
-	rid := ""
-	if len(requestID) > 0 {
-		rid = requestID[0]
-	} else {
-		rid = NewRequestID()
-	}
-	return c.SendMessage(ctx, ThreadArchiveMessage{
-		BaseMessage: BaseMessage{RequestID: rid, Type: "thread_archive"},
-		ThreadID:    threadID,
-	})
-}
-
-// SendThreadDelete requests thread deletion.
-func (c *Client) SendThreadDelete(ctx context.Context, threadID string, requestID ...string) error {
-	rid := ""
-	if len(requestID) > 0 {
-		rid = requestID[0]
-	} else {
-		rid = NewRequestID()
-	}
-	return c.SendMessage(ctx, ThreadDeleteMessage{
-		BaseMessage: BaseMessage{RequestID: rid, Type: "thread_delete"},
-		ThreadID:    threadID,
-	})
-}
-
-// SendThreadCreate requests creation of a persisted thread (RFC-402).
-func (c *Client) SendThreadCreate(ctx context.Context, initialMessage string, metadata map[string]interface{}, requestID ...string) error {
-	rid := ""
-	if len(requestID) > 0 {
-		rid = requestID[0]
-	} else {
-		rid = NewRequestID()
-	}
-	return c.SendMessage(ctx, ThreadCreateMessage{
-		BaseMessage:    BaseMessage{RequestID: rid, Type: "thread_create"},
-		InitialMessage: initialMessage,
-		Metadata:       metadata,
-	})
-}
-
-// SendThreadArtifacts requests thread artifacts (RFC-402).
-func (c *Client) SendThreadArtifacts(ctx context.Context, threadID string, requestID ...string) error {
-	rid := ""
-	if len(requestID) > 0 {
-		rid = requestID[0]
-	} else {
-		rid = NewRequestID()
-	}
-	return c.SendMessage(ctx, ThreadArtifactsMessage{
-		BaseMessage: BaseMessage{RequestID: rid, Type: "thread_artifacts"},
-		ThreadID:    threadID,
 	})
 }
 
@@ -362,7 +215,7 @@ func (c *Client) SendInvokeSkill(ctx context.Context, skill, args string, reques
 }
 
 // SendCommandRequest sends a structured RPC command (RFC-404).
-func (c *Client) SendCommandRequest(ctx context.Context, command string, threadID string, params map[string]interface{}, requestID ...string) error {
+func (c *Client) SendCommandRequest(ctx context.Context, command string, loopID string, params map[string]interface{}, requestID ...string) error {
 	rid := ""
 	if len(requestID) > 0 {
 		rid = requestID[0]
@@ -372,36 +225,8 @@ func (c *Client) SendCommandRequest(ctx context.Context, command string, threadI
 	return c.SendMessage(ctx, CommandRequestMessage{
 		BaseMessage: BaseMessage{RequestID: rid, Type: "command_request"},
 		Command:     command,
-		ThreadID:    threadID,
+		LoopID:      loopID,
 		Params:      params,
-	})
-}
-
-// SendThreadStatus requests runtime status for a thread.
-func (c *Client) SendThreadStatus(ctx context.Context, threadID string, requestID ...string) error {
-	rid := ""
-	if len(requestID) > 0 {
-		rid = requestID[0]
-	} else {
-		rid = NewRequestID()
-	}
-	return c.SendMessage(ctx, ThreadStatusMessage{
-		BaseMessage: BaseMessage{RequestID: rid, Type: "thread_status"},
-		ThreadID:    threadID,
-	})
-}
-
-// SendThreadStats requests thread execution statistics.
-func (c *Client) SendThreadStats(ctx context.Context, threadID string, requestID ...string) error {
-	rid := ""
-	if len(requestID) > 0 {
-		rid = requestID[0]
-	} else {
-		rid = NewRequestID()
-	}
-	return c.SendMessage(ctx, ThreadStatsMessage{
-		BaseMessage: BaseMessage{RequestID: rid, Type: "thread_stats"},
-		ThreadID:    threadID,
 	})
 }
 
@@ -495,7 +320,8 @@ func (c *Client) SendLoopReattach(ctx context.Context, loopID string, requestID 
 }
 
 // SendLoopSubscribe subscribes to loop events (RFC-503).
-func (c *Client) SendLoopSubscribe(ctx context.Context, loopID string, requestID ...string) error {
+// Pass empty verbosity to omit the field (daemon default).
+func (c *Client) SendLoopSubscribe(ctx context.Context, loopID string, verbosity string, requestID ...string) error {
 	rid := ""
 	if len(requestID) > 0 {
 		rid = requestID[0]
@@ -505,6 +331,7 @@ func (c *Client) SendLoopSubscribe(ctx context.Context, loopID string, requestID
 	return c.SendMessage(ctx, LoopSubscribeMessage{
 		BaseMessage: BaseMessage{RequestID: rid, Type: "loop_subscribe"},
 		LoopID:      loopID,
+		Verbosity:   verbosity,
 	})
 }
 

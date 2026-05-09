@@ -180,7 +180,7 @@ func Example_heartbeatStateMonitoring() {
 					if currentState == "idle" {
 						fmt.Println("Daemon is now idle, ready for new queries")
 					} else if currentState == "running" {
-						fmt.Printf("Daemon is processing thread: %s\n", tracker.GetThreadID())
+						fmt.Printf("Daemon is processing loop: %s\n", tracker.GetLoopID())
 					}
 				}
 			}
