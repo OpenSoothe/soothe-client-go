@@ -1,4 +1,4 @@
-.PHONY: help build test test-short test-integration vet fmt lint clean install run deps
+.PHONY: help build test test-short test-integration test-stress vet fmt lint clean install run deps
 
 # Project variables
 PACKAGE := github.com/mirasoth/soothe-client-go
@@ -35,11 +35,19 @@ test-integration: ## Run integration tests only (requires running daemon)
 	@echo "Running integration tests..."
 	$(GO) test -v -run Integration ./...
 
+test-stress: ## Run stress tests only (requires running daemon)
+	@echo "Running stress tests..."
+	$(GO) test -v -count=1 -run Stress ./...
+
 test-coverage: ## Run tests with coverage report
 	@echo "Running tests with coverage..."
 	$(GO) test -coverprofile=coverage.out ./...
 	$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
+
+test-full: ## Run integration and stress tests (requires running daemon)
+	@echo "Running integration and stress tests..."
+	$(GO) test -v -count=1 -run "Integration|Stress" ./...
 
 # Code quality
 vet: ## Run go vet
