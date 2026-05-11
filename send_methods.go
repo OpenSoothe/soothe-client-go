@@ -43,6 +43,9 @@ func (c *Client) SendInput(ctx context.Context, text string, opts ...InputOption
 	if o.modelParams != nil {
 		payload["model_params"] = o.modelParams
 	}
+	if o.intentHint != "" {
+		payload["intent_hint"] = o.intentHint
+	}
 	return c.SendMessage(ctx, payload)
 }
 
@@ -58,6 +61,7 @@ type inputOptions struct {
 	model             string
 	modelParams       map[string]interface{}
 	attachments       []map[string]interface{}
+	intentHint        string
 }
 
 // WithLoopID sets the subscribed loop id for loop_input.
@@ -96,6 +100,12 @@ func WithModel(model string) InputOption {
 // WithModelParams sets extra model parameters.
 func WithModelParams(params map[string]interface{}) InputOption {
 	return func(o *inputOptions) { o.modelParams = params }
+}
+
+// WithIntentHint sets a suggested intent to bypass LLM classification.
+// Valid values: "chitchat", "quiz", "continue_thread", "new_goal".
+func WithIntentHint(hint string) InputOption {
+	return func(o *inputOptions) { o.intentHint = hint }
 }
 
 // SendCommand sends a slash command to the daemon.
