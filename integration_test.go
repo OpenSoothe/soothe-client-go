@@ -460,62 +460,6 @@ func TestIntegration_FetchSkillsCatalog(t *testing.T) {
 // IntentHint integration tests
 // ---------------------------------------------------------------------------
 
-func TestIntegration_InputWithIntentHintChitchat(t *testing.T) {
-	skipIfShort(t)
-	cfg := integrationTestConfig()
-	client := NewClient(cfg.DaemonURL, cfg)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-	defer cancel()
-
-	if err := client.Connect(ctx); err != nil {
-		t.Fatalf("Failed to connect: %v", err)
-	}
-	defer client.Close()
-
-	wsDir := t.TempDir()
-	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
-	if err != nil {
-		t.Fatalf("Bootstrap: %v", err)
-	}
-	t.Logf("Loop ID: %s", loopID)
-
-	eventCh, err := client.ReceiveMessages(ctx)
-	if err != nil {
-		t.Fatalf("ReceiveMessages: %v", err)
-	}
-
-	// Send input with intent_hint=chitchat to bypass classification
-	if err := client.SendInput(ctx, "Hello!", WithLoopID(loopID), WithIntentHint("chitchat")); err != nil {
-		t.Fatalf("SendInput with intent_hint: %v", err)
-	}
-	t.Log("Sent input message with intent_hint=chitchat")
-
-	// Read events until we get an assistant response or timeout
-	eventCount := 0
-	eventTimeout := time.After(10 * time.Second)
-	for {
-		select {
-		case <-eventTimeout:
-			t.Logf("Received %d events", eventCount)
-			return
-		case msg := <-eventCh:
-			if msg == nil {
-				continue
-			}
-			eventCount++
-			switch m := msg.(type) {
-			case EventMessage:
-				t.Logf("Event #%d: mode=%s event_type=%s", eventCount, m.Mode, m.EventType())
-			case ErrorResponse:
-				t.Logf("Error: code=%s, message=%s", m.Code, m.Message)
-			default:
-				t.Logf("Event #%d: type=%T", eventCount, msg)
-			}
-		}
-	}
-}
-
 func TestIntegration_InputWithIntentHintQuiz(t *testing.T) {
 	skipIfShort(t)
 	cfg := integrationTestConfig()

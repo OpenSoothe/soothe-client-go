@@ -120,9 +120,7 @@ const (
 
 // Output events
 const (
-	EventChitchatStarted  = "soothe.output.chitchat.started"
-	EventChitchatResponse = "soothe.output.chitchat.responded"
-	EventFinalReport      = "soothe.output.autonomous.final_report.reported"
+	EventFinalReport = "soothe.output.autonomous.final_report.reported"
 )
 
 // System events
@@ -240,7 +238,7 @@ func classifyCapabilityEvent(full string) VerbosityTier {
 
 func classifyByEventTypeString(s string) VerbosityTier {
 	switch s {
-	case EventChitchatResponse, EventFinalReport,
+	case EventFinalReport,
 		EventGeneralFailed, EventGoalFailed, EventPlanStepFailed:
 		return TierQuiet
 	case EventPlanCreated, EventPlanStepStarted, EventPlanStepCompleted,
@@ -298,7 +296,6 @@ func IsSubagentProgressEvent(namespace string) bool {
 // EssentialEventTypes are always processed regardless of verbosity.
 var EssentialEventTypes = map[string]bool{
 	EventLoopCompleted:              true,
-	EventChitchatResponse:           true,
 	EventFinalReport:                true,
 	EventPlanCreated:                true,
 	EventPlanStepStarted:            true,

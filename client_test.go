@@ -81,7 +81,7 @@ func testNDJSONHandler(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 	conn.ReadMessage() // consume one message
 	conn.WriteMessage(websocket.TextMessage, []byte(
-		`{"type":"event","loop_id":"ndjson-loop","namespace":[],"mode":"messages","data":[{"type":"AIMessageChunk","content":"hello","phase":"chitchat"},{}]}`+"\n"+
+		`{"type":"event","loop_id":"ndjson-loop","namespace":[],"mode":"messages","data":[{"type":"AIMessageChunk","content":"hello","phase":"quiz"},{}]}`+"\n"+
 			`{"type":"status","state":"idle","loop_id":"ndjson-loop"}`,
 	))
 }
@@ -319,7 +319,7 @@ func TestClient_ReceiveMessages_LoopAIMessageEvent(t *testing.T) {
 			if !ok {
 				continue
 			}
-			if loopMsg.Phase != "chitchat" {
+			if loopMsg.Phase != "quiz" {
 				t.Fatalf("unexpected phase: %s", loopMsg.Phase)
 			}
 			if loopMsg.LoopAIText() != "hello" {
