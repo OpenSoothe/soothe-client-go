@@ -83,6 +83,11 @@ const (
 	EventToolError     = "soothe.tool.execution.error"
 )
 
+// Stream tool call events (RFC-450, IG-416)
+const (
+	EventStreamToolCallUpdate = "soothe.stream.tool_call.update"
+)
+
 // Agent loop events
 const (
 	EventAgentLoopStarted       = "soothe.cognition.agent_loop.started"
