@@ -2,6 +2,7 @@ package soothe
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -281,4 +282,161 @@ func TestIntegration_IntentHintImageToText_RejectsWithoutAttachments(t *testing.
 		}
 	}
 	t.Fatal("timeout: expected INVALID_REQUEST error for image_to_text without attachments")
+}
+
+var integrationWordReplySchema = map[string]interface{}{
+	"type": "object",
+	"properties": map[string]interface{}{
+		"word": map[string]interface{}{"type": "string"},
+	},
+	"required":             []interface{}{"word"},
+	"additionalProperties": false,
+}
+
+func TestIntegration_IntentHintDirectLLMStructured(t *testing.T) {
+	skipIfNoDaemon(t)
+
+	cfg := integrationTestConfig()
+	client := NewClient(cfg.DaemonURL, cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer client.Close()
+
+	wsDir := t.TempDir()
+	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
+	if err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	ch, err := client.ReceiveMessages(ctx)
+	if err != nil {
+		t.Fatalf("ReceiveMessages: %v", err)
+	}
+
+	strict := true
+	prompt := `Return JSON only. Set "word" to exactly "GOJSON".`
+	if err := client.SendInput(ctx, prompt,
+		WithLoopID(loopID),
+		WithIntentHint("direct_llm"),
+		WithResponseSchema(integrationWordReplySchema),
+		WithResponseSchemaName("WordReply"),
+		WithResponseSchemaStrict(strict),
+	); err != nil {
+		t.Fatalf("SendInput structured direct_llm: %v", err)
+	}
+
+	deadline := time.After(90 * time.Second)
+	var assistant string
+	var errResp *ErrorResponse
+
+	for {
+		select {
+		case <-deadline:
+			if errResp != nil {
+				t.Fatalf("daemon error: %s — %s", errResp.Code, errResp.Message)
+			}
+			if assistant == "" {
+				t.Fatal("timeout: expected structured JSON assistant content")
+			}
+			var parsed struct {
+				Word string `json:"word"`
+			}
+			if err := json.Unmarshal([]byte(assistant), &parsed); err != nil {
+				t.Fatalf("assistant is not valid JSON: %q err=%v", assistant, err)
+			}
+			if !strings.Contains(strings.ToUpper(parsed.Word), "GOJSON") {
+				t.Fatalf("word field: got %q", parsed.Word)
+			}
+			t.Logf("structured direct_llm: %q", assistant)
+			return
+		case msg, ok := <-ch:
+			if !ok {
+				if assistant != "" {
+					return
+				}
+				t.Fatal("channel closed before assistant message")
+			}
+			if msg == nil {
+				continue
+			}
+			switch m := msg.(type) {
+			case EventMessage:
+				if txt, ok := messagesModeAssistantContent(m); ok {
+					assistant = txt
+				}
+			case ErrorResponse:
+				e := m
+				errResp = &e
+			}
+		}
+	}
+}
+
+func TestIntegration_IntentHintDirectLLMStructured_RejectsWithoutDirectLLM(t *testing.T) {
+	skipIfNoDaemon(t)
+
+	cfg := integrationTestConfig()
+	client := NewClient(cfg.DaemonURL, cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer client.Close()
+
+	wsDir := t.TempDir()
+	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
+	if err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	if err := client.SendInput(ctx, "hello",
+		WithLoopID(loopID),
+		WithIntentHint("quiz"),
+		WithResponseSchema(integrationWordReplySchema),
+	); err != nil {
+		t.Fatalf("SendInput: %v", err)
+	}
+
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		if client.conn != nil {
+			_ = client.conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+		}
+		ev, err := client.ReadEvent()
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		if ev == nil {
+			continue
+		}
+		typ, _ := ev["type"].(string)
+		switch typ {
+		case "error":
+			code, _ := ev["code"].(string)
+			msgStr, _ := ev["message"].(string)
+			if code != "INVALID_REQUEST" {
+				t.Fatalf("unexpected error code %q: %s", code, msgStr)
+			}
+			if !strings.Contains(strings.ToLower(msgStr), "direct_llm") {
+				t.Fatalf("unexpected error message: %s", msgStr)
+			}
+			t.Logf("got expected rejection: %s", msgStr)
+			return
+		case "loop_input_response":
+			if ok, _ := ev["success"].(bool); ok {
+				t.Skip(
+					"daemon accepted response_schema without direct_llm; upgrade soothe-daemon",
+				)
+			}
+		}
+	}
+	t.Fatal("timeout: expected INVALID_REQUEST for response_schema with intent_hint=quiz")
 }
