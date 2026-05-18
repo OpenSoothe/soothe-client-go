@@ -46,6 +46,15 @@ func (c *Client) SendInput(ctx context.Context, text string, opts ...InputOption
 	if o.intentHint != "" {
 		payload["intent_hint"] = o.intentHint
 	}
+	if o.responseSchema != nil {
+		payload["response_schema"] = o.responseSchema
+	}
+	if o.responseSchemaName != "" {
+		payload["response_schema_name"] = o.responseSchemaName
+	}
+	if o.responseSchemaStrict != nil {
+		payload["response_schema_strict"] = *o.responseSchemaStrict
+	}
 	return c.SendMessage(ctx, payload)
 }
 
@@ -60,8 +69,11 @@ type inputOptions struct {
 	interactive       bool
 	model             string
 	modelParams       map[string]interface{}
-	attachments       []map[string]interface{}
-	intentHint        string
+	attachments          []map[string]interface{}
+	intentHint           string
+	responseSchema       map[string]interface{}
+	responseSchemaName   string
+	responseSchemaStrict *bool
 }
 
 // WithLoopID sets the subscribed loop id for loop_input.
@@ -108,6 +120,21 @@ func WithModelParams(params map[string]interface{}) InputOption {
 // (configured image model; requires WithAttachments).
 func WithIntentHint(hint string) InputOption {
 	return func(o *inputOptions) { o.intentHint = hint }
+}
+
+// WithResponseSchema sets JSON Schema for strict structured output (direct_llm only).
+func WithResponseSchema(schema map[string]interface{}) InputOption {
+	return func(o *inputOptions) { o.responseSchema = schema }
+}
+
+// WithResponseSchemaName sets the provider schema name for structured direct_llm output.
+func WithResponseSchemaName(name string) InputOption {
+	return func(o *inputOptions) { o.responseSchemaName = name }
+}
+
+// WithResponseSchemaStrict sets whether json_schema strict mode is requested (default true).
+func WithResponseSchemaStrict(strict bool) InputOption {
+	return func(o *inputOptions) { v := strict; o.responseSchemaStrict = &v }
 }
 
 // SendCommand sends a slash command to the daemon.
