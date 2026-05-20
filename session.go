@@ -18,7 +18,6 @@ func BootstrapLoopSession(
 	workspace string,
 	cfg *Config,
 ) (string, error) {
-	_ = workspace
 	if cfg == nil {
 		cfg = DefaultConfig()
 	}
@@ -32,9 +31,13 @@ func BootstrapLoopSession(
 
 	loopID := strings.TrimSpace(resumeLoopID)
 	if loopID == "" {
+		newPayload := map[string]interface{}{"type": "loop_new"}
+		if workspace != "" {
+			newPayload["workspace"] = workspace
+		}
 		resp, err := client.RequestResponse(
 			ctx,
-			map[string]interface{}{"type": "loop_new"},
+			newPayload,
 			"loop_new_response",
 			cfg.LoopStatusTimeout,
 		)

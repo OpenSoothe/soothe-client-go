@@ -127,8 +127,9 @@ type LoopReattachMessage struct {
 // LoopSubscribeMessage subscribes to loop events (RFC-503).
 type LoopSubscribeMessage struct {
 	BaseMessage
-	LoopID    string `json:"loop_id"`
-	Verbosity string `json:"verbosity,omitempty"`
+	LoopID         string `json:"loop_id"`
+	Verbosity      string `json:"verbosity,omitempty"`
+	StreamDelivery string `json:"stream_delivery,omitempty"` // "batch" or "streaming" (RFC-614)
 }
 
 // LoopDetachMessage detaches from a loop (RFC-503).
@@ -140,6 +141,7 @@ type LoopDetachMessage struct {
 // LoopNewMessage creates a new loop (RFC-503).
 type LoopNewMessage struct {
 	BaseMessage
+	Workspace string `json:"workspace,omitempty"` // Client CWD for file/shell tools (IG-409)
 }
 
 // LoopInputMessage sends input to a loop (RFC-503).

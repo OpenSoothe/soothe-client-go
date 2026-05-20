@@ -360,7 +360,8 @@ func (c *Client) SendLoopReattach(ctx context.Context, loopID string, requestID 
 
 // SendLoopSubscribe subscribes to loop events (RFC-503).
 // Pass empty verbosity to omit the field (daemon default).
-func (c *Client) SendLoopSubscribe(ctx context.Context, loopID string, verbosity string, requestID ...string) error {
+// Pass empty streamDelivery to omit the field (daemon default is "batch").
+func (c *Client) SendLoopSubscribe(ctx context.Context, loopID string, verbosity string, streamDelivery string, requestID ...string) error {
 	rid := ""
 	if len(requestID) > 0 {
 		rid = requestID[0]
@@ -368,9 +369,10 @@ func (c *Client) SendLoopSubscribe(ctx context.Context, loopID string, verbosity
 		rid = NewRequestID()
 	}
 	return c.SendMessage(ctx, LoopSubscribeMessage{
-		BaseMessage: BaseMessage{RequestID: rid, Type: "loop_subscribe"},
-		LoopID:      loopID,
-		Verbosity:   verbosity,
+		BaseMessage:    BaseMessage{RequestID: rid, Type: "loop_subscribe"},
+		LoopID:         loopID,
+		Verbosity:      verbosity,
+		StreamDelivery: streamDelivery,
 	})
 }
 
@@ -388,8 +390,8 @@ func (c *Client) SendLoopDetach(ctx context.Context, loopID string, requestID ..
 	})
 }
 
-// SendLoopNew creates a new loop (RFC-503).
-func (c *Client) SendLoopNew(ctx context.Context, requestID ...string) error {
+// SendLoopNew creates a new loop (RFC-503). Optional workspace sets client CWD.
+func (c *Client) SendLoopNew(ctx context.Context, workspace string, requestID ...string) error {
 	rid := ""
 	if len(requestID) > 0 {
 		rid = requestID[0]
@@ -398,6 +400,7 @@ func (c *Client) SendLoopNew(ctx context.Context, requestID ...string) error {
 	}
 	return c.SendMessage(ctx, LoopNewMessage{
 		BaseMessage: BaseMessage{RequestID: rid, Type: "loop_new"},
+		Workspace:   workspace,
 	})
 }
 
