@@ -8,6 +8,13 @@ import (
 	"time"
 )
 
+// LoopSessionOptions configures loop_new workspace fields (RFC-503).
+type LoopSessionOptions struct {
+	ClientWorkspace   string
+	UserID            string
+	ClientWorkspaceID string
+}
+
 // BootstrapLoopSession runs daemon_ready → (loop_new or reuse resumeLoopID) → loop_subscribe.
 // It mirrors soothe_sdk.client.session.bootstrap_loop_session and returns the loop id.
 // Call this before starting a concurrent ReceiveMessages reader on the same connection.
@@ -15,8 +22,9 @@ func BootstrapLoopSession(
 	ctx context.Context,
 	client *Client,
 	resumeLoopID string,
-	workspace string,
+	clientWorkspace string,
 	cfg *Config,
+	opts ...*LoopSessionOptions,
 ) (string, error) {
 	if cfg == nil {
 		cfg = DefaultConfig()
@@ -29,11 +37,28 @@ func BootstrapLoopSession(
 		return "", err
 	}
 
+	var sessionOpts *LoopSessionOptions
+	if len(opts) > 0 {
+		sessionOpts = opts[0]
+	}
+
 	loopID := strings.TrimSpace(resumeLoopID)
 	if loopID == "" {
 		newPayload := map[string]interface{}{"type": "loop_new"}
-		if workspace != "" {
-			newPayload["workspace"] = workspace
+		cw := strings.TrimSpace(clientWorkspace)
+		if sessionOpts != nil && strings.TrimSpace(sessionOpts.ClientWorkspace) != "" {
+			cw = strings.TrimSpace(sessionOpts.ClientWorkspace)
+		}
+		if cw != "" {
+			newPayload["client_workspace"] = cw
+		}
+		if sessionOpts != nil {
+			if uid := strings.TrimSpace(sessionOpts.UserID); uid != "" {
+				newPayload["user_id"] = uid
+			}
+			if wsid := strings.TrimSpace(sessionOpts.ClientWorkspaceID); wsid != "" {
+				newPayload["client_workspace_id"] = wsid
+			}
 		}
 		resp, err := client.RequestResponse(
 			ctx,

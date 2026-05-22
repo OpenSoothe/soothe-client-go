@@ -390,20 +390,29 @@ func (c *Client) SendLoopDetach(ctx context.Context, loopID string, requestID ..
 	})
 }
 
-// SendLoopNew creates a new loop (RFC-503). Optional workspace sets client CWD.
-// Optional userID sets user identity for workspace isolation.
-func (c *Client) SendLoopNew(ctx context.Context, workspace string, userID string, requestID ...string) error {
+// SendLoopNew creates a new loop (RFC-503).
+// clientWorkspace is the project directory (used directly when set).
+// clientWorkspaceID scopes persisted sandboxes when clientWorkspace is empty.
+func (c *Client) SendLoopNew(
+	ctx context.Context,
+	clientWorkspace string,
+	userID string,
+	clientWorkspaceID string,
+	requestID ...string,
+) error {
 	rid := ""
 	if len(requestID) > 0 {
 		rid = requestID[0]
 	} else {
 		rid = NewRequestID()
 	}
-	return c.SendMessage(ctx, LoopNewMessage{
-		BaseMessage: BaseMessage{RequestID: rid, Type: "loop_new"},
-		Workspace:   workspace,
-		UserID:      userID,
-	})
+	msg := LoopNewMessage{
+		BaseMessage:       BaseMessage{RequestID: rid, Type: "loop_new"},
+		ClientWorkspace:   clientWorkspace,
+		UserID:            userID,
+		ClientWorkspaceID: clientWorkspaceID,
+	}
+	return c.SendMessage(ctx, msg)
 }
 
 // SendLoopInput sends input to a loop (RFC-503).

@@ -141,8 +141,11 @@ type LoopDetachMessage struct {
 // LoopNewMessage creates a new loop (RFC-503).
 type LoopNewMessage struct {
 	BaseMessage
-	Workspace string `json:"workspace,omitempty"` // Client CWD for file/shell tools (IG-409)
-	UserID    string `json:"user_id,omitempty"`   // User identifier for workspace isolation
+	ClientWorkspace   string `json:"client_workspace,omitempty"`    // Project directory; runner uses path directly when set
+	ClientWorkspaceID string `json:"client_workspace_id,omitempty"` // Stable scope when client_workspace is unset
+	UserID            string `json:"user_id,omitempty"`             // User segment under $SOOTHE_HOME/workspaces/
+	// Workspace is deprecated; use ClientWorkspace. Still accepted by the daemon as an alias.
+	Workspace string `json:"workspace,omitempty"`
 }
 
 // LoopInputMessage sends input to a loop (RFC-503).
