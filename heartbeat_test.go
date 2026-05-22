@@ -36,7 +36,7 @@ func TestHeartbeatTracker_NewWithThreshold(t *testing.T) {
 
 	// Check that custom threshold is applied
 	tracker.Update(map[string]interface{}{
-		"state":    "running",
+		"state":   "running",
 		"loop_id": "loop-123",
 	})
 
@@ -64,8 +64,8 @@ func TestHeartbeatTracker_Update(t *testing.T) {
 	tracker := NewHeartbeatTracker()
 
 	heartbeatData := map[string]interface{}{
-		"state":    "running",
-		"loop_id": "loop-456",
+		"state":     "running",
+		"loop_id":   "loop-456",
 		"timestamp": "2024-01-01T00:00:00Z",
 	}
 
@@ -107,7 +107,7 @@ func TestHeartbeatTracker_StateMethods(t *testing.T) {
 
 	// Test running state
 	tracker.Update(map[string]interface{}{
-		"state":    "running",
+		"state":   "running",
 		"loop_id": "loop-789",
 	})
 
@@ -180,7 +180,7 @@ func TestHeartbeatTracker_Reset(t *testing.T) {
 
 	// Update with some data
 	tracker.Update(map[string]interface{}{
-		"state":    "running",
+		"state":   "running",
 		"loop_id": "loop-123",
 	})
 
@@ -241,7 +241,7 @@ func TestHeartbeatTracker_ConcurrentAccess(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func(id int) {
 			tracker.Update(map[string]interface{}{
-				"state":    "running",
+				"state":   "running",
 				"loop_id": fmt.Sprintf("loop-%d", id),
 			})
 			_ = tracker.GetHealth()

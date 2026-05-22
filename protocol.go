@@ -144,6 +144,7 @@ type LoopNewMessage struct {
 	ClientWorkspace   string `json:"client_workspace,omitempty"`    // Project directory; runner uses path directly when set
 	ClientWorkspaceID string `json:"client_workspace_id,omitempty"` // Stable scope when client_workspace is unset
 	UserID            string `json:"user_id,omitempty"`             // User segment under $SOOTHE_HOME/workspaces/
+	IsEphemeral       bool   `json:"is_ephemeral,omitempty"`        // GC execution data after idle period
 	// Workspace is deprecated; use ClientWorkspace. Still accepted by the daemon as an alias.
 	Workspace string `json:"workspace,omitempty"`
 }

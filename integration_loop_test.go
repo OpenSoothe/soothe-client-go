@@ -411,7 +411,7 @@ func TestIntegration_SendLoopMethods(t *testing.T) {
 
 	// Test SendLoopNew
 	requestID2 := NewRequestID()
-	if err := client.SendLoopNew(ctx, "", "", "", requestID2); err != nil { // empty client workspace uses persisted sandbox
+	if err := client.SendLoopNew(ctx, "", "", "", false, requestID2); err != nil { // empty client workspace uses persisted sandbox
 		t.Logf("SendLoopNew error: %v", err)
 	} else {
 		t.Logf("Sent loop_new request: %s", requestID2)

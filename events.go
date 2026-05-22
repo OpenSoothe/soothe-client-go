@@ -85,7 +85,7 @@ const (
 
 // Stream tool call events (RFC-450, IG-416)
 const (
-	EventStreamToolCallUpdate  = "soothe.stream.tool_call.update"
+	EventStreamToolCallUpdate = "soothe.stream.tool_call.update"
 	EventToolCallUpdatesBatch = "tool_call_updates_batch"
 )
 

@@ -258,7 +258,7 @@ func TestStress_RapidLoopOperations(t *testing.T) {
 
 		// Immediately delete loop
 		_, err = client.RequestResponse(ctx, map[string]interface{}{
-			"type":   "loop_delete",
+			"type":    "loop_delete",
 			"loop_id": loopID,
 		}, "loop_delete_response", 5*time.Second)
 		if err != nil {
@@ -319,7 +319,7 @@ func TestStress_MessageThroughput(t *testing.T) {
 
 	for i := 0; i < messageCount; i++ {
 		err := client.SendMessage(ctx, map[string]interface{}{
-			"type":    "loop_list",
+			"type":       "loop_list",
 			"request_id": NewRequestID(),
 		})
 		if err != nil {

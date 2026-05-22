@@ -62,13 +62,13 @@ func (c *Client) SendInput(ctx context.Context, text string, opts ...InputOption
 type InputOption func(*inputOptions)
 
 type inputOptions struct {
-	loopID            string
-	autonomous        bool
-	maxIterations     *int
-	preferredSubagent string
-	interactive       bool
-	model             string
-	modelParams       map[string]interface{}
+	loopID               string
+	autonomous           bool
+	maxIterations        *int
+	preferredSubagent    string
+	interactive          bool
+	model                string
+	modelParams          map[string]interface{}
 	attachments          []map[string]interface{}
 	intentHint           string
 	responseSchema       map[string]interface{}
@@ -398,6 +398,7 @@ func (c *Client) SendLoopNew(
 	clientWorkspace string,
 	userID string,
 	clientWorkspaceID string,
+	isEphemeral bool,
 	requestID ...string,
 ) error {
 	rid := ""
@@ -411,6 +412,7 @@ func (c *Client) SendLoopNew(
 		ClientWorkspace:   clientWorkspace,
 		UserID:            userID,
 		ClientWorkspaceID: clientWorkspaceID,
+		IsEphemeral:       isEphemeral,
 	}
 	return c.SendMessage(ctx, msg)
 }

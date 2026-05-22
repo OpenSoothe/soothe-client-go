@@ -16,12 +16,12 @@ type DaemonHealth struct {
 // HeartbeatTracker tracks daemon heartbeat events to monitor daemon aliveness.
 // It is safe for concurrent use from multiple goroutines.
 type HeartbeatTracker struct {
-	mu                sync.RWMutex
-	lastHeartbeat     time.Time
+	mu              sync.RWMutex
+	lastHeartbeat   time.Time
 	daemonState     string
 	heartbeatLoopID string
-	aliveThreshold    time.Duration // Max time since last heartbeat to consider daemon alive
-	startTime         time.Time     // When tracking started (for initial grace period)
+	aliveThreshold  time.Duration // Max time since last heartbeat to consider daemon alive
+	startTime       time.Time     // When tracking started (for initial grace period)
 }
 
 // NewHeartbeatTracker creates a new heartbeat tracker with default settings.
