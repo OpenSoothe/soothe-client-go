@@ -142,6 +142,7 @@ type LoopDetachMessage struct {
 type LoopNewMessage struct {
 	BaseMessage
 	Workspace string `json:"workspace,omitempty"` // Client CWD for file/shell tools (IG-409)
+	User      string `json:"user,omitempty"`      // User identifier for workspace isolation
 }
 
 // LoopInputMessage sends input to a loop (RFC-503).

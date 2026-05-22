@@ -391,7 +391,8 @@ func (c *Client) SendLoopDetach(ctx context.Context, loopID string, requestID ..
 }
 
 // SendLoopNew creates a new loop (RFC-503). Optional workspace sets client CWD.
-func (c *Client) SendLoopNew(ctx context.Context, workspace string, requestID ...string) error {
+// Optional user sets user identity for workspace isolation.
+func (c *Client) SendLoopNew(ctx context.Context, workspace string, user string, requestID ...string) error {
 	rid := ""
 	if len(requestID) > 0 {
 		rid = requestID[0]
@@ -401,6 +402,7 @@ func (c *Client) SendLoopNew(ctx context.Context, workspace string, requestID ..
 	return c.SendMessage(ctx, LoopNewMessage{
 		BaseMessage: BaseMessage{RequestID: rid, Type: "loop_new"},
 		Workspace:   workspace,
+		User:        user,
 	})
 }
 

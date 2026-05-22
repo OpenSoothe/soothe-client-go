@@ -312,6 +312,7 @@ func (c *Client) LoopDetach(ctx context.Context, loopID string, timeout time.Dur
 }
 
 // LoopNew creates a new loop and waits for the response (RFC-503).
+// Optional workspace and user can be set via the returned map.
 func (c *Client) LoopNew(ctx context.Context, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 15 * time.Second
