@@ -25,28 +25,19 @@ const (
 	EventGoalDirectivesApplied = "soothe.cognition.goal.directives.applied"
 )
 
-// Browser subagent events
+// Explore subagent events (built-in wire, IG-339)
 const (
-	EventBrowserStarted       = "soothe.capability.browser.started"
-	EventBrowserCompleted     = "soothe.capability.browser.completed"
-	EventBrowserStepRunning   = "soothe.capability.browser.step.running"
-	EventBrowserCDPConnecting = "soothe.capability.browser.cdp.connecting"
+	EventExploreStarted       = "soothe.subagent.explore.started"
+	EventExploreMilestone       = "soothe.subagent.explore.milestone"
+	EventExploreStepCompleted   = "soothe.subagent.explore.step.completed"
+	EventExploreCompleted       = "soothe.subagent.explore.completed"
 )
 
-// Claude subagent events
+// Tacitus subagent events (built-in wire, IG-339)
 const (
-	EventClaudeStarted     = "soothe.capability.claude.started"
-	EventClaudeTextRunning = "soothe.capability.claude.text.running"
-	EventClaudeToolRunning = "soothe.capability.claude.tool.running"
-	EventClaudeCompleted   = "soothe.capability.claude.completed"
-)
-
-// Research subagent events
-const (
-	EventResearchStarted            = "soothe.capability.research.started"
-	EventResearchCompleted          = "soothe.capability.research.completed"
-	EventResearchJudgementReporting = "soothe.capability.research.judgement.reporting"
-	EventResearchInternalLLM        = "soothe.capability.research.internal_llm.run"
+	EventTacitusStarted       = "soothe.subagent.tacitus.started"
+	EventTacitusGatherSummary = "soothe.subagent.tacitus.gather.summary"
+	EventTacitusCompleted     = "soothe.subagent.tacitus.completed"
 )
 
 // Iteration lifecycle events
@@ -192,9 +183,9 @@ func classifyByDomainAndComponent(domain, component, full string) VerbosityTier 
 		return classifyCognitionEvent(full)
 	case "tool":
 		return TierInternal
-	case "capability":
-		// Capability subagents: progress events -> NORMAL, others -> DETAILED
-		return classifyCapabilityEvent(full)
+	case "subagent":
+		// Curated subagent wire events: lifecycle milestones -> NORMAL, others -> DETAILED
+		return classifySubagentEvent(full)
 	case "output":
 		return TierQuiet
 	case "system":
@@ -232,7 +223,7 @@ func classifyCognitionEvent(full string) VerbosityTier {
 	}
 }
 
-func classifyCapabilityEvent(full string) VerbosityTier {
+func classifySubagentEvent(full string) VerbosityTier {
 	_, _, action, _ := ParseNamespace(full)
 	switch action {
 	case "started", "completed":
@@ -253,10 +244,8 @@ func classifyByEventTypeString(s string) VerbosityTier {
 		EventGoalBatchStarted, EventGoalReported, EventGoalDirectivesApplied,
 		EventAgentLoopStarted, EventAgentLoopIterated,
 		EventAgentLoopStepStarted, EventAgentLoopStepCompleted,
-		EventBrowserStarted, EventBrowserCompleted,
-		EventClaudeStarted, EventClaudeCompleted,
-		EventResearchStarted, EventResearchCompleted,
-		EventResearchJudgementReporting:
+		EventExploreStarted, EventExploreCompleted,
+		EventTacitusStarted, EventTacitusCompleted:
 		return TierNormal
 	case EventAgentLoopCompleted:
 		return TierQuiet
@@ -289,10 +278,8 @@ func IsCompletionEvent(namespace string) bool {
 // IsSubagentProgressEvent checks if an event is a subagent progress event.
 func IsSubagentProgressEvent(namespace string) bool {
 	switch namespace {
-	case EventBrowserStarted, EventBrowserCompleted,
-		EventClaudeStarted, EventClaudeCompleted,
-		EventResearchStarted, EventResearchCompleted,
-		EventResearchJudgementReporting:
+	case EventExploreStarted, EventExploreCompleted,
+		EventTacitusStarted, EventTacitusCompleted:
 		return true
 	default:
 		return false
@@ -313,11 +300,8 @@ var EssentialEventTypes = map[string]bool{
 	EventAgentLoopStarted:           true,
 	EventAgentLoopIterated:          true,
 	EventAgentLoopCompleted:         true,
-	EventBrowserStarted:             true,
-	EventBrowserCompleted:           true,
-	EventClaudeStarted:              true,
-	EventClaudeCompleted:            true,
-	EventResearchStarted:            true,
-	EventResearchCompleted:          true,
-	EventResearchJudgementReporting: true,
+	EventExploreStarted:             true,
+	EventExploreCompleted:           true,
+	EventTacitusStarted:             true,
+	EventTacitusCompleted:           true,
 }
