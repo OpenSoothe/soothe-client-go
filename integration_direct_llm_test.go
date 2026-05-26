@@ -109,7 +109,7 @@ func TestIntegration_IntentHintDirectLLM(t *testing.T) {
 					return
 				}
 				if m.Mode == "custom" {
-					if et := m.EventType(); et != "" && et != EventDaemonHeartbeat {
+					if et := m.EventType(); et != "" && !strings.HasPrefix(et, "soothe.internal.") {
 						t.Logf("custom event: %s", et)
 					}
 				}

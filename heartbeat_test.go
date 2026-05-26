@@ -137,41 +137,20 @@ func TestHeartbeatTracker_ProcessHeartbeatEvent(t *testing.T) {
 		t.Error("expected ProcessHeartbeatEvent to return false for non-event message")
 	}
 
-	// Test event message but not heartbeat
-	otherEvent := map[string]interface{}{
+	// Catalog heartbeat-shaped events are not delivered to clients (IG-435).
+	heartbeatEvent := map[string]interface{}{
 		"type": "event",
 		"data": map[string]interface{}{
-			"type": EventLoopStarted,
+			"type": "soothe.internal.daemon.heartbeat",
 		},
 	}
-	if tracker.ProcessHeartbeatEvent(otherEvent) {
-		t.Error("expected ProcessHeartbeatEvent to return false for non-heartbeat event")
+	if tracker.ProcessHeartbeatEvent(heartbeatEvent) {
+		t.Error("expected ProcessHeartbeatEvent to ignore server-internal heartbeat events")
 	}
 
-	// Test heartbeat event
-	heartbeatEvent := map[string]interface{}{
-		"type":      "event",
-		"loop_id":   "loop-123",
-		"namespace": []string{},
-		"mode":      "custom",
-		"data": map[string]interface{}{
-			"type":      EventDaemonHeartbeat,
-			"loop_id":   "loop-123",
-			"timestamp": "2024-01-01T00:00:00Z",
-			"state":     "running",
-		},
-	}
-	if !tracker.ProcessHeartbeatEvent(heartbeatEvent) {
-		t.Error("expected ProcessHeartbeatEvent to return true for heartbeat event")
-	}
-
-	// Verify tracker was updated
 	health := tracker.GetHealth()
-	if health.State != "running" {
-		t.Errorf("expected state 'running', got %q", health.State)
-	}
-	if health.LoopID != "loop-123" {
-		t.Errorf("expected loop_id 'loop-123', got %q", health.LoopID)
+	if health.State != "" {
+		t.Errorf("expected empty state when heartbeats are not on the wire, got %q", health.State)
 	}
 }
 

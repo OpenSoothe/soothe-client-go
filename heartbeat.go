@@ -150,15 +150,10 @@ func (t *HeartbeatTracker) ProcessHeartbeatEvent(event map[string]interface{}) b
 		return false
 	}
 
-	// Check if this is a daemon heartbeat
-	dataType, ok := data["type"].(string)
-	if !ok || dataType != EventDaemonHeartbeat {
-		return false
-	}
-
-	// Update tracker with heartbeat data
-	t.Update(data)
-	return true
+	// Catalog daemon heartbeats (soothe.internal.*) are server-only and are not
+	// broadcast to WebSocket clients (IG-435).
+	_ = data
+	return false
 }
 
 // WaitForAlive blocks until the daemon is considered alive or timeout is reached.
