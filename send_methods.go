@@ -115,7 +115,7 @@ func WithModelParams(params map[string]interface{}) InputOption {
 }
 
 // WithIntentHint sets intent_hint on loop_input (daemon normalizes case).
-// In-agent bypass values: "quiz", "continue_thread", "new_goal".
+// In-agent bypass value: "quiz".
 // Daemon-only direct model value: "direct_llm" (default chat model, or image model when
 // WithAttachments is set). Deprecated alias "image_to_text" (attachments required).
 func WithIntentHint(hint string) InputOption {
