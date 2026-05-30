@@ -493,45 +493,6 @@ func TestIntegration_SendCommandRequest(t *testing.T) {
 }
 
 // =============================================================================
-// RESUME INTERRUPTS API TEST
-// =============================================================================
-
-func TestIntegration_SendResumeInterrupts(t *testing.T) {
-	skipIfNoDaemon(t)
-
-	ctx := context.Background()
-	client := NewClient("ws://localhost:8765", integrationTestConfig())
-
-	if err := client.Connect(ctx); err != nil {
-		t.Fatalf("Failed to connect: %v", err)
-	}
-	defer client.Close()
-
-	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
-		t.Fatalf("Daemon not ready: %v", err)
-	}
-
-	loopID := createTestLoop(t, client, ctx)
-	if loopID == "" {
-		t.Skip("Could not create test loop")
-	}
-
-	// Send resume_interrupts (normally used for interactive mode continuation)
-	requestID := NewRequestID()
-	resumePayload := map[string]interface{}{
-		"user_response": "continue",
-		"approved":      true,
-	}
-
-	if err := client.SendResumeInterrupts(ctx, loopID, resumePayload, requestID); err != nil {
-		t.Logf("SendResumeInterrupts error: %v", err)
-		return
-	}
-
-	t.Logf("Sent resume_interrupts request: %s", requestID)
-}
-
-// =============================================================================
 // DAEMON MANAGEMENT API TESTS
 // =============================================================================
 

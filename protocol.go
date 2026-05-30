@@ -54,13 +54,6 @@ type ConfigGetMessage struct {
 	Section string `json:"section"`
 }
 
-// ResumeInterruptsMessage sends interactive continuation payload.
-type ResumeInterruptsMessage struct {
-	BaseMessage
-	LoopID        string                 `json:"loop_id"`
-	ResumePayload map[string]interface{} `json:"resume_payload"`
-}
-
 // SkillsListMessage requests the skills catalog (RFC-400).
 type SkillsListMessage struct {
 	BaseMessage
@@ -381,13 +374,6 @@ func DecodeMessage(data []byte) (interface{}, error) {
 
 	case "config_get":
 		var msg ConfigGetMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "resume_interrupts":
-		var msg ResumeInterruptsMessage
 		if err := json.Unmarshal(data, &msg); err != nil {
 			return nil, err
 		}

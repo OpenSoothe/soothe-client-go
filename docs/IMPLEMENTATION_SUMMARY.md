@@ -12,7 +12,6 @@ The `soothe-client-go` package speaks the Soothe daemon **WebSocket** protocol w
 4. **Daemon** — `daemon_ready`, `daemon_status`, `daemon_shutdown`, `config_get`
 5. **Input** — `loop_input` / `SendInput` with `WithLoopID`, autonomous options, attachments (see SDK parity)
 6. **Structured commands** — `command_request` with `loop_id` (RFC-404 wrappers in `request.go`)
-7. **Interrupts** — `resume_interrupts` with `loop_id`
 8. **Health** — optional heartbeat tracking (`HeartbeatTracker`, `loop_id` in heartbeat payloads)
 
 ## REST-only features

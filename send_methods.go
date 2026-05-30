@@ -197,21 +197,6 @@ func (c *Client) SendConfigGet(ctx context.Context, section string, requestID ..
 	})
 }
 
-// SendResumeInterrupts sends interactive continuation payload for a paused turn (loop-scoped).
-func (c *Client) SendResumeInterrupts(ctx context.Context, loopID string, resumePayload map[string]interface{}, requestID ...string) error {
-	rid := ""
-	if len(requestID) > 0 {
-		rid = requestID[0]
-	} else {
-		rid = NewRequestID()
-	}
-	return c.SendMessage(ctx, ResumeInterruptsMessage{
-		BaseMessage:   BaseMessage{RequestID: rid, Type: "resume_interrupts"},
-		LoopID:        loopID,
-		ResumePayload: resumePayload,
-	})
-}
-
 // SendSkillsList requests the skills catalog (RFC-400).
 func (c *Client) SendSkillsList(ctx context.Context, requestID ...string) error {
 	rid := ""

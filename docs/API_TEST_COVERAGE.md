@@ -39,12 +39,11 @@
 | `CheckDaemonStatus` / `RequestDaemonShutdown` | `helpers_test.go`, `integration_test.go:TestIntegration_CheckDaemonStatus` |
 | `SendDetach` | `integration_test.go:TestIntegration_SendDetach` |
 
-## Commands and interrupts
+## Commands
 
 | API | Typical test |
 |-----|----------------|
 | `CommandRequest` / `SendCommandRequest` | `integration_loop_test.go:TestIntegration_CommandRequest` |
-| `SendResumeInterrupts` | `integration_loop_test.go:TestIntegration_SendResumeInterrupts` |
 | `SendCommand` (slash) | `client_test.go:TestClient_SendCommand` |
 
 ## Protocol helpers
