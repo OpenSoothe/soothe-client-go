@@ -21,7 +21,6 @@ This client implements the WebSocket protocol for Soothe daemon, providing full 
 
 - `/api/v1/autopilot/status` - Get autopilot state
 - `/api/v1/autopilot/goals` - List/submit/approve/reject goals
-- `/api/v1/autopilot/inbox` - View pending tasks
 - `/api/v1/autopilot/wake` / `/api/v1/autopilot/dream` - Mode transitions
 
 The daemon only exposes these through HTTP REST transport (`http_rest.py`). To use autopilot features in Go, you would need to implement an HTTP REST client separately (not included in this package).
