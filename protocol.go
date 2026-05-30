@@ -662,6 +662,13 @@ func DecodeMessage(data []byte) (interface{}, error) {
 		}
 		return msg, nil
 
+	case "event_batch":
+		var msg map[string]interface{}
+		if err := json.Unmarshal(data, &msg); err != nil {
+			return nil, err
+		}
+		return msg, nil
+
 	default:
 		// Unknown type, return as generic map
 		var msg map[string]interface{}
@@ -670,6 +677,44 @@ func DecodeMessage(data []byte) (interface{}, error) {
 		}
 		return msg, nil
 	}
+}
+
+// ExpandWireMessages flattens daemon ``event_batch`` envelopes into individual wire messages.
+// The daemon may coalesce multiple loop events into one batch frame; callers must expand
+// before dispatching to typed handlers (matches soothe-sdk WebSocketClient behavior).
+func ExpandWireMessages(msg interface{}) []interface{} {
+	if msg == nil {
+		return nil
+	}
+	m, ok := msg.(map[string]interface{})
+	if !ok {
+		return []interface{}{msg}
+	}
+	typ, _ := m["type"].(string)
+	if typ != "event_batch" {
+		return []interface{}{msg}
+	}
+	rawEvents, ok := m["events"].([]interface{})
+	if !ok || len(rawEvents) == 0 {
+		return nil
+	}
+	out := make([]interface{}, 0, len(rawEvents))
+	for _, sub := range rawEvents {
+		subMap, ok := sub.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		raw, err := json.Marshal(subMap)
+		if err != nil {
+			continue
+		}
+		decoded, err := DecodeMessage(raw)
+		if err != nil || decoded == nil {
+			continue
+		}
+		out = append(out, decoded)
+	}
+	return out
 }
 
 // ExtractSootheLoopID returns a non-empty loop or checkpoint id when present in a daemon message.
@@ -860,8 +905,10 @@ func DecodeStream(reader io.Reader) (<-chan interface{}, error) {
 			if err != nil {
 				continue
 			}
-			if msg != nil {
-				ch <- msg
+			for _, expanded := range ExpandWireMessages(msg) {
+				if expanded != nil {
+					ch <- expanded
+				}
 			}
 		}
 	}()

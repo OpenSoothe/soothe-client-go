@@ -283,6 +283,131 @@ func TestClient_NDJSONReceive(t *testing.T) {
 	}
 }
 
+func TestExpandWireMessages_EventBatch(t *testing.T) {
+	batch := map[string]interface{}{
+		"type": "event_batch",
+		"events": []interface{}{
+			map[string]interface{}{
+				"type":  "event",
+				"mode":  "messages",
+				"data":  []interface{}{map[string]interface{}{"type": "ai", "content": "OK", "phase": "direct_model"}, map[string]interface{}{}},
+				"loop_id": "loop-1",
+			},
+			map[string]interface{}{
+				"type":    "status",
+				"state":   "idle",
+				"loop_id": "loop-1",
+			},
+		},
+	}
+	expanded := ExpandWireMessages(batch)
+	if len(expanded) != 2 {
+		t.Fatalf("expected 2 expanded messages, got %d", len(expanded))
+	}
+	ev, ok := expanded[0].(EventMessage)
+	if !ok {
+		t.Fatalf("first expanded message type: %T", expanded[0])
+	}
+	if ev.Mode != "messages" {
+		t.Fatalf("mode: got %q want messages", ev.Mode)
+	}
+	txt, ok := messagesModeAssistantContent(ev)
+	if !ok || txt != "OK" {
+		t.Fatalf("assistant content: %q ok=%v", txt, ok)
+	}
+	st, ok := expanded[1].(StatusResponse)
+	if !ok {
+		t.Fatalf("second expanded message type: %T", expanded[1])
+	}
+	if st.State != "idle" {
+		t.Fatalf("state: got %q want idle", st.State)
+	}
+}
+
+func testEventBatchHandler(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+	for {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		var base BaseMessage
+		if err := json.Unmarshal(msg, &base); err != nil {
+			continue
+		}
+		if base.Type != "trigger" {
+			continue
+		}
+		payload, err := json.Marshal(map[string]interface{}{
+			"type": "event_batch",
+			"events": []interface{}{
+				map[string]interface{}{
+					"type":  "event",
+					"mode":  "messages",
+					"data":  []interface{}{map[string]interface{}{"type": "ai", "content": "hello", "phase": "quiz"}, map[string]interface{}{}},
+					"loop_id": "loop-1",
+				},
+				map[string]interface{}{"type": "status", "state": "idle", "loop_id": "loop-1"},
+			},
+		})
+		if err != nil {
+			return
+		}
+		if err := conn.WriteMessage(websocket.TextMessage, payload); err != nil {
+			return
+		}
+	}
+}
+
+func TestClient_ReceiveMessages_EventBatch(t *testing.T) {
+	ts := newTestServer(testEventBatchHandler)
+	defer ts.Close()
+
+	client := NewClient(wsURL(ts.URL), nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer client.Close()
+
+	ch, err := client.ReceiveMessages(ctx)
+	if err != nil {
+		t.Fatalf("ReceiveMessages: %v", err)
+	}
+	if err := client.SendMessage(ctx, BaseMessage{Type: "trigger"}); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+
+	var gotEvent, gotIdle bool
+	timeout := time.After(3 * time.Second)
+	for !(gotEvent && gotIdle) {
+		select {
+		case raw := <-ch:
+			if raw == nil {
+				continue
+			}
+			switch m := raw.(type) {
+			case EventMessage:
+				if txt, ok := messagesModeAssistantContent(m); ok && txt == "hello" {
+					gotEvent = true
+				}
+			case StatusResponse:
+				if m.State == "idle" {
+					gotIdle = true
+				}
+			}
+		case <-timeout:
+			t.Fatalf("timeout: gotEvent=%v gotIdle=%v", gotEvent, gotIdle)
+		}
+	}
+}
+
 func TestClient_ReceiveMessages_LoopAIMessageEvent(t *testing.T) {
 	ts := newTestServer(testNDJSONHandler)
 	defer ts.Close()

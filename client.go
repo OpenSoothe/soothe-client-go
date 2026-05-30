@@ -206,17 +206,19 @@ func (c *Client) ReceiveMessages(ctx context.Context) (<-chan interface{}, error
 				if err != nil || msg == nil {
 					continue
 				}
-				// Automatically process heartbeat events if tracking is enabled
-				if tracker != nil {
-					// Convert to map for heartbeat processing
-					if m, ok := msg.(map[string]interface{}); ok {
-						tracker.ProcessHeartbeatEvent(m)
+				for _, expanded := range ExpandWireMessages(msg) {
+					// Automatically process heartbeat events if tracking is enabled
+					if tracker != nil {
+						// Convert to map for heartbeat processing
+						if m, ok := expanded.(map[string]interface{}); ok {
+							tracker.ProcessHeartbeatEvent(m)
+						}
 					}
-				}
-				select {
-				case ch <- msg:
-				case <-ctx.Done():
-					return
+					select {
+					case ch <- expanded:
+					case <-ctx.Done():
+						return
+					}
 				}
 			}
 		}
@@ -260,16 +262,18 @@ func (c *Client) ReadEvent() (map[string]interface{}, error) {
 		if err != nil || msg == nil {
 			continue
 		}
-		// Convert typed messages to map for uniform handling
-		b, err := json.Marshal(msg)
-		if err != nil {
-			return nil, err
+		for _, expanded := range ExpandWireMessages(msg) {
+			// Convert typed messages to map for uniform handling
+			b, err := json.Marshal(expanded)
+			if err != nil {
+				return nil, err
+			}
+			var m map[string]interface{}
+			if err := json.Unmarshal(b, &m); err != nil {
+				return nil, err
+			}
+			return m, nil
 		}
-		var m map[string]interface{}
-		if err := json.Unmarshal(b, &m); err != nil {
-			return nil, err
-		}
-		return m, nil
 	}
 	return nil, nil
 }
