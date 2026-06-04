@@ -33,42 +33,14 @@ func messagesModeAssistantContent(m EventMessage) (string, bool) {
 			return "", false
 		}
 	}
-	if s := extractAssistantContentText(msgMap["content"]); s != "" {
-		return s, true
+	switch c := msgMap["content"].(type) {
+	case string:
+		s := strings.TrimSpace(c)
+		if s != "" {
+			return s, true
+		}
 	}
 	return "", false
-}
-
-func extractAssistantContentText(content interface{}) string {
-	switch c := content.(type) {
-	case string:
-		return strings.TrimSpace(c)
-	case []interface{}:
-		var b strings.Builder
-		for _, item := range c {
-			switch v := item.(type) {
-			case string:
-				b.WriteString(v)
-			case map[string]interface{}:
-				if text, _ := v["text"].(string); text != "" {
-					b.WriteString(text)
-				}
-			}
-		}
-		return strings.TrimSpace(b.String())
-	case map[string]interface{}:
-		if text, _ := c["text"].(string); text != "" {
-			return strings.TrimSpace(text)
-		}
-		// Structured providers may already return a JSON object content value.
-		raw, err := json.Marshal(c)
-		if err != nil {
-			return ""
-		}
-		return strings.TrimSpace(string(raw))
-	default:
-		return ""
-	}
 }
 
 func TestIntegration_IntentHintDirectLLM(t *testing.T) {
@@ -321,14 +293,6 @@ var integrationWordReplySchema = map[string]interface{}{
 	"additionalProperties": false,
 }
 
-func shouldSkipStructuredDirectLLMError(msg string) bool {
-	lower := strings.ToLower(strings.TrimSpace(msg))
-	if lower == "" {
-		return false
-	}
-	return strings.Contains(lower, "structured direct_llm failed")
-}
-
 func TestIntegration_IntentHintDirectLLMStructured(t *testing.T) {
 	skipIfNoDaemon(t)
 
@@ -369,7 +333,6 @@ func TestIntegration_IntentHintDirectLLMStructured(t *testing.T) {
 	deadline := time.After(90 * time.Second)
 	var assistant string
 	var errResp *ErrorResponse
-	var customErr string
 
 	for {
 		select {
@@ -377,23 +340,7 @@ func TestIntegration_IntentHintDirectLLMStructured(t *testing.T) {
 			if errResp != nil {
 				t.Fatalf("daemon error: %s — %s", errResp.Code, errResp.Message)
 			}
-			if customErr != "" {
-				t.Fatalf("daemon custom error: %s", customErr)
-			}
-			if assistant == "" {
-				t.Fatal("timeout: expected structured JSON assistant content")
-			}
-			var parsed struct {
-				Word string `json:"word"`
-			}
-			if err := json.Unmarshal([]byte(assistant), &parsed); err != nil {
-				t.Fatalf("assistant is not valid JSON: %q err=%v", assistant, err)
-			}
-			if !strings.Contains(strings.ToUpper(parsed.Word), "GOJSON") {
-				t.Fatalf("word field: got %q", parsed.Word)
-			}
-			t.Logf("structured direct_llm: %q", assistant)
-			return
+			t.Fatal("timeout: expected structured JSON assistant content")
 		case msg, ok := <-ch:
 			if !ok {
 				if assistant != "" {
@@ -408,21 +355,17 @@ func TestIntegration_IntentHintDirectLLMStructured(t *testing.T) {
 			case EventMessage:
 				if txt, ok := messagesModeAssistantContent(m); ok {
 					assistant = txt
-				}
-				if m.Mode == "custom" {
-					if data, ok := m.Data.(map[string]interface{}); ok {
-						if et, _ := data["type"].(string); strings.HasPrefix(et, "soothe.error.") {
-							if emsg, _ := data["error"].(string); strings.TrimSpace(emsg) != "" {
-								if shouldSkipStructuredDirectLLMError(emsg) {
-									t.Skipf(
-										"daemon structured direct_llm unavailable in this environment: %s",
-										emsg,
-									)
-								}
-								customErr = emsg
-							}
-						}
+					var parsed struct {
+						Word string `json:"word"`
 					}
+					if err := json.Unmarshal([]byte(assistant), &parsed); err != nil {
+						t.Fatalf("assistant is not valid JSON: %q err=%v", assistant, err)
+					}
+					if !strings.Contains(strings.ToUpper(parsed.Word), "GOJSON") {
+						t.Fatalf("word field: got %q", parsed.Word)
+					}
+					t.Logf("structured direct_llm: %q", assistant)
+					return
 				}
 			case ErrorResponse:
 				e := m
