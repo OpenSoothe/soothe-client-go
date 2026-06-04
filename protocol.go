@@ -325,6 +325,32 @@ type LoopInputResponse struct {
 	Success bool   `json:"success"`
 }
 
+// CardReplayBeginMessage signals the start of a card ledger replay (RFC-413).
+type CardReplayBeginMessage struct {
+	BaseMessage
+	LoopID     string `json:"loop_id"`
+	TotalCards int    `json:"total_cards"`
+	LatestSeq  int    `json:"latest_seq"`
+}
+
+// CardCreatedMessage carries one display card during ledger replay (RFC-413).
+type CardCreatedMessage struct {
+	BaseMessage
+	LoopID string                 `json:"loop_id"`
+	Seq    int                    `json:"seq"`
+	CardID string                 `json:"card_id"`
+	Kind   string                 `json:"kind"`
+	Data   map[string]interface{} `json:"data"`
+}
+
+// CardReplayEndMessage signals the end of a card ledger replay (RFC-413).
+type CardReplayEndMessage struct {
+	BaseMessage
+	LoopID    string `json:"loop_id"`
+	LatestSeq int    `json:"latest_seq"`
+	CardCount int    `json:"card_count"`
+}
+
 // ---------------------------------------------------------------------------
 // Encode / Decode
 // ---------------------------------------------------------------------------
@@ -650,6 +676,27 @@ func DecodeMessage(data []byte) (interface{}, error) {
 
 	case "event_batch":
 		var msg map[string]interface{}
+		if err := json.Unmarshal(data, &msg); err != nil {
+			return nil, err
+		}
+		return msg, nil
+
+	case "card.replay_begin":
+		var msg CardReplayBeginMessage
+		if err := json.Unmarshal(data, &msg); err != nil {
+			return nil, err
+		}
+		return msg, nil
+
+	case "card.created":
+		var msg CardCreatedMessage
+		if err := json.Unmarshal(data, &msg); err != nil {
+			return nil, err
+		}
+		return msg, nil
+
+	case "card.replay_end":
+		var msg CardReplayEndMessage
 		if err := json.Unmarshal(data, &msg); err != nil {
 			return nil, err
 		}

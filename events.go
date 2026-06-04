@@ -43,6 +43,13 @@ const (
 	EventLoopReattachedWire = "loop_reattached"
 )
 
+// Card ledger replay frames (RFC-413, card_binder design)
+const (
+	EventCardReplayBegin = "card.replay_begin"
+	EventCardCreated     = "card.created"
+	EventCardReplayEnd   = "card.replay_end"
+)
+
 // Tool events
 const (
 	EventToolStarted   = "soothe.tool.execution.started"
