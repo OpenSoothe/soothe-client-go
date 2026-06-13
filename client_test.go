@@ -288,9 +288,9 @@ func TestExpandWireMessages_EventBatch(t *testing.T) {
 		"type": "event_batch",
 		"events": []interface{}{
 			map[string]interface{}{
-				"type":  "event",
-				"mode":  "messages",
-				"data":  []interface{}{map[string]interface{}{"type": "ai", "content": "OK", "phase": "direct_model"}, map[string]interface{}{}},
+				"type":    "event",
+				"mode":    "messages",
+				"data":    []interface{}{map[string]interface{}{"type": "ai", "content": "OK", "phase": "direct_model"}, map[string]interface{}{}},
 				"loop_id": "loop-1",
 			},
 			map[string]interface{}{
@@ -346,9 +346,9 @@ func testEventBatchHandler(w http.ResponseWriter, r *http.Request) {
 			"type": "event_batch",
 			"events": []interface{}{
 				map[string]interface{}{
-					"type":  "event",
-					"mode":  "messages",
-					"data":  []interface{}{map[string]interface{}{"type": "ai", "content": "hello", "phase": "quiz"}, map[string]interface{}{}},
+					"type":    "event",
+					"mode":    "messages",
+					"data":    []interface{}{map[string]interface{}{"type": "ai", "content": "hello", "phase": "quiz"}, map[string]interface{}{}},
 					"loop_id": "loop-1",
 				},
 				map[string]interface{}{"type": "status", "state": "idle", "loop_id": "loop-1"},

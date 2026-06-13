@@ -63,14 +63,16 @@ const (
 	EventToolCallUpdatesBatch = "tool_call_updates_batch"
 )
 
-// Agent loop events
+// StrangeLoop events
 const (
-	EventAgentLoopStarted       = "soothe.cognition.agent_loop.started"
-	EventAgentLoopIterated      = "soothe.cognition.agent_loop.iterated"
-	EventAgentLoopCompleted     = "soothe.cognition.agent_loop.completed"
-	EventAgentLoopReasoned      = "soothe.cognition.agent_loop.reasoned"
-	EventAgentLoopStepStarted   = "soothe.cognition.agent_loop.step.started"
-	EventAgentLoopStepCompleted = "soothe.cognition.agent_loop.step.completed"
+	EventStrangeLoopStarted          = "soothe.cognition.strange_loop.started"
+	EventStrangeLoopCompleted        = "soothe.cognition.strange_loop.completed"
+	EventStrangeLoopPlanDecision     = "soothe.cognition.strange_loop.plan.decision"
+	EventStrangeLoopReasoned         = "soothe.cognition.strange_loop.reasoned"
+	EventStrangeLoopStepStarted      = "soothe.cognition.strange_loop.step.started"
+	EventStrangeLoopStepQueued       = "soothe.cognition.strange_loop.step.queued"
+	EventStrangeLoopStepCompleted    = "soothe.cognition.strange_loop.step.completed"
+	EventStrangeLoopContextCompacted = "soothe.cognition.strange_loop.context.compacted"
 )
 
 // Branch (retry) events — client UX only

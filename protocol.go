@@ -76,7 +76,7 @@ type DetachMessage struct {
 	BaseMessage
 }
 
-// LoopListMessage requests the list of AgentLoop instances.
+// LoopListMessage requests the list of StrangeLoop instances.
 type LoopListMessage struct {
 	BaseMessage
 	Filter map[string]interface{} `json:"filter,omitempty"`
@@ -712,7 +712,7 @@ func DecodeMessage(data []byte) (interface{}, error) {
 	}
 }
 
-// ExpandWireMessages flattens daemon ``event_batch`` envelopes into individual wire messages.
+// ExpandWireMessages flattens daemon “event_batch“ envelopes into individual wire messages.
 // The daemon may coalesce multiple loop events into one batch frame; callers must expand
 // before dispatching to typed handlers (matches soothe-sdk WebSocketClient behavior).
 func ExpandWireMessages(msg interface{}) []interface{} {

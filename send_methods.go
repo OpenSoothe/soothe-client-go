@@ -254,7 +254,7 @@ func (c *Client) SendCommandRequest(ctx context.Context, command string, loopID 
 	})
 }
 
-// SendLoopList requests the list of AgentLoop instances.
+// SendLoopList requests the list of StrangeLoop instances.
 func (c *Client) SendLoopList(ctx context.Context, filter map[string]interface{}, limit int, requestID ...string) error {
 	rid := ""
 	if len(requestID) > 0 {
