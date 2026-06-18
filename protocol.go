@@ -214,10 +214,12 @@ type DaemonReadyResponse struct {
 // DaemonStatusResponse represents the daemon status response.
 type DaemonStatusResponse struct {
 	BaseMessage
-	Running     bool `json:"running"`
-	PortLive    bool `json:"port_live"`
-	ActiveLoops int  `json:"active_loops"`
-	DaemonPID   int  `json:"daemon_pid,omitempty"`
+	Running       bool   `json:"running"`
+	PortLive      bool   `json:"port_live"`
+	ActiveLoops   int    `json:"active_loops"`
+	DaemonPID     int    `json:"daemon_pid,omitempty"`
+	DaemonVersion string `json:"daemon_version,omitempty"`
+	CoreVersion   string `json:"core_version,omitempty"`
 }
 
 // ShutdownAckResponse represents the daemon shutdown acknowledgment.
