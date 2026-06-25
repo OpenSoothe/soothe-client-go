@@ -55,6 +55,16 @@ func (c *Client) SendInput(ctx context.Context, text string, opts ...InputOption
 	if o.responseSchemaStrict != nil {
 		payload["response_schema_strict"] = *o.responseSchemaStrict
 	}
+	// RFC-622 clarification relay
+	if o.clarificationMode != "" {
+		payload["clarification_mode"] = o.clarificationMode
+	}
+	if o.clarificationAnswer {
+		payload["clarification_answer"] = true
+	}
+	if o.clarificationAnswers != nil {
+		payload["clarification_answers"] = o.clarificationAnswers
+	}
 	return c.SendMessage(ctx, payload)
 }
 
@@ -74,6 +84,10 @@ type inputOptions struct {
 	responseSchema       map[string]interface{}
 	responseSchemaName   string
 	responseSchemaStrict *bool
+	// RFC-622 clarification relay
+	clarificationMode    string
+	clarificationAnswer  bool
+	clarificationAnswers []string
 }
 
 // WithLoopID sets the subscribed loop id for loop_input.
@@ -135,6 +149,21 @@ func WithResponseSchemaName(name string) InputOption {
 // WithResponseSchemaStrict sets whether json_schema strict mode is requested (default true).
 func WithResponseSchemaStrict(strict bool) InputOption {
 	return func(o *inputOptions) { v := strict; o.responseSchemaStrict = &v }
+}
+
+// WithClarificationMode sets RFC-622 clarification relay mode ("auto" / "manual").
+func WithClarificationMode(mode string) InputOption {
+	return func(o *inputOptions) { o.clarificationMode = mode }
+}
+
+// WithClarificationAnswer marks this input as the answer to a pending clarification interrupt.
+func WithClarificationAnswer() InputOption {
+	return func(o *inputOptions) { o.clarificationAnswer = true }
+}
+
+// WithClarificationAnswers sets per-question answers for multi-question clarifications.
+func WithClarificationAnswers(answers []string) InputOption {
+	return func(o *inputOptions) { o.clarificationAnswers = answers }
 }
 
 // SendCommand sends a slash command to the daemon.
@@ -414,5 +443,83 @@ func (c *Client) SendLoopInput(ctx context.Context, loopID string, content strin
 		BaseMessage: BaseMessage{RequestID: rid, Type: "loop_input"},
 		LoopID:      loopID,
 		Content:     content,
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Additional loop send methods (RFC-503 extensions)
+// ---------------------------------------------------------------------------
+
+// SendLoopMessages requests persisted conversation/activity rows.
+func (c *Client) SendLoopMessages(ctx context.Context, loopID string, limit int, offset int, includeEvents bool, requestID ...string) error {
+	rid := ""
+	if len(requestID) > 0 {
+		rid = requestID[0]
+	} else {
+		rid = NewRequestID()
+	}
+	return c.SendMessage(ctx, LoopMessagesMessage{
+		BaseMessage:    BaseMessage{RequestID: rid, Type: "loop_messages"},
+		LoopID:         loopID,
+		Limit:          limit,
+		Offset:         offset,
+		IncludeEvents:  includeEvents,
+	})
+}
+
+// SendLoopStateGet requests LangGraph checkpoint channel values.
+func (c *Client) SendLoopStateGet(ctx context.Context, loopID string, requestID ...string) error {
+	rid := ""
+	if len(requestID) > 0 {
+		rid = requestID[0]
+	} else {
+		rid = NewRequestID()
+	}
+	return c.SendMessage(ctx, LoopStateGetMessage{
+		BaseMessage: BaseMessage{RequestID: rid, Type: "loop_state_get"},
+		LoopID:      loopID,
+	})
+}
+
+// SendLoopStateUpdate applies partial checkpoint values.
+func (c *Client) SendLoopStateUpdate(ctx context.Context, loopID string, values map[string]interface{}, asNode string, requestID ...string) error {
+	rid := ""
+	if len(requestID) > 0 {
+		rid = requestID[0]
+	} else {
+		rid = NewRequestID()
+	}
+	return c.SendMessage(ctx, LoopStateUpdateMessage{
+		BaseMessage: BaseMessage{RequestID: rid, Type: "loop_state_update"},
+		LoopID:      loopID,
+		Values:      values,
+		AsNode:      asNode,
+	})
+}
+
+// SendLoopCardsFetch requests display card ledger (RFC-413).
+func (c *Client) SendLoopCardsFetch(ctx context.Context, loopID string, requestID ...string) error {
+	rid := ""
+	if len(requestID) > 0 {
+		rid = requestID[0]
+	} else {
+		rid = NewRequestID()
+	}
+	return c.SendMessage(ctx, LoopCardsFetchMessage{
+		BaseMessage: BaseMessage{RequestID: rid, Type: "loop_cards_fetch"},
+		LoopID:      loopID,
+	})
+}
+
+// SendMCPStatus requests MCP server status.
+func (c *Client) SendMCPStatus(ctx context.Context, requestID ...string) error {
+	rid := ""
+	if len(requestID) > 0 {
+		rid = requestID[0]
+	} else {
+		rid = NewRequestID()
+	}
+	return c.SendMessage(ctx, MCPStatusMessage{
+		BaseMessage: BaseMessage{RequestID: rid, Type: "mcp_status"},
 	})
 }

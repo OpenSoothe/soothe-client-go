@@ -157,6 +157,104 @@ type LoopInputMessage struct {
 }
 
 // ---------------------------------------------------------------------------
+// Job IPC messages (RFC-228)
+// ---------------------------------------------------------------------------
+
+// JobCreateMessage creates a new autopilot job.
+type JobCreateMessage struct {
+	BaseMessage
+	Goal             string `json:"goal"`
+	Workspace        string `json:"workspace,omitempty"`
+	VerificationRules string `json:"verification_rules,omitempty"`
+}
+
+// JobStatusMessage queries job status.
+type JobStatusMessage struct {
+	BaseMessage
+	JobID string `json:"job_id"`
+}
+
+// JobPauseMessage pauses a running job.
+type JobPauseMessage struct {
+	BaseMessage
+	JobID string `json:"job_id"`
+}
+
+// JobResumeMessage resumes a paused job.
+type JobResumeMessage struct {
+	BaseMessage
+	JobID string `json:"job_id"`
+}
+
+// JobCancelMessage cancels a job.
+type JobCancelMessage struct {
+	BaseMessage
+	JobID string `json:"job_id"`
+}
+
+// JobDagMessage requests DAG visualization.
+type JobDagMessage struct {
+	BaseMessage
+	JobID string `json:"job_id"`
+}
+
+// JobGuidanceMessage sends guidance to a job.
+type JobGuidanceMessage struct {
+	BaseMessage
+	JobID  string `json:"job_id"`
+	Text   string `json:"text"`
+	GoalID string `json:"goal_id,omitempty"`
+}
+
+// AutopilotSubscribeMessage subscribes to worker events.
+type AutopilotSubscribeMessage struct {
+	BaseMessage
+}
+
+// AutopilotUnsubscribeMessage unsubscribes from worker events.
+type AutopilotUnsubscribeMessage struct {
+	BaseMessage
+}
+
+// ---------------------------------------------------------------------------
+// Additional loop messages (RFC-503 extensions)
+// ---------------------------------------------------------------------------
+
+// LoopMessagesMessage requests persisted conversation/activity rows.
+type LoopMessagesMessage struct {
+	BaseMessage
+	LoopID         string `json:"loop_id"`
+	Limit          int    `json:"limit,omitempty"`
+	Offset         int    `json:"offset,omitempty"`
+	IncludeEvents  bool   `json:"include_events,omitempty"`
+}
+
+// LoopStateGetMessage requests LangGraph checkpoint channel values.
+type LoopStateGetMessage struct {
+	BaseMessage
+	LoopID string `json:"loop_id"`
+}
+
+// LoopStateUpdateMessage applies partial checkpoint values.
+type LoopStateUpdateMessage struct {
+	BaseMessage
+	LoopID  string                 `json:"loop_id"`
+	Values  map[string]interface{} `json:"values"`
+	AsNode string                 `json:"as_node,omitempty"`
+}
+
+// LoopCardsFetchMessage requests display card ledger (RFC-413).
+type LoopCardsFetchMessage struct {
+	BaseMessage
+	LoopID string `json:"loop_id"`
+}
+
+// MCPStatusMessage requests MCP server status.
+type MCPStatusMessage struct {
+	BaseMessage
+}
+
+// ---------------------------------------------------------------------------
 // Daemon → Client messages
 // ---------------------------------------------------------------------------
 

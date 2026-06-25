@@ -436,3 +436,76 @@ func (c *Client) CommandAutopilotDashboard(ctx context.Context, loopID string, t
 	}
 	return c.CommandRequest(ctx, "autopilot_dashboard", loopID, nil, timeout)
 }
+
+// ---------------------------------------------------------------------------
+// Additional loop methods (RFC-503 extensions)
+// ---------------------------------------------------------------------------
+
+// LoopMessages requests persisted conversation/activity rows for a loop.
+func (c *Client) LoopMessages(ctx context.Context, loopID string, limit int, offset int, includeEvents bool, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	payload := map[string]interface{}{
+		"type":    "loop_messages",
+		"loop_id": loopID,
+	}
+	if limit > 0 {
+		payload["limit"] = limit
+	}
+	if offset > 0 {
+		payload["offset"] = offset
+	}
+	if includeEvents {
+		payload["include_events"] = true
+	}
+	return c.RequestResponse(ctx, payload, "loop_messages_response", timeout)
+}
+
+// LoopStateGet requests LangGraph checkpoint channel values.
+func (c *Client) LoopStateGet(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	return c.RequestResponse(ctx, map[string]interface{}{
+		"type":    "loop_state_get",
+		"loop_id": loopID,
+	}, "loop_state_get_response", timeout)
+}
+
+// LoopStateUpdate applies partial checkpoint values to a loop.
+func (c *Client) LoopStateUpdate(ctx context.Context, loopID string, values map[string]interface{}, asNode string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	payload := map[string]interface{}{
+		"type":    "loop_state_update",
+		"loop_id": loopID,
+		"values":  values,
+	}
+	if asNode != "" {
+		payload["as_node"] = asNode
+	}
+	return c.RequestResponse(ctx, payload, "loop_state_update_response", timeout)
+}
+
+// LoopCardsFetch requests display card ledger snapshot (RFC-413).
+func (c *Client) LoopCardsFetch(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	return c.RequestResponse(ctx, map[string]interface{}{
+		"type":    "loop_cards_fetch",
+		"loop_id": loopID,
+	}, "loop_cards_fetch_response", timeout)
+}
+
+// MCPStatus requests MCP server connection status.
+func (c *Client) MCPStatus(ctx context.Context, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	return c.RequestResponse(ctx, map[string]interface{}{
+		"type": "mcp_status",
+	}, "mcp_status_response", timeout)
+}
