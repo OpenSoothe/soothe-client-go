@@ -51,9 +51,9 @@ func TestSendInputClarificationOptions(t *testing.T) {
 	// This test validates the payload construction without requiring a daemon
 
 	opts := &inputOptions{
-		loopID:              "test-loop-id",
-		clarificationMode:   "manual",
-		clarificationAnswer: true,
+		loopID:               "test-loop-id",
+		clarificationMode:    "manual",
+		clarificationAnswer:  true,
 		clarificationAnswers: []string{"yes", "no", "maybe"},
 	}
 

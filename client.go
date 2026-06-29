@@ -24,11 +24,11 @@ type Client struct {
 	closed           bool
 	heartbeatTracker *HeartbeatTracker // optional heartbeat tracker for daemon health monitoring
 	// Protocol-1 handshake state (RFC-450 §8.2)
-	handshakeComplete     bool
+	handshakeComplete      bool
 	negotiatedCapabilities map[string]struct{}
-	protocolVersion       string
-	readinessState        string
-	heartbeatIntervalMs   int
+	protocolVersion        string
+	readinessState         string
+	heartbeatIntervalMs    int
 }
 
 // NewClient creates a new Soothe daemon WebSocket client.

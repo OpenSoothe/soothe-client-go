@@ -27,15 +27,15 @@ const ClientVersion = "0.1.0"
 // Field tags use the protocol-1 wire names. Optional fields use omitempty so
 // the wire form is compact and matches the RFC-450 §5 examples.
 type Envelope struct {
-	Proto  string                 `json:"proto"`
-	Type   string                 `json:"type"`
-	Method string                 `json:"method,omitempty"`
-	Params map[string]interface{} `json:"params,omitempty"`
-	ID     string                 `json:"id,omitempty"`
-	Result map[string]interface{} `json:"result,omitempty"`
-	Error  *ErrorObject           `json:"error,omitempty"`
+	Proto   string                 `json:"proto"`
+	Type    string                 `json:"type"`
+	Method  string                 `json:"method,omitempty"`
+	Params  map[string]interface{} `json:"params,omitempty"`
+	ID      string                 `json:"id,omitempty"`
+	Result  map[string]interface{} `json:"result,omitempty"`
+	Error   *ErrorObject           `json:"error,omitempty"`
 	Payload map[string]interface{} `json:"payload,omitempty"`
-	Receipt string                `json:"receipt,omitempty"`
+	Receipt string                 `json:"receipt,omitempty"`
 }
 
 // ErrorObject is the structured error nested under envelope.error (RFC-450 §7.1).
