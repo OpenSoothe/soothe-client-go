@@ -72,10 +72,8 @@ func TestIntegration_DaemonReady(t *testing.T) {
 	}
 	defer client.Close()
 
-	if err := client.SendDaemonReady(ctx); err != nil {
-		t.Fatalf("Failed to send daemon_ready: %v", err)
-	}
-
+	// Connect() performs the protocol-1 handshake; WaitForDaemonReady returns
+	// immediately once the handshake reports readiness_state "ready".
 	ev, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout)
 	if err != nil {
 		t.Fatalf("WaitForDaemonReady: %v", err)
@@ -177,10 +175,7 @@ func TestIntegration_DaemonStatus(t *testing.T) {
 	}
 	defer client.Close()
 
-	// Need daemon_ready handshake first
-	if err := client.SendDaemonReady(ctx); err != nil {
-		t.Fatalf("SendDaemonReady: %v", err)
-	}
+	// Connect() completes the protocol-1 handshake; the daemon is ready.
 	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
 		t.Fatalf("WaitForDaemonReady: %v", err)
 	}
@@ -208,9 +203,7 @@ func TestIntegration_SkillsList(t *testing.T) {
 	}
 	defer client.Close()
 
-	if err := client.SendDaemonReady(ctx); err != nil {
-		t.Fatalf("SendDaemonReady: %v", err)
-	}
+	// Connect() completes the protocol-1 handshake; the daemon is ready.
 	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
 		t.Fatalf("WaitForDaemonReady: %v", err)
 	}
@@ -235,9 +228,7 @@ func TestIntegration_ModelsList(t *testing.T) {
 	}
 	defer client.Close()
 
-	if err := client.SendDaemonReady(ctx); err != nil {
-		t.Fatalf("SendDaemonReady: %v", err)
-	}
+	// Connect() completes the protocol-1 handshake; the daemon is ready.
 	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
 		t.Fatalf("WaitForDaemonReady: %v", err)
 	}
@@ -300,9 +291,7 @@ func TestIntegration_ConfigGet(t *testing.T) {
 	}
 	defer client.Close()
 
-	if err := client.SendDaemonReady(ctx); err != nil {
-		t.Fatalf("SendDaemonReady: %v", err)
-	}
+	// Connect() completes the protocol-1 handshake; the daemon is ready.
 	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
 		t.Fatalf("WaitForDaemonReady: %v", err)
 	}
@@ -386,9 +375,7 @@ func TestIntegration_SendDetach(t *testing.T) {
 	}
 	defer client.Close()
 
-	if err := client.SendDaemonReady(ctx); err != nil {
-		t.Fatalf("SendDaemonReady: %v", err)
-	}
+	// Connect() completes the protocol-1 handshake; the daemon is ready.
 	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
 		t.Fatalf("WaitForDaemonReady: %v", err)
 	}
@@ -412,9 +399,7 @@ func TestIntegration_CheckDaemonStatus(t *testing.T) {
 	}
 	defer client.Close()
 
-	if err := client.SendDaemonReady(ctx); err != nil {
-		t.Fatalf("SendDaemonReady: %v", err)
-	}
+	// Connect() completes the protocol-1 handshake; the daemon is ready.
 	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
 		t.Fatalf("WaitForDaemonReady: %v", err)
 	}
@@ -439,9 +424,7 @@ func TestIntegration_FetchSkillsCatalog(t *testing.T) {
 	}
 	defer client.Close()
 
-	if err := client.SendDaemonReady(ctx); err != nil {
-		t.Fatalf("SendDaemonReady: %v", err)
-	}
+	// Connect() completes the protocol-1 handshake; the daemon is ready.
 	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
 		t.Fatalf("WaitForDaemonReady: %v", err)
 	}

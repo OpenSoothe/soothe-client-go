@@ -10,8 +10,109 @@ import (
 	"github.com/google/uuid"
 )
 
+// ProtoVersion is the protocol-1 version string (RFC-450 §8.1).
+const ProtoVersion = "1"
+
+// DefaultClientCapabilities are declared in the connection_init handshake.
+var DefaultClientCapabilities = []string{"streaming", "batch", "heartbeat", "receipts"}
+
+// ClientVersion reported in the connection_init handshake.
+const ClientVersion = "0.1.0"
+
 // ---------------------------------------------------------------------------
-// Base types
+// Protocol-1 wire envelope (RFC-450 §5.2)
+// ---------------------------------------------------------------------------
+
+// Envelope is the unified {proto, type, method, params, id} base structure.
+// Field tags use the protocol-1 wire names. Optional fields use omitempty so
+// the wire form is compact and matches the RFC-450 §5 examples.
+type Envelope struct {
+	Proto  string                 `json:"proto"`
+	Type   string                 `json:"type"`
+	Method string                 `json:"method,omitempty"`
+	Params map[string]interface{} `json:"params,omitempty"`
+	ID     string                 `json:"id,omitempty"`
+	Result map[string]interface{} `json:"result,omitempty"`
+	Error  *ErrorObject           `json:"error,omitempty"`
+	Payload map[string]interface{} `json:"payload,omitempty"`
+	Receipt string                `json:"receipt,omitempty"`
+}
+
+// ErrorObject is the structured error nested under envelope.error (RFC-450 §7.1).
+type ErrorObject struct {
+	Code    int                    `json:"code"`
+	Message string                 `json:"message"`
+	Data    map[string]interface{} `json:"data,omitempty"`
+}
+
+// NewRequestEnvelope builds a request envelope with a generated id.
+func NewRequestEnvelope(method string, params map[string]interface{}) Envelope {
+	return Envelope{
+		Proto:  ProtoVersion,
+		Type:   "request",
+		Method: method,
+		Params: params,
+		ID:     NewRequestID(),
+	}
+}
+
+// NewRequestEnvelopeWithID builds a request envelope with an explicit id.
+func NewRequestEnvelopeWithID(method string, params map[string]interface{}, id string) Envelope {
+	if id == "" {
+		id = NewRequestID()
+	}
+	return Envelope{Proto: ProtoVersion, Type: "request", Method: method, Params: params, ID: id}
+}
+
+// NewNotificationEnvelope builds a fire-and-forget notification (no id).
+func NewNotificationEnvelope(method string, params map[string]interface{}) Envelope {
+	return Envelope{Proto: ProtoVersion, Type: "notification", Method: method, Params: params}
+}
+
+// NewSubscribeEnvelope builds a subscribe envelope with a generated id.
+func NewSubscribeEnvelope(method string, params map[string]interface{}) Envelope {
+	return Envelope{Proto: ProtoVersion, Type: "subscribe", Method: method, Params: params, ID: NewRequestID()}
+}
+
+// NewUnsubscribeEnvelope builds an unsubscribe envelope by subscription id.
+func NewUnsubscribeEnvelope(id string) Envelope {
+	return Envelope{Proto: ProtoVersion, Type: "unsubscribe", ID: id}
+}
+
+// NewConnectionInitEnvelope builds the connection_init handshake message.
+func NewConnectionInitEnvelope() Envelope {
+	return Envelope{
+		Proto: ProtoVersion,
+		Type:  "connection_init",
+		Params: map[string]interface{}{
+			"client_version": ClientVersion,
+			"client_name":    "soothe-client-go",
+			"accept_proto":   []string{ProtoVersion},
+			"capabilities":   DefaultClientCapabilities,
+		},
+	}
+}
+
+// NewPingEnvelope builds a ping heartbeat message.
+func NewPingEnvelope() Envelope {
+	return Envelope{Proto: ProtoVersion, Type: "ping"}
+}
+
+// NewPongEnvelope builds a pong heartbeat message.
+func NewPongEnvelope() Envelope {
+	return Envelope{Proto: ProtoVersion, Type: "pong"}
+}
+
+// NewDisconnectEnvelope builds a disconnect notification.
+func NewDisconnectEnvelope() Envelope {
+	return Envelope{Proto: ProtoVersion, Type: "disconnect"}
+}
+
+// ---------------------------------------------------------------------------
+// Legacy typed message structs (kept for compatibility with older callers).
+// Under protocol-1 the daemon speaks envelopes; these structs are only used
+// by DecodeMessage when a legacy frame shape is encountered (test servers or
+// older daemons). New code should use the Envelope helpers above.
 // ---------------------------------------------------------------------------
 
 // BaseMessage represents the common message structure with type and optional request_id.
@@ -20,22 +121,10 @@ type BaseMessage struct {
 	Type      string `json:"type"`
 }
 
-// ---------------------------------------------------------------------------
-// Client → Daemon messages
-// ---------------------------------------------------------------------------
-
 // CommandMessage represents a slash command sent to the daemon.
 type CommandMessage struct {
 	BaseMessage
 	Cmd string `json:"cmd"`
-}
-
-// CommandRequestMessage represents a structured RPC command (RFC-404).
-type CommandRequestMessage struct {
-	BaseMessage
-	Command string                 `json:"command"`
-	LoopID  string                 `json:"loop_id,omitempty"`
-	Params  map[string]interface{} `json:"params,omitempty"`
 }
 
 // DaemonStatusMessage requests daemon status.
@@ -43,220 +132,10 @@ type DaemonStatusMessage struct {
 	BaseMessage
 }
 
-// DaemonShutdownMessage requests daemon shutdown.
-type DaemonShutdownMessage struct {
-	BaseMessage
-}
-
-// ConfigGetMessage requests a config section.
-type ConfigGetMessage struct {
-	BaseMessage
-	Section string `json:"section"`
-}
-
-// SkillsListMessage requests the skills catalog (RFC-400).
-type SkillsListMessage struct {
-	BaseMessage
-}
-
-// ModelsListMessage requests the models catalog (RFC-400).
-type ModelsListMessage struct {
-	BaseMessage
-}
-
-// InvokeSkillMessage invokes a skill on the daemon (RFC-400).
-type InvokeSkillMessage struct {
-	BaseMessage
-	Skill string `json:"skill"`
-	Args  string `json:"args,omitempty"`
-}
-
 // DetachMessage notifies the daemon that the client is detaching.
 type DetachMessage struct {
 	BaseMessage
 }
-
-// LoopListMessage requests the list of StrangeLoop instances.
-type LoopListMessage struct {
-	BaseMessage
-	Filter map[string]interface{} `json:"filter,omitempty"`
-	Limit  int                    `json:"limit,omitempty"`
-}
-
-// LoopGetMessage requests details for a specific loop.
-type LoopGetMessage struct {
-	BaseMessage
-	LoopID  string `json:"loop_id"`
-	Verbose bool   `json:"verbose,omitempty"`
-}
-
-// LoopTreeMessage requests the checkpoint tree for a loop.
-type LoopTreeMessage struct {
-	BaseMessage
-	LoopID string `json:"loop_id"`
-	Format string `json:"format,omitempty"`
-}
-
-// LoopPruneMessage requests pruning of old branches for a loop.
-type LoopPruneMessage struct {
-	BaseMessage
-	LoopID        string `json:"loop_id"`
-	RetentionDays int    `json:"retention_days,omitempty"`
-	DryRun        bool   `json:"dry_run,omitempty"`
-}
-
-// LoopDeleteMessage requests deletion of a loop.
-type LoopDeleteMessage struct {
-	BaseMessage
-	LoopID string `json:"loop_id"`
-}
-
-// LoopReattachMessage requests reattachment to a loop (RFC-411).
-type LoopReattachMessage struct {
-	BaseMessage
-	LoopID string `json:"loop_id"`
-}
-
-// LoopSubscribeMessage subscribes to loop events (RFC-503).
-type LoopSubscribeMessage struct {
-	BaseMessage
-	LoopID         string `json:"loop_id"`
-	Verbosity      string `json:"verbosity,omitempty"`
-	StreamDelivery string `json:"stream_delivery,omitempty"` // "batch" or "streaming" (RFC-614)
-}
-
-// LoopDetachMessage detaches from a loop (RFC-503).
-type LoopDetachMessage struct {
-	BaseMessage
-	LoopID string `json:"loop_id"`
-}
-
-// LoopNewMessage creates a new loop (RFC-503).
-type LoopNewMessage struct {
-	BaseMessage
-	ClientWorkspace   string `json:"client_workspace,omitempty"`    // Project directory; runner uses path directly when set
-	ClientWorkspaceID string `json:"client_workspace_id,omitempty"` // Stable scope when client_workspace is unset
-	UserID            string `json:"user_id,omitempty"`             // User segment under $SOOTHE_HOME/workspaces/
-	IsEphemeral       bool   `json:"is_ephemeral,omitempty"`        // GC execution data after idle period
-	// Workspace is deprecated; use ClientWorkspace. Still accepted by the daemon as an alias.
-	Workspace string `json:"workspace,omitempty"`
-}
-
-// LoopInputMessage sends input to a loop (RFC-503).
-type LoopInputMessage struct {
-	BaseMessage
-	LoopID            string                   `json:"loop_id"`
-	Content           string                   `json:"content"`
-	Autonomous        bool                     `json:"autonomous,omitempty"`
-	MaxIterations     *int                     `json:"max_iterations,omitempty"`
-	PreferredSubagent string                   `json:"preferred_subagent,omitempty"`
-	Interactive       bool                     `json:"interactive,omitempty"`
-	Model             string                   `json:"model,omitempty"`
-	ModelParams       map[string]interface{}   `json:"model_params,omitempty"`
-	Attachments       []map[string]interface{} `json:"attachments,omitempty"`
-}
-
-// ---------------------------------------------------------------------------
-// Job IPC messages (RFC-228)
-// ---------------------------------------------------------------------------
-
-// JobCreateMessage creates a new autopilot job.
-type JobCreateMessage struct {
-	BaseMessage
-	Goal             string `json:"goal"`
-	Workspace        string `json:"workspace,omitempty"`
-	VerificationRules string `json:"verification_rules,omitempty"`
-}
-
-// JobStatusMessage queries job status.
-type JobStatusMessage struct {
-	BaseMessage
-	JobID string `json:"job_id"`
-}
-
-// JobPauseMessage pauses a running job.
-type JobPauseMessage struct {
-	BaseMessage
-	JobID string `json:"job_id"`
-}
-
-// JobResumeMessage resumes a paused job.
-type JobResumeMessage struct {
-	BaseMessage
-	JobID string `json:"job_id"`
-}
-
-// JobCancelMessage cancels a job.
-type JobCancelMessage struct {
-	BaseMessage
-	JobID string `json:"job_id"`
-}
-
-// JobDagMessage requests DAG visualization.
-type JobDagMessage struct {
-	BaseMessage
-	JobID string `json:"job_id"`
-}
-
-// JobGuidanceMessage sends guidance to a job.
-type JobGuidanceMessage struct {
-	BaseMessage
-	JobID  string `json:"job_id"`
-	Text   string `json:"text"`
-	GoalID string `json:"goal_id,omitempty"`
-}
-
-// AutopilotSubscribeMessage subscribes to worker events.
-type AutopilotSubscribeMessage struct {
-	BaseMessage
-}
-
-// AutopilotUnsubscribeMessage unsubscribes from worker events.
-type AutopilotUnsubscribeMessage struct {
-	BaseMessage
-}
-
-// ---------------------------------------------------------------------------
-// Additional loop messages (RFC-503 extensions)
-// ---------------------------------------------------------------------------
-
-// LoopMessagesMessage requests persisted conversation/activity rows.
-type LoopMessagesMessage struct {
-	BaseMessage
-	LoopID         string `json:"loop_id"`
-	Limit          int    `json:"limit,omitempty"`
-	Offset         int    `json:"offset,omitempty"`
-	IncludeEvents  bool   `json:"include_events,omitempty"`
-}
-
-// LoopStateGetMessage requests LangGraph checkpoint channel values.
-type LoopStateGetMessage struct {
-	BaseMessage
-	LoopID string `json:"loop_id"`
-}
-
-// LoopStateUpdateMessage applies partial checkpoint values.
-type LoopStateUpdateMessage struct {
-	BaseMessage
-	LoopID  string                 `json:"loop_id"`
-	Values  map[string]interface{} `json:"values"`
-	AsNode string                 `json:"as_node,omitempty"`
-}
-
-// LoopCardsFetchMessage requests display card ledger (RFC-413).
-type LoopCardsFetchMessage struct {
-	BaseMessage
-	LoopID string `json:"loop_id"`
-}
-
-// MCPStatusMessage requests MCP server status.
-type MCPStatusMessage struct {
-	BaseMessage
-}
-
-// ---------------------------------------------------------------------------
-// Daemon → Client messages
-// ---------------------------------------------------------------------------
 
 // EventMessage represents a streaming event from the agent.
 type EventMessage struct {
@@ -286,169 +165,12 @@ type StatusResponse struct {
 	ConversationHistory []interface{} `json:"conversation_history,omitempty"`
 }
 
-// SubscriptionConfirmedResponse represents a subscription acknowledgment.
-type SubscriptionConfirmedResponse struct {
-	BaseMessage
-	LoopID    string `json:"loop_id,omitempty"`
-	ClientID  string `json:"client_id"`
-	Verbosity string `json:"verbosity"`
-}
-
 // ErrorResponse represents an error message from the daemon.
 type ErrorResponse struct {
 	BaseMessage
 	Code    string                 `json:"code"`
 	Message string                 `json:"message"`
 	Details map[string]interface{} `json:"details,omitempty"`
-}
-
-// DaemonReadyResponse represents daemon readiness.
-type DaemonReadyResponse struct {
-	BaseMessage
-	State   string `json:"state"`
-	Message string `json:"message,omitempty"`
-}
-
-// DaemonStatusResponse represents the daemon status response.
-type DaemonStatusResponse struct {
-	BaseMessage
-	Running       bool   `json:"running"`
-	PortLive      bool   `json:"port_live"`
-	ActiveLoops   int    `json:"active_loops"`
-	DaemonPID     int    `json:"daemon_pid,omitempty"`
-	DaemonVersion string `json:"daemon_version,omitempty"`
-	CoreVersion   string `json:"core_version,omitempty"`
-}
-
-// ShutdownAckResponse represents the daemon shutdown acknowledgment.
-type ShutdownAckResponse struct {
-	BaseMessage
-	Status string `json:"status"`
-}
-
-// ConfigGetResponse represents the config section response.
-type ConfigGetResponse struct {
-	BaseMessage
-	// Section data is in extra fields; we use raw map for flexibility.
-}
-
-// SkillsListResponse represents the skills list response.
-type SkillsListResponse struct {
-	BaseMessage
-	Skills []map[string]interface{} `json:"skills,omitempty"`
-}
-
-// ModelsListResponse represents the models list response.
-type ModelsListResponse struct {
-	BaseMessage
-	Models []map[string]interface{} `json:"models,omitempty"`
-}
-
-// InvokeSkillResponse represents the skill invocation response.
-type InvokeSkillResponse struct {
-	BaseMessage
-	Echo map[string]interface{} `json:"echo,omitempty"`
-}
-
-// CommandResponseMessage represents an RPC command response (RFC-404).
-type CommandResponseMessage struct {
-	BaseMessage
-	Command string                 `json:"command"`
-	Data    map[string]interface{} `json:"data,omitempty"`
-	Error   string                 `json:"error,omitempty"`
-}
-
-// InterruptsResumedMessage represents interrupt resume acknowledgment.
-type InterruptsResumedMessage struct {
-	BaseMessage
-	LoopID  string `json:"loop_id"`
-	Success bool   `json:"success"`
-}
-
-// LoopListResponse represents the loop list response.
-type LoopListResponse struct {
-	BaseMessage
-	Loops []map[string]interface{} `json:"loops,omitempty"`
-	Total int                      `json:"total,omitempty"`
-}
-
-// LoopGetResponse represents loop details response.
-type LoopGetResponse struct {
-	BaseMessage
-	Loop map[string]interface{} `json:"loop"`
-}
-
-// LoopTreeResponse represents checkpoint tree response.
-type LoopTreeResponse struct {
-	BaseMessage
-	Tree map[string]interface{} `json:"tree"`
-}
-
-// LoopPruneResponse represents prune result response.
-type LoopPruneResponse struct {
-	BaseMessage
-	Result map[string]interface{} `json:"result"`
-}
-
-// LoopDeleteResponse represents loop delete response.
-type LoopDeleteResponse struct {
-	BaseMessage
-	Success bool   `json:"success"`
-	Message string `json:"message,omitempty"`
-}
-
-// LoopSubscribeResponse represents loop subscription result.
-type LoopSubscribeResponse struct {
-	BaseMessage
-	LoopID  string `json:"loop_id"`
-	Success bool   `json:"success"`
-}
-
-// LoopDetachResponse represents loop detach result.
-type LoopDetachResponse struct {
-	BaseMessage
-	LoopID  string `json:"loop_id"`
-	Success bool   `json:"success"`
-}
-
-// LoopNewResponse represents new loop creation result.
-type LoopNewResponse struct {
-	BaseMessage
-	LoopID  string `json:"loop_id"`
-	Success bool   `json:"success"`
-}
-
-// LoopInputResponse represents loop input result.
-type LoopInputResponse struct {
-	BaseMessage
-	LoopID  string `json:"loop_id"`
-	Success bool   `json:"success"`
-}
-
-// CardReplayBeginMessage signals the start of a card ledger replay (RFC-413).
-type CardReplayBeginMessage struct {
-	BaseMessage
-	LoopID     string `json:"loop_id"`
-	TotalCards int    `json:"total_cards"`
-	LatestSeq  int    `json:"latest_seq"`
-}
-
-// CardCreatedMessage carries one display card during ledger replay (RFC-413).
-type CardCreatedMessage struct {
-	BaseMessage
-	LoopID string                 `json:"loop_id"`
-	Seq    int                    `json:"seq"`
-	CardID string                 `json:"card_id"`
-	Kind   string                 `json:"kind"`
-	Data   map[string]interface{} `json:"data"`
-}
-
-// CardReplayEndMessage signals the end of a card ledger replay (RFC-413).
-type CardReplayEndMessage struct {
-	BaseMessage
-	LoopID    string `json:"loop_id"`
-	LatestSeq int    `json:"latest_seq"`
-	CardCount int    `json:"card_count"`
 }
 
 // ---------------------------------------------------------------------------
@@ -465,159 +187,62 @@ func EncodeMessage(msg interface{}) ([]byte, error) {
 }
 
 // DecodeMessage decodes a JSON message and returns a typed Go struct.
-// Unknown types are returned as map[string]interface{}.
+//
+// Protocol-1 envelopes are decoded into the unified Envelope struct. Legacy
+// flat-form frames (status, event, error) are decoded into their typed structs
+// for backward compatibility with test harnesses. Unknown types are returned
+// as map[string]interface{}.
 func DecodeMessage(data []byte) (interface{}, error) {
 	if len(data) == 0 {
 		return nil, nil
 	}
 
-	var base BaseMessage
-	if err := json.Unmarshal(data, &base); err != nil {
+	// First peek at the type to dispatch.
+	var probe struct {
+		Proto string `json:"proto"`
+		Type  string `json:"type"`
+	}
+	if err := json.Unmarshal(data, &probe); err != nil {
 		return nil, err
 	}
 
-	switch base.Type {
-	case "command":
-		var msg CommandMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
+	// Protocol-1 envelope types (RFC-450 §9.1). Decode into the unified
+	// Envelope struct so callers can inspect type/method/id/result/error/payload.
+	switch probe.Type {
+	case "connection_init", "connection_ack",
+		"request", "response", "notification", "subscribe",
+		"error", "complete", "unsubscribe",
+		"ping", "pong", "receipt_response", "disconnect":
+		var env Envelope
+		if err := json.Unmarshal(data, &env); err != nil {
 			return nil, err
 		}
-		return msg, nil
-
-	case "daemon_status":
-		var msg DaemonStatusMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
+		return env, nil
+	case "next":
+		// `next` frames carry subscription stream events. The daemon wraps
+		// legacy free-form frames as {payload:{namespace, mode, data}}. Project
+		// event-shaped payloads to EventMessage so consumers using
+		// `raw.(EventMessage)` (LoopAIMessage, NamespaceParts, etc.) keep
+		// working. Non-event next frames (e.g. subscription confirmation
+		// payload.event=="subscribed") stay as Envelope.
+		var env Envelope
+		if err := json.Unmarshal(data, &env); err != nil {
 			return nil, err
 		}
-		return msg, nil
-
-	case "daemon_shutdown":
-		var msg DaemonShutdownMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
+		if em, ok := nextToEventMessage(env); ok {
+			return em, nil
 		}
-		return msg, nil
+		return env, nil
+	}
 
-	case "config_get":
-		var msg ConfigGetMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "skills_list":
-		var msg SkillsListMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "models_list":
-		var msg ModelsListMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "invoke_skill":
-		var msg InvokeSkillMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "detach":
-		var msg DetachMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "command_request":
-		var msg CommandRequestMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "loop_list":
-		var msg LoopListMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "loop_get":
-		var msg LoopGetMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "loop_tree":
-		var msg LoopTreeMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "loop_prune":
-		var msg LoopPruneMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "loop_delete":
-		var msg LoopDeleteMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "loop_reattach":
-		var msg LoopReattachMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "loop_subscribe":
-		var msg LoopSubscribeMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "loop_detach":
-		var msg LoopDetachMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "loop_new":
-		var msg LoopNewMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "loop_input":
-		var msg LoopInputMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	// Daemon → Client message types
+	// Legacy / pass-through types.
+	switch probe.Type {
 	case "event":
 		var msg EventMessage
 		if err := json.Unmarshal(data, &msg); err != nil {
 			return nil, err
 		}
 		return msg, nil
-
 	case "status":
 		var msg StatusResponse
 		if err := json.Unmarshal(data, &msg); err != nil {
@@ -633,177 +258,14 @@ func DecodeMessage(data []byte) (interface{}, error) {
 			}
 		}
 		return msg, nil
-
-	case "subscription_confirmed":
-		var msg SubscriptionConfirmedResponse
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "error":
-		var msg ErrorResponse
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "daemon_ready":
-		var msg DaemonReadyResponse
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "daemon_status_response":
-		var msg DaemonStatusResponse
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "shutdown_ack":
-		var msg ShutdownAckResponse
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "config_get_response":
-		var msg map[string]interface{}
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "skills_list_response":
-		var msg SkillsListResponse
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "models_list_response":
-		var msg ModelsListResponse
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "invoke_skill_response":
-		var msg InvokeSkillResponse
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "command_response":
-		var msg CommandResponseMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "interrupts_resumed":
-		var msg InterruptsResumedMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "loop_list_response":
-		var msg LoopListResponse
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "loop_get_response":
-		var msg LoopGetResponse
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "loop_tree_response":
-		var msg LoopTreeResponse
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "loop_prune_response":
-		var msg LoopPruneResponse
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "loop_delete_response":
-		var msg LoopDeleteResponse
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "loop_subscribe_response":
-		var msg LoopSubscribeResponse
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "loop_detach_response":
-		var msg LoopDetachResponse
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "loop_new_response":
-		var msg LoopNewResponse
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "loop_input_response":
-		var msg LoopInputResponse
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
 	case "event_batch":
 		var msg map[string]interface{}
 		if err := json.Unmarshal(data, &msg); err != nil {
 			return nil, err
 		}
 		return msg, nil
-
-	case "card.replay_begin":
-		var msg CardReplayBeginMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "card.created":
-		var msg CardCreatedMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
-	case "card.replay_end":
-		var msg CardReplayEndMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, err
-		}
-		return msg, nil
-
 	default:
-		// Unknown type, return as generic map
+		// Unknown type, return as generic map.
 		var msg map[string]interface{}
 		if err := json.Unmarshal(data, &msg); err != nil {
 			return nil, err
@@ -812,9 +274,68 @@ func DecodeMessage(data []byte) (interface{}, error) {
 	}
 }
 
-// ExpandWireMessages flattens daemon “event_batch“ envelopes into individual wire messages.
-// The daemon may coalesce multiple loop events into one batch frame; callers must expand
-// before dispatching to typed handlers (matches soothe-sdk WebSocketClient behavior).
+// nextToEventMessage projects a protocol-1 `next` envelope's payload into an
+// EventMessage when the payload carries a wrapped legacy event frame.
+//
+// The daemon wraps legacy free-form frames as
+// {payload:{namespace, mode:<orig type>, data:<orig frame>}} (RFC-450 §9.3).
+// The original event frame (with its own type/mode/data/loop_id) lives inside
+// payload.data, so we project from the inner frame to preserve the legacy
+// EventMessage shape (Mode, Data, LoopID, Namespace) that consumers expect.
+// Returns (EventMessage, true) when the payload wraps an event-shaped frame;
+// otherwise (zero, false) so the caller keeps the raw Envelope (e.g. for
+// subscription-confirmation next frames whose payload is {event:"subscribed"}).
+func nextToEventMessage(env Envelope) (EventMessage, bool) {
+	var zero EventMessage
+	payload := env.Payload
+	if payload == nil {
+		return zero, false
+	}
+
+	// Common case: payload.data is the original event frame
+	// {type:"event"|"status"|..., mode:"messages"|..., data:[...], loop_id:...}.
+	if inner, ok := payload["data"].(map[string]interface{}); ok {
+		innerType, _ := inner["type"].(string)
+		// Only project event-like frames; status frames are top-level protocol-1
+		// types and are not wrapped in next (but defend anyway).
+		if innerType == "event" || innerType == "" {
+			if _, hasMode := inner["mode"]; hasMode {
+				em := EventMessage{
+					BaseMessage: BaseMessage{Type: "event"},
+					Mode:        asString(inner["mode"]),
+					Namespace:   inner["namespace"],
+					Data:        inner["data"],
+				}
+				if lid, ok := inner["loop_id"].(string); ok && lid != "" {
+					em.LoopID = lid
+				}
+				return em, true
+			}
+		}
+	}
+
+	// Fallback: payload itself carries mode/data directly (some daemon paths).
+	mode, hasMode := payload["mode"].(string)
+	_, hasData := payload["data"]
+	if hasMode || hasData {
+		em := EventMessage{
+			BaseMessage: BaseMessage{Type: "event"},
+			Mode:        mode,
+			Namespace:   payload["namespace"],
+			Data:        payload["data"],
+		}
+		if lid, ok := payload["loop_id"].(string); ok && lid != "" {
+			em.LoopID = lid
+		}
+		return em, true
+	}
+	return zero, false
+}
+
+// ExpandWireMessages flattens daemon "event_batch" envelopes into individual
+// wire messages. Under protocol-1 the batch wrapper is preserved as a
+// transport-level optimization; each sub-event is individually wrapped as a
+// `next` envelope by the daemon, so callers must expand before dispatching.
 func ExpandWireMessages(msg interface{}) []interface{} {
 	if msg == nil {
 		return nil
@@ -850,9 +371,32 @@ func ExpandWireMessages(msg interface{}) []interface{} {
 	return out
 }
 
-// ExtractSootheLoopID returns a non-empty loop or checkpoint id when present in a daemon message.
+// ExtractSootheLoopID returns a non-empty loop or checkpoint id when present in
+// a daemon message. Handles both protocol-1 envelopes (next.payload.data.loop_id,
+// status.loop_id) and legacy frames.
 func ExtractSootheLoopID(msg interface{}) (string, bool) {
 	switch m := msg.(type) {
+	case Envelope:
+		if m.Type == "next" {
+			if payload, ok := m.Payload["data"].(map[string]interface{}); ok && payload != nil {
+				if s, ok := payload["loop_id"].(string); ok && s != "" {
+					return s, true
+				}
+				if s, ok := payload["loopId"].(string); ok && s != "" {
+					return s, true
+				}
+			}
+			if s, ok := m.Payload["loop_id"].(string); ok && s != "" {
+				return s, true
+			}
+			return "", false
+		}
+		if m.Type == "status" {
+			if s, ok := m.Params["loop_id"].(string); ok && s != "" {
+				return s, true
+			}
+			return "", false
+		}
 	case StatusResponse:
 		if m.LoopID != "" {
 			return m.LoopID, true
@@ -869,15 +413,23 @@ func ExtractSootheLoopID(msg interface{}) (string, bool) {
 				return s, true
 			}
 		}
-	case InterruptsResumedMessage:
-		if m.LoopID != "" {
-			return m.LoopID, true
-		}
-	case LoopInputResponse:
-		if m.LoopID != "" {
-			return m.LoopID, true
-		}
 	case map[string]interface{}:
+		if t, _ := m["type"].(string); t == "next" {
+			if payload, ok := m["payload"].(map[string]interface{}); ok {
+				if data, ok := payload["data"].(map[string]interface{}); ok && data != nil {
+					if s, ok := data["loop_id"].(string); ok && s != "" {
+						return s, true
+					}
+					if s, ok := data["loopId"].(string); ok && s != "" {
+						return s, true
+					}
+				}
+				if s, ok := payload["loop_id"].(string); ok && s != "" {
+					return s, true
+				}
+			}
+			return "", false
+		}
 		if s, ok := m["loop_id"].(string); ok && s != "" {
 			return s, true
 		}
@@ -1000,8 +552,9 @@ func (m LoopAIMessage) LoopAIText() string {
 	}
 }
 
-// SplitSootheWirePayload returns one or more JSON objects from a single WebSocket text payload.
-// The daemon may send newline-delimited JSON (NDJSON) in one frame.
+// SplitSootheWirePayload returns one or more JSON objects from a single
+// WebSocket text payload. The daemon may send newline-delimited JSON (NDJSON)
+// in one frame.
 func SplitSootheWirePayload(data []byte) [][]byte {
 	s := strings.TrimSpace(string(data))
 	if s == "" {
@@ -1053,7 +606,7 @@ func DecodeStream(reader io.Reader) (<-chan interface{}, error) {
 // Message factory functions
 // ---------------------------------------------------------------------------
 
-// NewRequestID generates a new UUID request ID.
+// NewRequestID generates a new UUID request correlation id (RFC-450 §5.2).
 func NewRequestID() string {
 	return uuid.New().String()
 }

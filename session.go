@@ -15,8 +15,10 @@ type LoopSessionOptions struct {
 	ClientWorkspaceID string
 }
 
-// BootstrapLoopSession runs daemon_ready → (loop_new or reuse resumeLoopID) → loop_subscribe.
-// It mirrors soothe_sdk.client.session.bootstrap_loop_session and returns the loop id.
+// BootstrapLoopSession runs (loop_new or reuse resumeLoopID) → loop_subscribe.
+// The protocol-1 connection_init/connection_ack handshake is performed in
+// Connect(); this function assumes it has already completed. It mirrors
+// soothe_sdk.client.session.bootstrap_loop_session and returns the loop id.
 // Call this before starting a concurrent ReceiveMessages reader on the same connection.
 func BootstrapLoopSession(
 	ctx context.Context,
@@ -28,13 +30,6 @@ func BootstrapLoopSession(
 ) (string, error) {
 	if cfg == nil {
 		cfg = DefaultConfig()
-	}
-
-	if err := client.SendMessage(ctx, BaseMessage{Type: "daemon_ready"}); err != nil {
-		return "", fmt.Errorf("daemon_ready: %w", err)
-	}
-	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
-		return "", err
 	}
 
 	var sessionOpts *LoopSessionOptions
@@ -63,7 +58,7 @@ func BootstrapLoopSession(
 		resp, err := client.RequestResponse(
 			ctx,
 			newPayload,
-			"loop_new_response",
+			"loop_new",
 			cfg.LoopStatusTimeout,
 		)
 		if err != nil {
@@ -72,16 +67,12 @@ func BootstrapLoopSession(
 		lid, _ := resp["loop_id"].(string)
 		loopID = strings.TrimSpace(lid)
 		if loopID == "" {
-			return "", fmt.Errorf("loop_new_response missing loop_id")
+			return "", fmt.Errorf("loop_new response missing loop_id")
 		}
 	}
 
-	subPayload := map[string]interface{}{
-		"type":      "loop_subscribe",
-		"loop_id":   loopID,
-		"verbosity": cfg.VerbosityLevel,
-	}
-	subResp, err := client.RequestResponse(ctx, subPayload, "loop_subscribe_response", cfg.SubscriptionTimeout)
+	// Subscribe to the loop event stream. Confirmation arrives as a `next` frame.
+	subResp, err := client.LoopSubscribe(ctx, loopID, cfg.VerbosityLevel, cfg.SubscriptionTimeout)
 	if err != nil {
 		return "", fmt.Errorf("loop_subscribe: %w", err)
 	}
@@ -96,7 +87,7 @@ func BootstrapLoopSession(
 // Wait helpers (consume from event channel)
 // ---------------------------------------------------------------------------
 
-// WaitDaemonReady blocks until a daemon_ready message with state == "ready".
+// WaitDaemonReady blocks until a connection_ack with readiness_state == "ready".
 func WaitDaemonReady(ctx context.Context, ch <-chan interface{}, timeout time.Duration) error {
 	if timeout <= 0 {
 		timeout = 20 * time.Second
@@ -108,30 +99,39 @@ func WaitDaemonReady(ctx context.Context, ch <-chan interface{}, timeout time.Du
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-deadline.C:
-			return fmt.Errorf("timeout after %v waiting for daemon_ready (state=ready)", timeout)
+			return fmt.Errorf("timeout after %v waiting for connection_ack (ready)", timeout)
 		case msg := <-ch:
 			if msg == nil {
 				continue
 			}
-			switch m := msg.(type) {
-			case DaemonReadyResponse:
-				if m.State == "ready" {
-					return nil
-				}
-				return fmt.Errorf("daemon not ready: state=%q message=%q", m.State, m.Message)
-			case map[string]interface{}:
-				if t, _ := m["type"].(string); t == "daemon_ready" {
-					if st, _ := m["state"].(string); st == "ready" {
+			if m, ok := msg.(Envelope); ok {
+				if m.Type == "connection_ack" {
+					result := m.Result
+					state, _ := result["readiness_state"].(string)
+					if state == "ready" {
 						return nil
 					}
-					return fmt.Errorf("daemon not ready: %#v", m)
+					return fmt.Errorf("daemon not ready: state=%q", state)
+				}
+				continue
+			}
+			if m, ok := msg.(map[string]interface{}); ok {
+				if t, _ := m["type"].(string); t == "connection_ack" {
+					result, _ := m["result"].(map[string]interface{})
+					state, _ := result["readiness_state"].(string)
+					if state == "ready" {
+						return nil
+					}
+					return fmt.Errorf("daemon not ready: state=%q", state)
 				}
 			}
 		}
 	}
 }
 
-// WaitLoopStatusWithID waits for type status with non-empty loop_id.
+// WaitLoopStatusWithID waits for a status frame with non-empty loop_id.
+// Under protocol-1 the daemon emits status frames as top-level type "status"
+// (not wrapped in next).
 func WaitLoopStatusWithID(ctx context.Context, ch <-chan interface{}, timeout time.Duration) (StatusResponse, error) {
 	var zero StatusResponse
 	if timeout <= 0 {
@@ -149,39 +149,60 @@ func WaitLoopStatusWithID(ctx context.Context, ch <-chan interface{}, timeout ti
 			if msg == nil {
 				continue
 			}
-			switch m := msg.(type) {
-			case ErrorResponse:
-				return zero, fmt.Errorf("daemon error: %s: %s", m.Code, m.Message)
-			case StatusResponse:
-				if m.LoopID != "" {
-					return m, nil
+			// Normalize to a map for uniform inspection.
+			var m map[string]interface{}
+			switch v := msg.(type) {
+			case Envelope:
+				if v.Type == "error" {
+					msgStr, _ := v.Error.Message, v.Error
+					return zero, fmt.Errorf("daemon error: %s", msgStr)
+				}
+				if v.Type == "status" {
+					m = map[string]interface{}{"type": "status", "state": v.Params["state"], "loop_id": v.Params["loop_id"]}
 				}
 			case map[string]interface{}:
-				typ, _ := m["type"].(string)
-				if typ == "error" {
-					code, _ := m["code"].(string)
-					msgStr, _ := m["message"].(string)
-					return zero, fmt.Errorf("daemon error: %s: %s", code, msgStr)
+				m = v
+			}
+			if m == nil {
+				continue
+			}
+			typ, _ := m["type"].(string)
+			if typ == "error" {
+				if errObj, ok := m["error"].(map[string]interface{}); ok {
+					msgStr, _ := errObj["message"].(string)
+					return zero, fmt.Errorf("daemon error: %s", msgStr)
 				}
-				if typ == "status" {
-					raw, err := json.Marshal(m)
-					if err != nil {
-						continue
-					}
-					decoded, err := DecodeMessage(raw)
-					if err != nil {
-						continue
-					}
-					if st, ok := decoded.(StatusResponse); ok && st.LoopID != "" {
-						return st, nil
-					}
+				msgStr, _ := m["message"].(string)
+				return zero, fmt.Errorf("daemon error: %s", msgStr)
+			}
+			if typ == "status" {
+				raw, err := json.Marshal(m)
+				if err != nil {
+					continue
+				}
+				decoded, err := DecodeMessage(raw)
+				if err != nil {
+					continue
+				}
+				if st, ok := decoded.(StatusResponse); ok && st.LoopID != "" {
+					return st, nil
+				}
+				// Fall back to map inspection.
+				if lid, _ := m["loop_id"].(string); lid != "" {
+					return StatusResponse{
+						BaseMessage: BaseMessage{Type: "status"},
+						State:       asString(m["state"]),
+						LoopID:      lid,
+						Workspace:   asString(m["workspace"]),
+					}, nil
 				}
 			}
 		}
 	}
 }
 
-// WaitSubscriptionConfirmed waits for subscription_confirmed or loop_subscribe_response matching loopID.
+// WaitSubscriptionConfirmed waits for a subscription confirmation `next` frame
+// whose payload carries the matching loop_id (RFC-450 §9.4).
 func WaitSubscriptionConfirmed(ctx context.Context, ch <-chan interface{}, wantLoopID, wantVerbosity string, timeout time.Duration) error {
 	_ = wantVerbosity
 	if timeout <= 0 {
@@ -199,30 +220,48 @@ func WaitSubscriptionConfirmed(ctx context.Context, ch <-chan interface{}, wantL
 			if msg == nil {
 				continue
 			}
-			switch m := msg.(type) {
-			case SubscriptionConfirmedResponse:
-				if m.LoopID == wantLoopID {
-					return nil
+			var payload map[string]interface{}
+			var typ string
+			switch v := msg.(type) {
+			case Envelope:
+				typ = v.Type
+				if v.Type == "next" {
+					payload = v.Payload
+				}
+				if v.Type == "error" {
+					return fmt.Errorf("daemon error: %s", v.Error.Message)
 				}
 			case map[string]interface{}:
-				t, _ := m["type"].(string)
-				if t == "subscription_confirmed" {
-					lid, _ := m["loop_id"].(string)
-					if lid == wantLoopID {
-						return nil
-					}
+				typ, _ = v["type"].(string)
+				if typ == "next" {
+					payload, _ = v["payload"].(map[string]interface{})
 				}
-				if t == "loop_subscribe_response" {
-					if ok, _ := m["success"].(bool); ok {
-						lid, _ := m["loop_id"].(string)
-						if lid == wantLoopID {
-							return nil
-						}
+				if typ == "error" {
+					if errObj, ok := v["error"].(map[string]interface{}); ok {
+						return fmt.Errorf("daemon error: %s", errObj["message"])
 					}
 				}
 			}
+			if typ != "next" || payload == nil {
+				continue
+			}
+			lid, _ := payload["loop_id"].(string)
+			if lid != wantLoopID {
+				continue
+			}
+			if ok, _ := payload["success"].(bool); ok {
+				return nil
+			}
 		}
 	}
+}
+
+// asString coerces an interface{} to string when possible.
+func asString(v interface{}) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }
 
 // ---------------------------------------------------------------------------

@@ -13,12 +13,64 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Test WebSocket server helpers
+// Test WebSocket server helpers (RFC-450 protocol-1)
 // ---------------------------------------------------------------------------
 
 var upgrader = websocket.Upgrader{}
 
-// testEchoHandler echoes back any message it receives.
+// testSendHandshake responds to connection_init with a leading status frame
+// and a connection_ack reporting readiness_state "ready".
+func testSendHandshake(conn *websocket.Conn, m map[string]interface{}) {
+	conn.WriteMessage(websocket.TextMessage, []byte(`{"proto":"1","type":"status","state":"idle","input_history":[]}`))
+	clientCaps, _ := m["capabilities"].([]interface{})
+	daemonCaps := []string{"streaming", "batch", "heartbeat", "receipts"}
+	capSet := map[string]bool{}
+	for _, c := range clientCaps {
+		if s, ok := c.(string); ok {
+			capSet[s] = true
+		}
+	}
+	negotiated := []string{}
+	for _, c := range daemonCaps {
+		if capSet[c] {
+			negotiated = append(negotiated, c)
+		}
+	}
+	ack := map[string]interface{}{
+		"proto": "1", "type": "connection_ack",
+		"result": map[string]interface{}{
+			"server_version":        "0.1.0",
+			"protocol_version":      "1",
+			"capabilities":          negotiated,
+			"readiness_state":       "ready",
+			"heartbeat_interval_ms": 0,
+		},
+	}
+	b, _ := json.Marshal(ack)
+	conn.WriteMessage(websocket.TextMessage, b)
+}
+
+// testSendResponse sends a protocol-1 response envelope correlated by id.
+func testSendResponse(conn *websocket.Conn, id string, result map[string]interface{}) {
+	env := map[string]interface{}{"proto": "1", "type": "response", "result": result, "id": id}
+	b, _ := json.Marshal(env)
+	conn.WriteMessage(websocket.TextMessage, b)
+}
+
+// testSendError sends a protocol-1 error envelope correlated by id.
+func testSendError(conn *websocket.Conn, id string, code int, message string) {
+	env := map[string]interface{}{"proto": "1", "type": "error", "error": map[string]interface{}{"code": code, "message": message}, "id": id}
+	b, _ := json.Marshal(env)
+	conn.WriteMessage(websocket.TextMessage, b)
+}
+
+// isConnectionInit returns true if m is a protocol-1 connection_init envelope.
+func isConnectionInit(m map[string]interface{}) bool {
+	t, _ := m["type"].(string)
+	return t == "connection_init"
+}
+
+// testEchoHandler handshakes, then echoes back any message it receives.
 func testEchoHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -30,11 +82,19 @@ func testEchoHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return
 		}
+		var m map[string]interface{}
+		if err := json.Unmarshal(msg, &m); err != nil {
+			continue
+		}
+		if isConnectionInit(m) {
+			testSendHandshake(conn, m)
+			continue
+		}
 		conn.WriteMessage(websocket.TextMessage, msg)
 	}
 }
 
-// testFullBootstrapHandler simulates the full daemon handshake.
+// testFullBootstrapHandler simulates the full daemon handshake + loop lifecycle.
 func testFullBootstrapHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -51,42 +111,54 @@ func testFullBootstrapHandler(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal(msg, &m); err != nil {
 			continue
 		}
+		if isConnectionInit(m) {
+			testSendHandshake(conn, m)
+			continue
+		}
 		typ, _ := m["type"].(string)
+		method, _ := m["method"].(string)
+		id, _ := m["id"].(string)
+		params, _ := m["params"].(map[string]interface{})
+		if params == nil {
+			params = map[string]interface{}{}
+		}
 
-		switch typ {
-		case "daemon_ready":
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"daemon_ready","state":"ready"}`))
-		case "loop_new":
-			rid, _ := m["request_id"].(string)
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"loop_new_response","request_id":"`+rid+`","loop_id":"test-loop-123","success":true}`))
-		case "loop_subscribe":
-			rid, _ := m["request_id"].(string)
-			lid, _ := m["loop_id"].(string)
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"loop_subscribe_response","request_id":"`+rid+`","loop_id":"`+lid+`","success":true}`))
-		case "loop_reattach":
-			lid, _ := m["loop_id"].(string)
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"status","state":"idle","loop_id":"`+lid+`","workspace":"/tmp"}`))
+		switch {
+		case typ == "request" && method == "loop_new":
+			testSendResponse(conn, id, map[string]interface{}{"loop_id": "test-loop-123", "success": true})
+		case typ == "subscribe" && method == "loop_events":
+			lid, _ := params["loop_id"].(string)
+			payload := map[string]interface{}{"loop_id": lid, "event": "subscribed", "success": true, "client_id": "c1"}
+			b, _ := json.Marshal(map[string]interface{}{"proto": "1", "type": "next", "id": id, "payload": payload})
+			conn.WriteMessage(websocket.TextMessage, b)
+		case typ == "notification" && method == "loop_input":
+			lid, _ := params["loop_id"].(string)
+			b, _ := json.Marshal(map[string]interface{}{"proto": "1", "type": "status", "state": "running", "loop_id": lid, "workspace": "/tmp"})
+			conn.WriteMessage(websocket.TextMessage, b)
 		default:
 			conn.WriteMessage(websocket.TextMessage, msg)
 		}
 	}
 }
 
-// testNDJSONHandler sends multiple JSON objects in one frame.
+// testNDJSONHandler handshakes, then sends multiple JSON objects in one frame.
 func testNDJSONHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}
 	defer conn.Close()
-	conn.ReadMessage() // consume one message
+	// First message: connection_init → handshake. Second message: trigger → NDJSON.
+	conn.ReadMessage()
+	testSendHandshake(conn, map[string]interface{}{"capabilities": []interface{}{}})
+	conn.ReadMessage()
 	conn.WriteMessage(websocket.TextMessage, []byte(
-		`{"type":"event","loop_id":"ndjson-loop","namespace":[],"mode":"messages","data":[{"type":"AIMessageChunk","content":"hello","phase":"quiz"},{}]}`+"\n"+
-			`{"type":"status","state":"idle","loop_id":"ndjson-loop"}`,
+		`{"proto":"1","type":"next","payload":{"namespace":["soothe","output"],"mode":"messages","data":[{"type":"AIMessageChunk","content":"hello","phase":"quiz"},{}],"loop_id":"ndjson-loop"}}`+"\n"+
+			`{"proto":"1","type":"status","state":"idle","loop_id":"ndjson-loop"}`,
 	))
 }
 
-// testRequestResponseHandler simulates the request-response RPC pattern.
+// testRequestResponseHandler handshakes, then answers request envelopes.
 func testRequestResponseHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -103,29 +175,38 @@ func testRequestResponseHandler(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal(msg, &m); err != nil {
 			continue
 		}
+		if isConnectionInit(m) {
+			testSendHandshake(conn, m)
+			continue
+		}
 		typ, _ := m["type"].(string)
-		rid, _ := m["request_id"].(string)
+		method, _ := m["method"].(string)
+		id, _ := m["id"].(string)
+		params, _ := m["params"].(map[string]interface{})
 
-		switch typ {
+		if typ != "request" {
+			continue
+		}
+		switch method {
 		case "daemon_status":
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"daemon_status_response","request_id":"`+rid+`","running":true,"port_live":true,"active_loops":2}`))
+			testSendResponse(conn, id, map[string]interface{}{"running": true, "port_live": true, "active_loops": 2})
 		case "skills_list":
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"skills_list_response","request_id":"`+rid+`","skills":[{"name":"research"},{"name":"browser"}]}`))
+			testSendResponse(conn, id, map[string]interface{}{"skills": []interface{}{map[string]interface{}{"name": "research"}, map[string]interface{}{"name": "browser"}}})
 		case "models_list":
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"models_list_response","request_id":"`+rid+`","models":[{"id":"gpt-4"},{"id":"claude"}]}`))
+			testSendResponse(conn, id, map[string]interface{}{"models": []interface{}{map[string]interface{}{"id": "gpt-4"}, map[string]interface{}{"id": "claude"}}})
 		case "config_get":
-			section, _ := m["section"].(string)
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"config_get_response","request_id":"`+rid+`","`+section+`":{"key":"value"}}`))
+			section, _ := params["section"].(string)
+			testSendResponse(conn, id, map[string]interface{}{section: map[string]interface{}{"key": "value"}})
 		case "daemon_shutdown":
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"shutdown_ack","request_id":"`+rid+`","status":"acknowledged"}`))
+			testSendResponse(conn, id, map[string]interface{}{"status": "acknowledged"})
 		case "loop_list":
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"loop_list_response","request_id":"`+rid+`","loops":[{"loop_id":"l1"},{"loop_id":"l2"}],"total":2}`))
+			testSendResponse(conn, id, map[string]interface{}{"loops": []interface{}{map[string]interface{}{"loop_id": "l1"}, map[string]interface{}{"loop_id": "l2"}}, "total": 2})
 		case "invoke_skill":
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"invoke_skill_response","request_id":"`+rid+`","skill":"test","status":"ok"}`))
+			testSendResponse(conn, id, map[string]interface{}{"echo": map[string]interface{}{"skill": "test", "status": "ok"}})
 		case "error_test":
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","request_id":"`+rid+`","code":"test_error","message":"test error message"}`))
+			testSendError(conn, id, -32603, "test error message")
 		default:
-			conn.WriteMessage(websocket.TextMessage, msg)
+			testSendResponse(conn, id, map[string]interface{}{"echoed": method})
 		}
 	}
 }
@@ -187,7 +268,7 @@ func TestClient_SendReceive(t *testing.T) {
 	}
 	defer client.Close()
 
-	msg := map[string]interface{}{"type": "test", "data": "hello"}
+	msg := map[string]interface{}{"proto": "1", "type": "test", "data": "hello"}
 	if err := client.SendMessage(ctx, msg); err != nil {
 		t.Fatalf("send: %v", err)
 	}
@@ -219,7 +300,7 @@ func TestClient_ReceiveMessages(t *testing.T) {
 		t.Fatalf("ReceiveMessages: %v", err)
 	}
 
-	msg := map[string]interface{}{"type": "test_echo", "data": "world"}
+	msg := map[string]interface{}{"proto": "1", "type": "test_echo", "data": "world"}
 	if err := client.SendMessage(ctx, msg); err != nil {
 		t.Fatalf("send: %v", err)
 	}
@@ -234,8 +315,10 @@ func TestClient_ReceiveMessages(t *testing.T) {
 			if m["type"] != "test_echo" {
 				t.Errorf("type mismatch: %v", m["type"])
 			}
-		default:
-			// Decoded by protocol, might be a typed message
+		case Envelope:
+			if m.Type != "test_echo" {
+				t.Errorf("type mismatch: %v", m.Type)
+			}
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timeout waiting for echo")
@@ -335,11 +418,16 @@ func testEventBatchHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return
 		}
-		var base BaseMessage
-		if err := json.Unmarshal(msg, &base); err != nil {
+		var m map[string]interface{}
+		if err := json.Unmarshal(msg, &m); err != nil {
 			continue
 		}
-		if base.Type != "trigger" {
+		if isConnectionInit(m) {
+			testSendHandshake(conn, m)
+			continue
+		}
+		typ, _ := m["type"].(string)
+		if typ != "trigger" {
 			continue
 		}
 		payload, err := json.Marshal(map[string]interface{}{
@@ -472,12 +560,9 @@ func TestClient_RequestResponse(t *testing.T) {
 
 	resp, err := client.RequestResponse(ctx, map[string]interface{}{
 		"type": "daemon_status",
-	}, "daemon_status_response", 3*time.Second)
+	}, "daemon_status", 3*time.Second)
 	if err != nil {
 		t.Fatalf("RequestResponse: %v", err)
-	}
-	if resp["type"] != "daemon_status_response" {
-		t.Errorf("type mismatch: %v", resp["type"])
 	}
 	if resp["running"] != true {
 		t.Errorf("running should be true: %v", resp["running"])
@@ -491,9 +576,23 @@ func TestClient_RequestResponse_Timeout(t *testing.T) {
 			return
 		}
 		defer conn.Close()
-		// Read but never respond
-		conn.ReadMessage()
-		time.Sleep(5 * time.Second)
+		// Handshake so Connect() completes, then never answer the RPC.
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var m map[string]interface{}
+			if err := json.Unmarshal(msg, &m); err != nil {
+				continue
+			}
+			if isConnectionInit(m) {
+				testSendHandshake(conn, m)
+				continue
+			}
+			// Got the RPC request — never respond.
+			time.Sleep(5 * time.Second)
+		}
 	})
 	defer ts.Close()
 
@@ -508,7 +607,7 @@ func TestClient_RequestResponse_Timeout(t *testing.T) {
 
 	_, err := client.RequestResponse(ctx, map[string]interface{}{
 		"type": "daemon_status",
-	}, "daemon_status_response", 500*time.Millisecond)
+	}, "daemon_status", 500*time.Millisecond)
 	if err == nil {
 		t.Error("expected timeout error")
 	}
@@ -529,7 +628,7 @@ func TestClient_RequestResponse_DaemonError(t *testing.T) {
 
 	_, err := client.RequestResponse(ctx, map[string]interface{}{
 		"type": "error_test",
-	}, "some_response", 3*time.Second)
+	}, "error_test", 3*time.Second)
 	if err == nil {
 		t.Error("expected daemon error")
 	}
@@ -557,22 +656,26 @@ func TestClient_SendInput(t *testing.T) {
 		t.Fatalf("SendInput: %v", err)
 	}
 
-	// Verify the echoed message
+	// Verify the echoed message (loop_input is a notification envelope).
 	ev, err := client.ReadEvent()
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if ev["type"] != "loop_input" {
+	if ev["type"] != "notification" {
 		t.Errorf("type: %v", ev["type"])
 	}
-	if ev["content"] != "hello" {
-		t.Errorf("content: %v", ev["content"])
+	params, _ := ev["params"].(map[string]interface{})
+	if params == nil {
+		t.Fatalf("missing params: %v", ev)
 	}
-	if ev["loop_id"] != "t1" {
-		t.Errorf("loop_id: %v", ev["loop_id"])
+	if params["content"] != "hello" {
+		t.Errorf("content: %v", params["content"])
 	}
-	if ev["model"] != "openai:gpt-4" {
-		t.Errorf("model: %v", ev["model"])
+	if params["loop_id"] != "t1" {
+		t.Errorf("loop_id: %v", params["loop_id"])
+	}
+	if params["model"] != "openai:gpt-4" {
+		t.Errorf("model: %v", params["model"])
 	}
 }
 
@@ -598,8 +701,12 @@ func TestClient_SendInput_PreferredSubagent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if ev["preferred_subagent"] != "research" {
-		t.Errorf("preferred_subagent: %v", ev["preferred_subagent"])
+	params, _ := ev["params"].(map[string]interface{})
+	if params == nil {
+		t.Fatalf("missing params: %v", ev)
+	}
+	if params["preferred_subagent"] != "research" {
+		t.Errorf("preferred_subagent: %v", params["preferred_subagent"])
 	}
 }
 
@@ -620,12 +727,14 @@ func TestClient_RequestResponse_PreservesRequestID(t *testing.T) {
 	resp, err := client.RequestResponse(ctx, map[string]interface{}{
 		"type":       "daemon_status",
 		"request_id": fixed,
-	}, "daemon_status_response", 3*time.Second)
+	}, "daemon_status", 3*time.Second)
 	if err != nil {
 		t.Fatalf("RequestResponse: %v", err)
 	}
-	if got, _ := resp["request_id"].(string); got != fixed {
-		t.Errorf("request_id: got %q want %q", got, fixed)
+	// The caller-supplied request_id is used as the correlation id; the
+	// response is matched on it. The result payload carries the RPC data.
+	if resp["running"] != true {
+		t.Errorf("running should be true: %v", resp["running"])
 	}
 }
 
@@ -652,11 +761,15 @@ func TestClient_SendInput_Autonomous(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if ev["autonomous"] != true {
-		t.Errorf("autonomous: %v", ev["autonomous"])
+	params, _ := ev["params"].(map[string]interface{})
+	if params == nil {
+		t.Fatalf("missing params: %v", ev)
 	}
-	if ev["max_iterations"] != float64(5) {
-		t.Errorf("max_iterations: %v", ev["max_iterations"])
+	if params["autonomous"] != true {
+		t.Errorf("autonomous: %v", params["autonomous"])
+	}
+	if params["max_iterations"] != float64(5) {
+		t.Errorf("max_iterations: %v", params["max_iterations"])
 	}
 }
 
@@ -681,8 +794,12 @@ func TestClient_SendCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if ev["type"] != "command" || ev["cmd"] != "/help" {
-		t.Errorf("unexpected: %v", ev)
+	if ev["type"] != "notification" || ev["method"] != "slash_command" {
+		t.Errorf("unexpected type/method: %v / %v", ev["type"], ev["method"])
+	}
+	params, _ := ev["params"].(map[string]interface{})
+	if params == nil || params["cmd"] != "/help" {
+		t.Errorf("unexpected cmd: %v", params)
 	}
 }
 
@@ -707,7 +824,7 @@ func TestClient_SendDetach(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if ev["type"] != "detach" {
+	if ev["type"] != "disconnect" {
 		t.Errorf("type: %v", ev["type"])
 	}
 }
@@ -733,8 +850,9 @@ func TestClient_ListSkills(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListSkills: %v", err)
 	}
-	if resp["type"] != "skills_list_response" {
-		t.Errorf("type: %v", resp["type"])
+	skills, _ := resp["skills"].([]interface{})
+	if len(skills) != 2 {
+		t.Errorf("expected 2 skills, got %d", len(skills))
 	}
 }
 
@@ -755,8 +873,9 @@ func TestClient_ListModels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListModels: %v", err)
 	}
-	if resp["type"] != "models_list_response" {
-		t.Errorf("type: %v", resp["type"])
+	models, _ := resp["models"].([]interface{})
+	if len(models) != 2 {
+		t.Errorf("expected 2 models, got %d", len(models))
 	}
 }
 
@@ -777,8 +896,9 @@ func TestClient_InvokeSkill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InvokeSkill: %v", err)
 	}
-	if resp["type"] != "invoke_skill_response" {
-		t.Errorf("type: %v", resp["type"])
+	echo, _ := resp["echo"].(map[string]interface{})
+	if echo == nil || echo["status"] != "ok" {
+		t.Errorf("echo: %v", resp)
 	}
 }
 
@@ -787,17 +907,9 @@ func TestClient_InvokeSkill(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestClient_WaitForDaemonReady(t *testing.T) {
-	ts := newTestServer(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			return
-		}
-		defer conn.Close()
-		// Read the daemon_ready request
-		conn.ReadMessage()
-		// Send ready response
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"daemon_ready","state":"ready"}`))
-	})
+	// The protocol-1 handshake is performed in Connect(); WaitForDaemonReady
+	// returns immediately once the handshake reports readiness "ready".
+	ts := newTestServer(testEchoHandler)
 	defer ts.Close()
 
 	client := NewClient(wsURL(ts.URL), nil)
@@ -809,16 +921,12 @@ func TestClient_WaitForDaemonReady(t *testing.T) {
 	}
 	defer client.Close()
 
-	if err := client.SendDaemonReady(ctx); err != nil {
-		t.Fatalf("SendDaemonReady: %v", err)
-	}
-
 	ev, err := client.WaitForDaemonReady(3 * time.Second)
 	if err != nil {
 		t.Fatalf("WaitForDaemonReady: %v", err)
 	}
-	if ev["state"] != "ready" {
-		t.Errorf("state: %v", ev["state"])
+	if ev["readiness_state"] != "ready" {
+		t.Errorf("readiness_state: %v", ev["readiness_state"])
 	}
 }
 

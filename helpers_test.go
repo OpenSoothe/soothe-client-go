@@ -7,8 +7,6 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
-
-	"github.com/gorilla/websocket"
 )
 
 func TestCheckDaemonStatus(t *testing.T) {
@@ -19,15 +17,20 @@ func TestCheckDaemonStatus(t *testing.T) {
 		}
 		defer conn.Close()
 
-		_, msg, err := conn.ReadMessage()
-		if err != nil {
-			return
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var m map[string]interface{}
+			json.Unmarshal(msg, &m)
+			if isConnectionInit(m) {
+				testSendHandshake(conn, m)
+				continue
+			}
+			id, _ := m["id"].(string)
+			testSendResponse(conn, id, map[string]interface{}{"running": true, "port_live": true, "active_loops": 5})
 		}
-		var m map[string]interface{}
-		json.Unmarshal(msg, &m)
-		rid, _ := m["request_id"].(string)
-
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"daemon_status_response","request_id":"`+rid+`","running":true,"port_live":true,"active_loops":5}`))
 	}))
 	defer ts.Close()
 
@@ -57,11 +60,20 @@ func TestIsDaemonLive_Success(t *testing.T) {
 		}
 		defer conn.Close()
 
-		_, msg, _ := conn.ReadMessage()
-		var m map[string]interface{}
-		json.Unmarshal(msg, &m)
-		rid, _ := m["request_id"].(string)
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"daemon_status_response","request_id":"`+rid+`","running":true,"port_live":true,"active_loops":0}`))
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var m map[string]interface{}
+			json.Unmarshal(msg, &m)
+			if isConnectionInit(m) {
+				testSendHandshake(conn, m)
+				continue
+			}
+			id, _ := m["id"].(string)
+			testSendResponse(conn, id, map[string]interface{}{"running": true, "port_live": true, "active_loops": 0})
+		}
 	}))
 	defer ts.Close()
 
@@ -84,11 +96,20 @@ func TestRequestDaemonShutdown(t *testing.T) {
 		}
 		defer conn.Close()
 
-		_, msg, _ := conn.ReadMessage()
-		var m map[string]interface{}
-		json.Unmarshal(msg, &m)
-		rid, _ := m["request_id"].(string)
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"shutdown_ack","request_id":"`+rid+`","status":"acknowledged"}`))
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var m map[string]interface{}
+			json.Unmarshal(msg, &m)
+			if isConnectionInit(m) {
+				testSendHandshake(conn, m)
+				continue
+			}
+			id, _ := m["id"].(string)
+			testSendResponse(conn, id, map[string]interface{}{"status": "acknowledged"})
+		}
 	}))
 	defer ts.Close()
 
@@ -114,11 +135,20 @@ func TestRequestDaemonShutdown_NotAcknowledged(t *testing.T) {
 		}
 		defer conn.Close()
 
-		_, msg, _ := conn.ReadMessage()
-		var m map[string]interface{}
-		json.Unmarshal(msg, &m)
-		rid, _ := m["request_id"].(string)
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"shutdown_ack","request_id":"`+rid+`","status":"denied"}`))
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var m map[string]interface{}
+			json.Unmarshal(msg, &m)
+			if isConnectionInit(m) {
+				testSendHandshake(conn, m)
+				continue
+			}
+			id, _ := m["id"].(string)
+			testSendResponse(conn, id, map[string]interface{}{"status": "denied"})
+		}
 	}))
 	defer ts.Close()
 
@@ -145,11 +175,23 @@ func TestFetchSkillsCatalog(t *testing.T) {
 		}
 		defer conn.Close()
 
-		_, msg, _ := conn.ReadMessage()
-		var m map[string]interface{}
-		json.Unmarshal(msg, &m)
-		rid, _ := m["request_id"].(string)
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"skills_list_response","request_id":"`+rid+`","skills":[{"name":"research","description":"Research skill"},{"name":"browser","description":"Browser skill"}]}`))
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var m map[string]interface{}
+			json.Unmarshal(msg, &m)
+			if isConnectionInit(m) {
+				testSendHandshake(conn, m)
+				continue
+			}
+			id, _ := m["id"].(string)
+			testSendResponse(conn, id, map[string]interface{}{"skills": []interface{}{
+				map[string]interface{}{"name": "research", "description": "Research skill"},
+				map[string]interface{}{"name": "browser", "description": "Browser skill"},
+			}})
+		}
 	}))
 	defer ts.Close()
 
@@ -182,11 +224,20 @@ func TestFetchSkillsCatalog_Empty(t *testing.T) {
 		}
 		defer conn.Close()
 
-		_, msg, _ := conn.ReadMessage()
-		var m map[string]interface{}
-		json.Unmarshal(msg, &m)
-		rid, _ := m["request_id"].(string)
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"skills_list_response","request_id":"`+rid+`"}`))
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var m map[string]interface{}
+			json.Unmarshal(msg, &m)
+			if isConnectionInit(m) {
+				testSendHandshake(conn, m)
+				continue
+			}
+			id, _ := m["id"].(string)
+			testSendResponse(conn, id, map[string]interface{}{})
+		}
 	}))
 	defer ts.Close()
 
@@ -216,12 +267,24 @@ func TestFetchConfigSection(t *testing.T) {
 		}
 		defer conn.Close()
 
-		_, msg, _ := conn.ReadMessage()
-		var m map[string]interface{}
-		json.Unmarshal(msg, &m)
-		rid, _ := m["request_id"].(string)
-		section, _ := m["section"].(string)
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"config_get_response","request_id":"`+rid+`","`+section+`":{"api_key":"sk-***","model":"gpt-4"}}`))
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var m map[string]interface{}
+			json.Unmarshal(msg, &m)
+			if isConnectionInit(m) {
+				testSendHandshake(conn, m)
+				continue
+			}
+			id, _ := m["id"].(string)
+			params, _ := m["params"].(map[string]interface{})
+			section, _ := params["section"].(string)
+			testSendResponse(conn, id, map[string]interface{}{
+				section: map[string]interface{}{"api_key": "sk-***", "model": "gpt-4"},
+			})
+		}
 	}))
 	defer ts.Close()
 

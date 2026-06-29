@@ -67,16 +67,20 @@ func TestIntegration_LoopList(t *testing.T) {
 
 	t.Logf("LoopList response: %v", response)
 
-	loops, ok := response["loops"].([]map[string]interface{})
+	loopsRaw, ok := response["loops"].([]interface{})
 	if !ok {
 		t.Logf("No loops array in response")
 		return
 	}
 
 	total, _ := response["total"].(float64)
-	t.Logf("Found %d loops (total: %v)", len(loops), total)
+	t.Logf("Found %d loops (total: %v)", len(loopsRaw), total)
 
-	for i, loop := range loops {
+	for i, loopRaw := range loopsRaw {
+		loop, _ := loopRaw.(map[string]interface{})
+		if loop == nil {
+			continue
+		}
 		loopID, _ := loop["loop_id"].(string)
 		t.Logf("  Loop %d: %s", i+1, loopID)
 	}
@@ -537,6 +541,8 @@ func TestIntegration_SendDaemonStatus(t *testing.T) {
 	}
 
 	requestID := NewRequestID()
+	// RequestResponse returns the protocol-1 response's result map, so the
+	// daemon status fields (running, port_live, active_loops) are top-level.
 	ev, err := client.RequestResponse(ctx, map[string]interface{}{
 		"type":       "daemon_status",
 		"request_id": requestID,
@@ -546,14 +552,11 @@ func TestIntegration_SendDaemonStatus(t *testing.T) {
 		return
 	}
 
-	typ, _ := ev["type"].(string)
-	if typ == "daemon_status_response" {
-		running, _ := ev["running"].(bool)
-		portLive, _ := ev["port_live"].(bool)
-		activeLoops, _ := ev["active_loops"].(float64)
-		t.Logf("Daemon status: running=%v, port_live=%v, active_loops=%v",
-			running, portLive, int(activeLoops))
-	}
+	running, _ := ev["running"].(bool)
+	portLive, _ := ev["port_live"].(bool)
+	activeLoops, _ := ev["active_loops"].(float64)
+	t.Logf("Daemon status: running=%v, port_live=%v, active_loops=%v",
+		running, portLive, int(activeLoops))
 }
 
 // =============================================================================

@@ -22,18 +22,24 @@ func NewConnectionError(url string, attempt int, err error) *ConnectionError {
 	return &ConnectionError{URL: url, Attempt: attempt, Err: err}
 }
 
-// DaemonError represents an error reported by the Soothe daemon.
+// DaemonError represents an error reported by the Soothe daemon (RFC-450 §7).
+// The daemon's structured error object carries a numeric code from the
+// reserved ranges, a human-readable message, and optional data.
 type DaemonError struct {
-	Code    string
+	Code    int
 	Message string
+	Data    map[string]interface{}
 }
 
 func (e *DaemonError) Error() string {
-	return fmt.Sprintf("daemon error [%s]: %s", e.Code, e.Message)
+	if len(e.Data) > 0 {
+		return fmt.Sprintf("daemon error [%d]: %s (%v)", e.Code, e.Message, e.Data)
+	}
+	return fmt.Sprintf("daemon error [%d]: %s", e.Code, e.Message)
 }
 
-// NewDaemonError creates a new daemon error.
-func NewDaemonError(code, message string) *DaemonError {
+// NewDaemonError creates a new daemon error with a numeric code.
+func NewDaemonError(code int, message string) *DaemonError {
 	return &DaemonError{Code: code, Message: message}
 }
 

@@ -10,18 +10,33 @@ import (
 // Request-Response pattern (mirrors Python SDK request_response)
 // ---------------------------------------------------------------------------
 
-// RequestResponse sends a request payload with a request_id and waits for a
-// response with a matching request_id and the expected response type.
-// If payload does not already set a non-empty request_id, one is generated.
-// Events not matching the request_id are skipped.
+// RequestResponse sends a protocol-1 request envelope and waits for the
+// matching response (or error) correlated by id (RFC-450 §5/§9).
+//
+// The payload's "type" field is used as the RPC method; all other fields are
+// moved into the envelope "params". If the payload carries a "request_id" it
+// is used as the correlation id, otherwise a new one is generated. The
+// returned map is the response "result" object.
+//
+// Events whose id does not match are skipped.
 func (c *Client) RequestResponse(ctx context.Context, payload map[string]interface{}, responseType string, timeout time.Duration) (map[string]interface{}, error) {
-	rid, _ := payload["request_id"].(string)
-	if rid == "" {
-		rid = NewRequestID()
-		payload["request_id"] = rid
+	method, _ := payload["type"].(string)
+	if method == "" {
+		return nil, fmt.Errorf("request payload missing 'type' (method)")
 	}
+	// Build params from the payload, dropping the type/request_id control fields.
+	params := make(map[string]interface{}, len(payload))
+	for k, v := range payload {
+		if k == "type" || k == "request_id" {
+			continue
+		}
+		params[k] = v
+	}
+	rid, _ := payload["request_id"].(string)
+	env := NewRequestEnvelopeWithID(method, params, rid)
+	rid = env.ID
 
-	if err := c.SendMessage(ctx, payload); err != nil {
+	if err := c.SendMessage(ctx, env); err != nil {
 		return nil, fmt.Errorf("send request: %w", err)
 	}
 
@@ -49,15 +64,27 @@ func (c *Client) RequestResponse(ctx context.Context, payload map[string]interfa
 			return nil, fmt.Errorf("connection closed waiting for %s", responseType)
 		}
 
-		if evRid, ok := ev["request_id"].(string); !ok || evRid != rid {
+		// Correlate by id. The daemon echoes the request id on response/error.
+		evID, _ := ev["id"].(string)
+		if evID != rid {
 			continue
 		}
-		if typ, _ := ev["type"].(string); typ == "error" {
-			msg, _ := ev["message"].(string)
-			return nil, fmt.Errorf("daemon error: %s", msg)
+		typ, _ := ev["type"].(string)
+		if typ == "error" {
+			errObj, _ := ev["error"].(map[string]interface{})
+			code := -32603
+			if ic, ok := errObj["code"].(float64); ok {
+				code = int(ic)
+			}
+			msg, _ := errObj["message"].(string)
+			return nil, &DaemonError{Code: code, Message: msg}
 		}
-		if typ, _ := ev["type"].(string); typ == responseType {
-			return ev, nil
+		if typ == "response" {
+			result, _ := ev["result"].(map[string]interface{})
+			if result == nil {
+				result = ev
+			}
+			return result, nil
 		}
 	}
 }
@@ -94,11 +121,23 @@ func (c *Client) InvokeSkill(ctx context.Context, skill, args string, timeout ti
 	}, "invoke_skill_response", timeout)
 }
 
-// WaitForDaemonReady reads events until a daemon_ready with state == "ready".
+// WaitForDaemonReady waits for the protocol-1 connection_ack handshake to
+// report readiness_state "ready". The handshake is performed in Connect();
+// this method returns immediately once the handshake is complete, or waits
+// for an out-of-band connection_ack if Connect() did not complete it.
 func (c *Client) WaitForDaemonReady(timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
+	// Fast path: handshake already completed during Connect().
+	c.mu.Lock()
+	ready := c.handshakeComplete
+	state := c.readinessState
+	c.mu.Unlock()
+	if ready {
+		return map[string]interface{}{"readiness_state": state}, nil
+	}
+
 	if c.conn != nil {
 		c.conn.SetReadDeadline(time.Now().Add(timeout))
 		defer c.conn.SetReadDeadline(time.Time{})
@@ -109,7 +148,7 @@ func (c *Client) WaitForDaemonReady(timeout time.Duration) (map[string]interface
 	for {
 		select {
 		case <-deadline.C:
-			return nil, fmt.Errorf("timeout after %v waiting for daemon_ready", timeout)
+			return nil, fmt.Errorf("timeout after %v waiting for connection_ack", timeout)
 		default:
 		}
 
@@ -118,23 +157,22 @@ func (c *Client) WaitForDaemonReady(timeout time.Duration) (map[string]interface
 			return nil, err
 		}
 		if ev == nil {
-			return nil, fmt.Errorf("connection closed waiting for daemon_ready")
+			return nil, fmt.Errorf("connection closed waiting for connection_ack")
 		}
-		if typ, _ := ev["type"].(string); typ != "daemon_ready" {
+		if typ, _ := ev["type"].(string); typ != "connection_ack" {
 			continue
 		}
-		if state, _ := ev["state"].(string); state == "ready" {
+		result, _ := ev["result"].(map[string]interface{})
+		state, _ := result["readiness_state"].(string)
+		if state == "ready" {
 			return ev, nil
 		}
-		msg, _ := ev["message"].(string)
-		if msg == "" {
-			msg = fmt.Sprintf("daemon state is %v", ev["state"])
-		}
-		return nil, fmt.Errorf("daemon not ready: %s", msg)
+		return nil, fmt.Errorf("daemon not ready: state=%s", state)
 	}
 }
 
-// WaitForSubscriptionConfirmed waits for subscription confirmation matching loopID.
+// WaitForSubscriptionConfirmed waits for a subscription confirmation `next`
+// frame whose payload carries the matching loop_id (RFC-450 §9.4).
 func (c *Client) WaitForSubscriptionConfirmed(loopID string, verbosity string, timeout time.Duration) error {
 	_ = verbosity
 	if timeout <= 0 {
@@ -150,7 +188,7 @@ func (c *Client) WaitForSubscriptionConfirmed(loopID string, verbosity string, t
 	for {
 		select {
 		case <-deadline.C:
-			return fmt.Errorf("timeout after %v waiting for subscription_confirmed", timeout)
+			return fmt.Errorf("timeout after %v waiting for subscription confirmation", timeout)
 		default:
 		}
 
@@ -159,21 +197,23 @@ func (c *Client) WaitForSubscriptionConfirmed(loopID string, verbosity string, t
 			return err
 		}
 		if ev == nil {
-			return fmt.Errorf("connection closed waiting for subscription_confirmed")
+			return fmt.Errorf("connection closed waiting for subscription confirmation")
 		}
 		typ, _ := ev["type"].(string)
-		if typ == "loop_subscribe_response" {
-			if ok, _ := ev["success"].(bool); ok {
-				if lid, _ := ev["loop_id"].(string); lid == loopID {
-					return nil
-				}
-			}
+		if typ == "error" {
+			errObj, _ := ev["error"].(map[string]interface{})
+			msg, _ := errObj["message"].(string)
+			return fmt.Errorf("daemon error: %s", msg)
+		}
+		if typ != "next" {
 			continue
 		}
-		if typ != "subscription_confirmed" {
+		payload, _ := ev["payload"].(map[string]interface{})
+		lid, _ := payload["loop_id"].(string)
+		if lid != loopID {
 			continue
 		}
-		if lid, _ := ev["loop_id"].(string); lid == loopID {
+		if ok, _ := payload["success"].(bool); ok {
 			return nil
 		}
 	}
@@ -284,31 +324,106 @@ func (c *Client) LoopReattach(ctx context.Context, loopID string, timeout time.D
 	}, "loop_reattach_response", timeout)
 }
 
-// LoopSubscribe subscribes to loop events and waits for the response (RFC-503).
-// Pass empty verbosity to omit the field (daemon default).
+// LoopSubscribe subscribes to loop events and waits for the subscription
+// confirmation `next` frame (RFC-450 §9.4). Pass empty verbosity to omit the
+// field (daemon default). Returns a map describing the subscription.
 func (c *Client) LoopSubscribe(ctx context.Context, loopID string, verbosity string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
-	payload := map[string]interface{}{
-		"type":    "loop_subscribe",
-		"loop_id": loopID,
-	}
+	params := map[string]interface{}{"loop_id": loopID}
 	if verbosity != "" {
-		payload["verbosity"] = verbosity
+		params["verbosity"] = verbosity
 	}
-	return c.RequestResponse(ctx, payload, "loop_subscribe_response", timeout)
+	env := NewSubscribeEnvelope("loop_events", params)
+	if err := c.SendMessage(ctx, env); err != nil {
+		return nil, fmt.Errorf("send subscribe: %w", err)
+	}
+	if c.conn != nil {
+		c.conn.SetReadDeadline(time.Now().Add(timeout))
+		defer c.conn.SetReadDeadline(time.Time{})
+	}
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-deadline.C:
+			return nil, fmt.Errorf("timeout after %v waiting for loop_events confirmation", timeout)
+		default:
+		}
+		ev, err := c.ReadEvent()
+		if err != nil {
+			return nil, fmt.Errorf("read event: %w", err)
+		}
+		if ev == nil {
+			return nil, fmt.Errorf("connection closed waiting for loop_events confirmation")
+		}
+		typ, _ := ev["type"].(string)
+		evID, _ := ev["id"].(string)
+		if typ == "error" && evID == env.ID {
+			errObj, _ := ev["error"].(map[string]interface{})
+			msg, _ := errObj["message"].(string)
+			return nil, fmt.Errorf("daemon error: %s", msg)
+		}
+		if typ != "next" || evID != env.ID {
+			continue
+		}
+		payload, _ := ev["payload"].(map[string]interface{})
+		return payload, nil
+	}
 }
 
-// LoopDetach detaches from a loop and waits for the response (RFC-503).
+// LoopDetach detaches from a loop (unsubscribe by subscription id) and waits
+// for the daemon response.
 func (c *Client) LoopDetach(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
-	return c.RequestResponse(ctx, map[string]interface{}{
-		"type":    "loop_detach",
-		"loop_id": loopID,
-	}, "loop_detach_response", timeout)
+	env := NewUnsubscribeEnvelope(loopID)
+	if err := c.SendMessage(ctx, env); err != nil {
+		return nil, fmt.Errorf("send unsubscribe: %w", err)
+	}
+	if c.conn != nil {
+		c.conn.SetReadDeadline(time.Now().Add(timeout))
+		defer c.conn.SetReadDeadline(time.Time{})
+	}
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-deadline.C:
+			return nil, fmt.Errorf("timeout after %v waiting for loop_detach", timeout)
+		default:
+		}
+		ev, err := c.ReadEvent()
+		if err != nil {
+			return nil, fmt.Errorf("read event: %w", err)
+		}
+		if ev == nil {
+			return nil, fmt.Errorf("connection closed waiting for loop_detach")
+		}
+		evID, _ := ev["id"].(string)
+		if evID != env.ID {
+			continue
+		}
+		typ, _ := ev["type"].(string)
+		if typ == "error" {
+			errObj, _ := ev["error"].(map[string]interface{})
+			msg, _ := errObj["message"].(string)
+			return nil, fmt.Errorf("daemon error: %s", msg)
+		}
+		if typ == "response" {
+			result, _ := ev["result"].(map[string]interface{})
+			if result == nil {
+				result = ev
+			}
+			return result, nil
+		}
+	}
 }
 
 // LoopNew creates a new loop and waits for the response (RFC-503).

@@ -58,14 +58,7 @@ func TestStress_ConcurrentConnections(t *testing.T) {
 			connectTimes = append(connectTimes, connectTime)
 			timesMu.Unlock()
 
-			// Brief handshake
-			if err := client.SendDaemonReady(ctx); err != nil {
-				failCount.Add(1)
-				t.Logf("Client %d: daemon_ready failed: %v", id, err)
-				client.Close()
-				return
-			}
-
+			// Connect() performs the protocol-1 handshake; the daemon is ready once connected.
 			successCount.Add(1)
 			client.Close()
 		}(i)
@@ -181,12 +174,7 @@ func TestStress_ConcurrentLoopCreation(t *testing.T) {
 			}
 			defer client.Close()
 
-			if err := client.SendDaemonReady(ctx); err != nil {
-				errMu.Lock()
-				createErrors = append(createErrors, fmt.Errorf("client %d daemon_ready: %w", id, err))
-				errMu.Unlock()
-				return
-			}
+			// Connect() completes the protocol-1 handshake; the daemon is ready.
 			if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
 				errMu.Lock()
 				createErrors = append(createErrors, fmt.Errorf("client %d wait_ready: %w", id, err))
@@ -236,9 +224,7 @@ func TestStress_RapidLoopOperations(t *testing.T) {
 	}
 	defer client.Close()
 
-	if err := client.SendDaemonReady(ctx); err != nil {
-		t.Fatalf("SendDaemonReady: %v", err)
-	}
+	// Connect() completes the protocol-1 handshake; the daemon is ready.
 	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
 		t.Fatalf("WaitForDaemonReady: %v", err)
 	}
@@ -299,9 +285,7 @@ func TestStress_MessageThroughput(t *testing.T) {
 	}
 	defer client.Close()
 
-	if err := client.SendDaemonReady(ctx); err != nil {
-		t.Fatalf("SendDaemonReady: %v", err)
-	}
+	// Connect() completes the protocol-1 handshake; the daemon is ready.
 	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
 		t.Fatalf("WaitForDaemonReady: %v", err)
 	}
@@ -369,10 +353,7 @@ func TestStress_ConcurrentRequests(t *testing.T) {
 			}
 			defer client.Close()
 
-			if err := client.SendDaemonReady(ctx); err != nil {
-				errorCount.Add(1)
-				return
-			}
+			// Connect() completes the protocol-1 handshake; the daemon is ready.
 			if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
 				errorCount.Add(1)
 				return
@@ -430,9 +411,7 @@ func TestStress_SustainedLoad(t *testing.T) {
 	}
 	defer client.Close()
 
-	if err := client.SendDaemonReady(ctx); err != nil {
-		t.Fatalf("SendDaemonReady: %v", err)
-	}
+	// Connect() completes the protocol-1 handshake; the daemon is ready.
 	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
 		t.Fatalf("WaitForDaemonReady: %v", err)
 	}
@@ -502,9 +481,7 @@ func TestStress_EventStreaming(t *testing.T) {
 	}
 	defer client.Close()
 
-	if err := client.SendDaemonReady(ctx); err != nil {
-		t.Fatalf("SendDaemonReady: %v", err)
-	}
+	// Connect() completes the protocol-1 handshake; the daemon is ready.
 	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
 		t.Fatalf("WaitForDaemonReady: %v", err)
 	}
@@ -615,7 +592,6 @@ func TestStress_MixedWorkload(t *testing.T) {
 					time.Sleep(500 * time.Millisecond)
 					continue
 				}
-				_ = client.SendDaemonReady(ctx)
 				client.Close()
 				totalOps.Add(1)
 				time.Sleep(200 * time.Millisecond)
@@ -634,7 +610,6 @@ func TestStress_MixedWorkload(t *testing.T) {
 				return
 			}
 			defer client.Close()
-			_ = client.SendDaemonReady(ctx)
 			_, _ = client.WaitForDaemonReady(cfg.DaemonReadyTimeout)
 
 			for {
@@ -668,7 +643,6 @@ func TestStress_MixedWorkload(t *testing.T) {
 				return
 			}
 			defer client.Close()
-			_ = client.SendDaemonReady(ctx)
 			_, _ = client.WaitForDaemonReady(cfg.DaemonReadyTimeout)
 
 			for {
@@ -729,9 +703,6 @@ func TestStress_ResourceCleanup(t *testing.T) {
 		}
 		connectSuccess.Add(1)
 
-		// Do some work
-		_ = client.SendDaemonReady(ctx)
-
 		// Check state before close
 		if !client.IsConnected() {
 			t.Logf("Cycle %d: unexpected state - not connected before close", i)
@@ -779,9 +750,7 @@ func TestStress_LoopCleanup(t *testing.T) {
 	}
 	defer client.Close()
 
-	if err := client.SendDaemonReady(ctx); err != nil {
-		t.Fatalf("SendDaemonReady: %v", err)
-	}
+	// Connect() completes the protocol-1 handshake; the daemon is ready.
 	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
 		t.Fatalf("WaitForDaemonReady: %v", err)
 	}

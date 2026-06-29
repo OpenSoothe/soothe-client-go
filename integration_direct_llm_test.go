@@ -257,11 +257,14 @@ func TestIntegration_IntentHintImageToText_RejectsWithoutAttachments(t *testing.
 		typ, _ := ev["type"].(string)
 		switch typ {
 		case "error":
-			code, _ := ev["code"].(string)
-			msgStr, _ := ev["message"].(string)
-			if code != "INVALID_REQUEST" {
-				t.Fatalf("unexpected error code %q: %s", code, msgStr)
+			// Protocol-1 nests error details under envelope.error. The code may be
+			// numeric (-32603) or a semantic string label depending on daemon version,
+			// so we key the assertion off the message content (the stable signal).
+			errObj, _ := ev["error"].(map[string]interface{})
+			if errObj == nil {
+				errObj = map[string]interface{}{"code": ev["code"], "message": ev["message"]}
 			}
+			msgStr, _ := errObj["message"].(string)
 			if !strings.Contains(strings.ToLower(msgStr), "attachment") {
 				t.Fatalf("unexpected error message: %s", msgStr)
 			}
@@ -418,11 +421,13 @@ func TestIntegration_IntentHintDirectLLMStructured_RejectsWithoutDirectLLM(t *te
 		typ, _ := ev["type"].(string)
 		switch typ {
 		case "error":
-			code, _ := ev["code"].(string)
-			msgStr, _ := ev["message"].(string)
-			if code != "INVALID_REQUEST" {
-				t.Fatalf("unexpected error code %q: %s", code, msgStr)
+			// Protocol-1 nests error details under envelope.error; code format is
+			// daemon-version-dependent, so assert on the message content instead.
+			errObj, _ := ev["error"].(map[string]interface{})
+			if errObj == nil {
+				errObj = map[string]interface{}{"code": ev["code"], "message": ev["message"]}
 			}
+			msgStr, _ := errObj["message"].(string)
 			if !strings.Contains(strings.ToLower(msgStr), "direct_llm") {
 				t.Fatalf("unexpected error message: %s", msgStr)
 			}
