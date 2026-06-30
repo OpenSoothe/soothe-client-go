@@ -241,10 +241,20 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 			}
 
 			if eventResult.Content != "" {
+				// Derive the newly-arrived text to stream as a delta. The
+				// daemon may send either cumulative content (each event holds
+				// the full text so far, prefixed by what we already have) or
+				// true streaming chunks (each event holds only the new text).
+				var delta string
 				if strings.HasPrefix(eventResult.Content, assistantContent) {
+					delta = strings.TrimPrefix(eventResult.Content, assistantContent)
 					assistantContent = eventResult.Content
 				} else {
+					delta = eventResult.Content
 					assistantContent += eventResult.Content
+				}
+				if delta != "" {
+					r.broadcastDelta(sessionID, delta)
 				}
 			}
 
@@ -323,9 +333,27 @@ func (r *TurnRunner) broadcastThinkingStep(sessionID, step string) {
 	if r.broadcaster == nil || strings.TrimSpace(step) == "" {
 		return
 	}
+	// Distinct from "delta": a thinking step is a progress line (e.g. "Tool:
+	// search"), not assistant content. Bridges that only stream assistant
+	// text can ignore "thinking_step"; those that surface progress can map it
+	// to their own event vocabulary.
+	r.broadcaster.Broadcast(sessionID, SSEEvent{
+		Type: "thinking_step",
+		Data: strings.TrimSpace(step) + "\n",
+	})
+}
+
+// broadcastDelta streams a newly-arrived fragment of assistant content. The
+// concatenation of all deltas for a turn equals the final "complete" payload
+// (barring deliverable-phase replacement). Streaming is best-effort: a nil
+// broadcaster or empty delta is a no-op.
+func (r *TurnRunner) broadcastDelta(sessionID, delta string) {
+	if r.broadcaster == nil || delta == "" {
+		return
+	}
 	r.broadcaster.Broadcast(sessionID, SSEEvent{
 		Type: "delta",
-		Data: strings.TrimSpace(step) + "\n",
+		Data: delta,
 	})
 }
 

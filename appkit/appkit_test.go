@@ -439,15 +439,30 @@ func TestTurnRunner_DeliverableTurn(t *testing.T) {
 		t.Fatalf("execute: %v", err)
 	}
 
-	// Expect a complete SSE event with the deliverable content.
+	// The deliverable event's content is streamed as a delta before the
+	// turn completes, so drain events until the "complete" arrives.
 	var got SSEEvent
-	select {
-	case got = <-sub:
-	case <-time.After(time.Second):
-		t.Fatal("no complete event received")
+	var deltas []string
+	for {
+		select {
+		case got = <-sub:
+		case <-time.After(time.Second):
+			t.Fatal("no complete event received")
+		}
+		if got.Type == "delta" {
+			if s, ok := got.Data.(string); ok {
+				deltas = append(deltas, s)
+			}
+			continue
+		}
+		break
 	}
 	if got.Type != "complete" {
 		t.Errorf("expected complete, got %s", got.Type)
+	}
+	// The streamed delta should carry the deliverable content.
+	if joined := strings.Join(deltas, ""); joined != "This is a substantive final answer." {
+		t.Errorf("expected streamed deltas to carry the reply, got %q", joined)
 	}
 	// And the assistant reply persisted to the store.
 	msgs := store.messages("s1")
@@ -458,6 +473,108 @@ func TestTurnRunner_DeliverableTurn(t *testing.T) {
 	sent := fake.sentMessages()
 	if len(sent) == 0 || sent[0]["type"] != "loop_input" || sent[0]["intent_hint"] != soothe.IntentHintTextCompletion {
 		t.Errorf("unexpected send: %+v", sent)
+	}
+}
+
+// streamingChunkEvent builds a mode=messages AIMessageChunk carrying one piece
+// of streaming assistant text (classifier maps these to ChatEventContinue).
+func streamingChunkEvent(content string) string {
+	return fmt.Sprintf(`{"proto":"1","type":"event","namespace":["soothe","protocol","message"],"mode":"messages","data":[{"type":"AIMessageChunk","content":%q}],"loop_id":"loop-1"}`, content)
+}
+
+// drainUntil collects SSEEvents from sub until one of wantTypes arrives, then
+// returns that event and every delta seen before it.
+func drainUntil(t *testing.T, sub <-chan SSEEvent, wantTypes ...string) (final SSEEvent, deltas []string) {
+	t.Helper()
+	want := make(map[string]bool, len(wantTypes))
+	for _, w := range wantTypes {
+		want[w] = true
+	}
+	for {
+		select {
+		case ev := <-sub:
+			if ev.Type == "delta" {
+				if s, ok := ev.Data.(string); ok {
+					deltas = append(deltas, s)
+				}
+				continue
+			}
+			if want[ev.Type] {
+				return ev, deltas
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("drainUntil: no %v event received", wantTypes)
+		}
+	}
+}
+
+// TestTurnRunner_StreamsContentDeltas verifies that streaming chunks are
+// emitted as "delta" events whose concatenation equals the final "complete".
+func TestTurnRunner_StreamsContentDeltas(t *testing.T) {
+	store := newMemStore()
+	chunk1 := eventMessageFromJSON(t, streamingChunkEvent("Hello "))
+	chunk2 := eventMessageFromJSON(t, streamingChunkEvent("world"))
+	final := eventMessageFromJSON(t, deliverableEvent("text_completion", "Hello world"))
+	fake := newFakeClient(chunk1, chunk2, final)
+	pool := newTestPool(t, store, fake)
+	gate := NewQueryGate()
+	cl := triarchClassifier()
+	b := NewSSEBroadcaster()
+	tr := NewTurnRunner(pool, gate, cl, store, b, TurnConfig{QueryTimeout: 2 * time.Second})
+
+	sub, _ := b.Subscribe("s1")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	if err := tr.Execute(ctx, "s1", "hi", "user-1", "ws-1", nil, nil); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	got, deltas := drainUntil(t, sub, "complete")
+	if got.Type != "complete" {
+		t.Errorf("expected complete, got %s", got.Type)
+	}
+	if joined := strings.Join(deltas, ""); joined != "Hello world" {
+		t.Errorf("expected streamed deltas 'Hello world', got %q", joined)
+	}
+	if got.Data != "Hello world" {
+		t.Errorf("expected complete data 'Hello world', got %v", got.Data)
+	}
+}
+
+// TestTurnRunner_CumulativeContent verifies that when the daemon sends the
+// full-so-far text on each event (cumulative), only the new suffix is streamed.
+func TestTurnRunner_CumulativeContent(t *testing.T) {
+	store := newMemStore()
+	// Two cumulative AIMessages in a deliverable phase: the classifier treats
+	// a deliverable-phase AIMessage as deliverable, so use non-deliverable
+	// phase "chunk" (continue) then a final text_completion deliverable.
+	c1 := eventMessageFromJSON(t, deliverableEvent("chunk", "Hi"))
+	c2 := eventMessageFromJSON(t, deliverableEvent("chunk", "Hi there"))
+	final := eventMessageFromJSON(t, deliverableEvent("text_completion", "Hi there"))
+	fake := newFakeClient(c1, c2, final)
+	pool := newTestPool(t, store, fake)
+	gate := NewQueryGate()
+	cl := triarchClassifier()
+	b := NewSSEBroadcaster()
+	tr := NewTurnRunner(pool, gate, cl, store, b, TurnConfig{QueryTimeout: 2 * time.Second})
+
+	sub, _ := b.Subscribe("s1")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	if err := tr.Execute(ctx, "s1", "hi", "user-1", "ws-1", nil, nil); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	_, deltas := drainUntil(t, sub, "complete")
+	// Cumulative trim-prefix: "Hi" emits "Hi"; "Hi there" emits only the new
+	// suffix " there"; the final deliverable "Hi there" is a prefix of the
+	// accumulated text and so emits no delta (dedup). Net streamed text is the
+	// reply itself, with no duplicate re-emission at completion.
+	want := "Hi there"
+	if joined := strings.Join(deltas, ""); joined != want {
+		t.Errorf("expected cumulative deltas %q, got %q", want, joined)
 	}
 }
 
