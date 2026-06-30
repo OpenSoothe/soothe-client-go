@@ -224,7 +224,7 @@ func TestSSEBroadcaster_DropOnFull(t *testing.T) {
 
 func triarchClassifier() *EventClassifier {
 	return NewEventClassifier(ClassifierConfig{
-		DeliverablePhases: map[string]bool{"quiz": true, "goal_completion": true, "direct_model": true},
+		DeliverablePhases: soothe.DefaultDeliverablePhases(),
 	})
 }
 
@@ -390,7 +390,7 @@ func TestConnectionPool_ReuseActiveConnection(t *testing.T) {
 
 func TestTurnRunner_DeliverableTurn(t *testing.T) {
 	store := newMemStore()
-	deliverable := eventMessageFromJSON(t, deliverableEvent("quiz", "This is a substantive final answer."))
+	deliverable := eventMessageFromJSON(t, deliverableEvent("text_completion", "This is a substantive final answer."))
 	fake := newFakeClient(deliverable)
 	pool := newTestPool(t, store, fake)
 	gate := NewQueryGate()
@@ -402,7 +402,7 @@ func TestTurnRunner_DeliverableTurn(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	if err := tr.Execute(ctx, "s1", "what is 2+2", "user-1", "ws-1", nil, &InputOpts{IntentHint: "quiz"}); err != nil {
+	if err := tr.Execute(ctx, "s1", "what is 2+2", "user-1", "ws-1", nil, &InputOpts{IntentHint: soothe.IntentHintTextCompletion}); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
 
@@ -423,7 +423,7 @@ func TestTurnRunner_DeliverableTurn(t *testing.T) {
 	}
 	// And loop_input was sent with the intent hint.
 	sent := fake.sentMessages()
-	if len(sent) == 0 || sent[0]["type"] != "loop_input" || sent[0]["intent_hint"] != "quiz" {
+	if len(sent) == 0 || sent[0]["type"] != "loop_input" || sent[0]["intent_hint"] != soothe.IntentHintTextCompletion {
 		t.Errorf("unexpected send: %+v", sent)
 	}
 }

@@ -32,8 +32,9 @@ type ChatEventResult struct {
 
 // ClassifierConfig supplies the product-specific decisions an EventClassifier
 // needs. The DeliverablePhases set is the key product knob: which message
-// `phase` values count as user-facing deliverables (triarch uses
-// {quiz, goal_completion, direct_model}; other apps pass their own).
+// `phase` values count as user-facing deliverables (triarch uses quiz,
+// goal_completion, direct_model, text_completion, image_to_text, ocr, embed;
+// other apps pass their own).
 type ClassifierConfig struct {
 	// DeliverablePhases recognizes loop-tagged message phases that may end a
 	// query with user-facing text. Required.
@@ -157,7 +158,7 @@ func isTerminalMessageType(msgType string) bool {
 
 // messagesModeAssistantContent extracts plain assistant text from mode="messages"
 // events that carry a terminal AIMessage without loop-tagged phase metadata
-// (direct_llm turns, including vision attachments).
+// (legacy direct_llm turns before phase tagging; prefer DeliverablePhases with text_completion).
 func (cl *EventClassifier) messagesModeAssistantContent(m soothe.EventMessage) (string, bool) {
 	if m.Mode != "messages" {
 		return "", false

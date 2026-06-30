@@ -8,10 +8,21 @@ import (
 	"time"
 )
 
+// directTurnAssistantContent extracts assistant text from a direct intent_hint turn
+// (text_completion, image_to_text, ocr, embed, or legacy direct_model phase).
+func directTurnAssistantContent(m EventMessage) (string, bool) {
+	if loopMsg, ok := m.LoopAIMessage(); ok {
+		txt := strings.TrimSpace(loopMsg.LoopAIText())
+		if txt != "" {
+			return txt, true
+		}
+	}
+	return messagesModeAssistantContent(m)
+}
+
 // messagesModeAssistantContent extracts plain assistant text from a daemon stream
-// event with mode "messages" and data shaped as [messageDict, metadata]. This
-// covers direct-model turns (intent_hint direct_llm / image_to_text) that emit a
-// single AIMessage without loop-tagged phase metadata.
+// event with mode "messages" and data shaped as [messageDict, metadata]. Used for
+// legacy direct turns that omitted loop phase metadata.
 func messagesModeAssistantContent(m EventMessage) (string, bool) {
 	if m.Mode != "messages" {
 		return "", false
@@ -43,7 +54,7 @@ func messagesModeAssistantContent(m EventMessage) (string, bool) {
 	return "", false
 }
 
-func TestIntegration_IntentHintDirectLLM(t *testing.T) {
+func TestIntegration_IntentHintTextCompletion(t *testing.T) {
 	skipIfNoDaemon(t)
 
 	cfg := integrationTestConfig()
@@ -70,8 +81,8 @@ func TestIntegration_IntentHintDirectLLM(t *testing.T) {
 	}
 
 	prompt := "Reply with exactly one word: OK."
-	if err := client.SendInput(ctx, prompt, WithLoopID(loopID), WithIntentHint("direct_llm")); err != nil {
-		t.Fatalf("SendInput direct_llm: %v", err)
+	if err := client.SendInput(ctx, prompt, WithLoopID(loopID), WithIntentHint(IntentHintTextCompletion)); err != nil {
+		t.Fatalf("SendInput text_completion: %v", err)
 	}
 
 	deadline := time.After(90 * time.Second)
@@ -88,12 +99,12 @@ func TestIntegration_IntentHintDirectLLM(t *testing.T) {
 			if assistant == "" {
 				t.Fatalf("timeout: expected mode=messages assistant content (got running=%v idle=%v)", sawRunning, sawIdle)
 			}
-			t.Logf("direct_llm assistant: %q", assistant)
+			t.Logf("text_completion assistant: %q", assistant)
 			return
 		case msg, ok := <-ch:
 			if !ok {
 				if assistant != "" {
-					t.Logf("direct_llm assistant: %q", assistant)
+					t.Logf("text_completion assistant: %q", assistant)
 					return
 				}
 				t.Fatal("channel closed before assistant message")
@@ -103,7 +114,7 @@ func TestIntegration_IntentHintDirectLLM(t *testing.T) {
 			}
 			switch m := msg.(type) {
 			case EventMessage:
-				if txt, ok := messagesModeAssistantContent(m); ok {
+				if txt, ok := directTurnAssistantContent(m); ok {
 					assistant = txt
 					t.Logf("messages assistant: %q", assistant)
 					return
@@ -120,7 +131,7 @@ func TestIntegration_IntentHintDirectLLM(t *testing.T) {
 				case "idle":
 					sawIdle = true
 					if assistant != "" {
-						t.Logf("direct_llm assistant: %q", assistant)
+						t.Logf("text_completion assistant: %q", assistant)
 						return
 					}
 				}
@@ -163,7 +174,7 @@ func TestIntegration_IntentHintImageToText(t *testing.T) {
 
 	err = client.SendInput(ctx, "In one short phrase, what is shown?",
 		WithLoopID(loopID),
-		WithIntentHint("image_to_text"),
+		WithIntentHint(IntentHintImageToText),
 		WithAttachments([]map[string]interface{}{
 			{"mime_type": mimeType, "data": imgData},
 		}),
@@ -196,7 +207,7 @@ func TestIntegration_IntentHintImageToText(t *testing.T) {
 			}
 			switch m := msg.(type) {
 			case EventMessage:
-				if txt, ok := messagesModeAssistantContent(m); ok {
+				if txt, ok := directTurnAssistantContent(m); ok {
 					assistant = txt
 					t.Logf("messages assistant: %q", assistant)
 					return
@@ -235,7 +246,7 @@ func TestIntegration_IntentHintImageToText_RejectsWithoutAttachments(t *testing.
 
 	if err := client.SendInput(ctx, "text without image",
 		WithLoopID(loopID),
-		WithIntentHint("image_to_text"),
+		WithIntentHint(IntentHintImageToText),
 	); err != nil {
 		t.Fatalf("SendInput: %v", err)
 	}
@@ -296,7 +307,7 @@ var integrationWordReplySchema = map[string]interface{}{
 	"additionalProperties": false,
 }
 
-func TestIntegration_IntentHintDirectLLMStructured(t *testing.T) {
+func TestIntegration_IntentHintTextCompletionStructured(t *testing.T) {
 	skipIfNoDaemon(t)
 
 	cfg := integrationTestConfig()
@@ -325,12 +336,12 @@ func TestIntegration_IntentHintDirectLLMStructured(t *testing.T) {
 	prompt := `Return JSON only. Set "word" to exactly "GOJSON".`
 	if err := client.SendInput(ctx, prompt,
 		WithLoopID(loopID),
-		WithIntentHint("direct_llm"),
+		WithIntentHint(IntentHintTextCompletion),
 		WithResponseSchema(integrationWordReplySchema),
 		WithResponseSchemaName("WordReply"),
 		WithResponseSchemaStrict(strict),
 	); err != nil {
-		t.Fatalf("SendInput structured direct_llm: %v", err)
+		t.Fatalf("SendInput structured text_completion: %v", err)
 	}
 
 	deadline := time.After(90 * time.Second)
@@ -356,7 +367,7 @@ func TestIntegration_IntentHintDirectLLMStructured(t *testing.T) {
 			}
 			switch m := msg.(type) {
 			case EventMessage:
-				if txt, ok := messagesModeAssistantContent(m); ok {
+				if txt, ok := directTurnAssistantContent(m); ok {
 					assistant = txt
 					var parsed struct {
 						Word string `json:"word"`
@@ -367,7 +378,7 @@ func TestIntegration_IntentHintDirectLLMStructured(t *testing.T) {
 					if !strings.Contains(strings.ToUpper(parsed.Word), "GOJSON") {
 						t.Fatalf("word field: got %q", parsed.Word)
 					}
-					t.Logf("structured direct_llm: %q", assistant)
+					t.Logf("structured text_completion: %q", assistant)
 					return
 				}
 			case ErrorResponse:
@@ -378,7 +389,7 @@ func TestIntegration_IntentHintDirectLLMStructured(t *testing.T) {
 	}
 }
 
-func TestIntegration_IntentHintDirectLLMStructured_RejectsWithoutDirectLLM(t *testing.T) {
+func TestIntegration_IntentHintStructured_RejectsWithoutStructuredHint(t *testing.T) {
 	skipIfNoDaemon(t)
 
 	cfg := integrationTestConfig()
@@ -400,7 +411,7 @@ func TestIntegration_IntentHintDirectLLMStructured_RejectsWithoutDirectLLM(t *te
 
 	if err := client.SendInput(ctx, "hello",
 		WithLoopID(loopID),
-		WithIntentHint("quiz"),
+		WithIntentHint(IntentHintEmbed),
 		WithResponseSchema(integrationWordReplySchema),
 	); err != nil {
 		t.Fatalf("SendInput: %v", err)
@@ -428,7 +439,7 @@ func TestIntegration_IntentHintDirectLLMStructured_RejectsWithoutDirectLLM(t *te
 				errObj = map[string]interface{}{"code": ev["code"], "message": ev["message"]}
 			}
 			msgStr, _ := errObj["message"].(string)
-			if !strings.Contains(strings.ToLower(msgStr), "direct_llm") {
+			if !strings.Contains(strings.ToLower(msgStr), "text_completion") {
 				t.Fatalf("unexpected error message: %s", msgStr)
 			}
 			t.Logf("got expected rejection: %s", msgStr)
@@ -436,10 +447,64 @@ func TestIntegration_IntentHintDirectLLMStructured_RejectsWithoutDirectLLM(t *te
 		case "loop_input_response":
 			if ok, _ := ev["success"].(bool); ok {
 				t.Skip(
-					"daemon accepted response_schema without direct_llm; upgrade soothe-daemon",
+					"daemon accepted response_schema without text_completion; upgrade soothe-daemon",
 				)
 			}
 		}
 	}
-	t.Fatal("timeout: expected INVALID_REQUEST for response_schema with intent_hint=quiz")
+	t.Fatal("timeout: expected INVALID_REQUEST for response_schema with intent_hint=embed")
+}
+
+func TestIntegration_IntentHintDirectLLMRemoved(t *testing.T) {
+	skipIfNoDaemon(t)
+
+	cfg := integrationTestConfig()
+	client := NewClient(cfg.DaemonURL, cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer client.Close()
+
+	wsDir := t.TempDir()
+	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
+	if err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	if err := client.SendInput(ctx, "hello",
+		WithLoopID(loopID),
+		WithIntentHint("direct_llm"),
+	); err != nil {
+		t.Fatalf("SendInput: %v", err)
+	}
+
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		if client.conn != nil {
+			_ = client.conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+		}
+		ev, err := client.ReadEvent()
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		if ev == nil {
+			continue
+		}
+		if typ, _ := ev["type"].(string); typ == "error" {
+			errObj, _ := ev["error"].(map[string]interface{})
+			if errObj == nil {
+				errObj = map[string]interface{}{"message": ev["message"]}
+			}
+			msgStr, _ := errObj["message"].(string)
+			if !strings.Contains(strings.ToLower(msgStr), "removed") {
+				t.Fatalf("unexpected error message: %s", msgStr)
+			}
+			return
+		}
+	}
+	t.Fatal("timeout: expected INVALID_REQUEST for intent_hint=direct_llm")
 }

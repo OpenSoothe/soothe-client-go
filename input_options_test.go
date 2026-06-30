@@ -116,7 +116,7 @@ func TestMultipleInputOptions(t *testing.T) {
 	WithClarificationAnswer()(opts)
 	WithClarificationAnswers([]string{"a", "b"})(opts)
 	WithModel("openai:gpt-4")(opts)
-	WithIntentHint("quiz")(opts)
+	WithIntentHint(IntentHintTextCompletion)(opts)
 
 	// Verify all options applied
 	if opts.loopID != "loop-123" {
@@ -134,7 +134,7 @@ func TestMultipleInputOptions(t *testing.T) {
 	if opts.model != "openai:gpt-4" {
 		t.Errorf("expected model='openai:gpt-4', got '%s'", opts.model)
 	}
-	if opts.intentHint != "quiz" {
-		t.Errorf("expected intentHint='quiz', got '%s'", opts.intentHint)
+	if opts.intentHint != IntentHintTextCompletion {
+		t.Errorf("expected intentHint=%q, got '%s'", IntentHintTextCompletion, opts.intentHint)
 	}
 }

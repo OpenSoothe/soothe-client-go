@@ -43,6 +43,9 @@ func (c *Client) SendInput(ctx context.Context, text string, opts ...InputOption
 		params["model_params"] = o.modelParams
 	}
 	if o.intentHint != "" {
+		if err := ValidateLoopInputIntentHint(o.intentHint); err != nil {
+			return err
+		}
 		params["intent_hint"] = o.intentHint
 	}
 	if o.responseSchema != nil {
@@ -126,16 +129,20 @@ func WithModelParams(params map[string]interface{}) InputOption {
 }
 
 // WithIntentHint sets intent_hint on loop_input (daemon normalizes case).
+// For direct model turns use IntentHintTextCompletion, IntentHintImageToText,
+// IntentHintOCR, or IntentHintEmbed. Agent-path pass-through hints
+// (e.g. resume_clarification, skill:foo) are also accepted. Legacy values
+// direct_llm and quiz are rejected before send.
 func WithIntentHint(hint string) InputOption {
 	return func(o *inputOptions) { o.intentHint = hint }
 }
 
-// WithResponseSchema sets JSON Schema for strict structured output (direct_llm only).
+// WithResponseSchema sets JSON Schema for structured output (text_completion or image_to_text).
 func WithResponseSchema(schema map[string]interface{}) InputOption {
 	return func(o *inputOptions) { o.responseSchema = schema }
 }
 
-// WithResponseSchemaName sets the provider schema name for structured direct_llm output.
+// WithResponseSchemaName sets the provider schema name for structured output.
 func WithResponseSchemaName(name string) InputOption {
 	return func(o *inputOptions) { o.responseSchemaName = name }
 }

@@ -7,6 +7,8 @@ import (
 	"log"
 	"strings"
 	"time"
+
+	soothe "github.com/mirasoth/soothe-client-go"
 )
 
 // ErrQueryTimeout is returned when a turn exceeds the configured timeout.
@@ -127,6 +129,13 @@ func (r *TurnRunner) WithOnError(f func(sessionID, loopID string, err error)) *T
 // caller (SSE subscribers receive it). Returns nil on success, an error on
 // failure (ErrQueryTimeout, context.Canceled, or a daemon/processing error).
 func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, workspaceID string, attachments []map[string]interface{}, opts *InputOpts) error {
+	if opts != nil {
+		if h := strings.TrimSpace(opts.IntentHint); h != "" {
+			if err := soothe.ValidateLoopInputIntentHint(h); err != nil {
+				return fmt.Errorf("appkit: %w", err)
+			}
+		}
+	}
 	conn, err := r.pool.Acquire(ctx, sessionID, workspaceID, userID)
 	if err != nil {
 		r.persistFailed(sessionID, "", err)

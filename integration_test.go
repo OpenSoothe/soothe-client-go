@@ -443,7 +443,7 @@ func TestIntegration_FetchSkillsCatalog(t *testing.T) {
 // IntentHint integration tests
 // ---------------------------------------------------------------------------
 
-func TestIntegration_InputWithIntentHintQuiz(t *testing.T) {
+func TestIntegration_InputWithIntentHintTextCompletion(t *testing.T) {
 	skipIfShort(t)
 	cfg := integrationTestConfig()
 	client := NewClient(cfg.DaemonURL, cfg)
@@ -468,11 +468,11 @@ func TestIntegration_InputWithIntentHintQuiz(t *testing.T) {
 		t.Fatalf("ReceiveMessages: %v", err)
 	}
 
-	// Send input with intent_hint=quiz to use think model for factual response
-	if err := client.SendInput(ctx, "What is the capital of France?", WithLoopID(loopID), WithIntentHint("quiz")); err != nil {
-		t.Fatalf("SendInput with intent_hint=quiz: %v", err)
+	// Send input with intent_hint=text_completion for a direct model turn
+	if err := client.SendInput(ctx, "Reply with exactly one word: PARIS", WithLoopID(loopID), WithIntentHint(IntentHintTextCompletion)); err != nil {
+		t.Fatalf("SendInput with intent_hint=text_completion: %v", err)
 	}
-	t.Log("Sent input message with intent_hint=quiz")
+	t.Log("Sent input message with intent_hint=text_completion")
 
 	// Read events until we get an assistant response or timeout
 	eventCount := 0

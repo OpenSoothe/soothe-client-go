@@ -516,7 +516,8 @@ func (e EventMessage) LoopAIMessage() (LoopAIMessage, bool) {
 
 func isLoopAssistantPhase(phase string) bool {
 	switch phase {
-	case "goal_completion", "quiz", "autonomous_goal", "direct_model":
+	case "goal_completion", "quiz", "autonomous_goal", "direct_model",
+		"text_completion", "image_to_text", "ocr", "embed", "plan_direct":
 		return true
 	default:
 		return false
