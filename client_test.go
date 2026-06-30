@@ -803,8 +803,40 @@ func TestClient_SendCommand(t *testing.T) {
 	}
 }
 
+// testDisconnectHandler handshakes, then on any post-handshake message sends
+// a `disconnect` notification (RFC-450 §9.2) and holds the connection open so
+// the client can read the frame before any teardown.
+func testDisconnectHandler(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+	sentDisconnect := false
+	for {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		var m map[string]interface{}
+		if err := json.Unmarshal(msg, &m); err != nil {
+			continue
+		}
+		if isConnectionInit(m) {
+			testSendHandshake(conn, m)
+			continue
+		}
+		// Respond to the first post-handshake frame with a clean disconnect,
+		// then keep reading so the socket stays open until the client closes.
+		if !sentDisconnect {
+			conn.WriteMessage(websocket.TextMessage, []byte(`{"proto":"1","type":"disconnect"}`))
+			sentDisconnect = true
+		}
+	}
+}
+
 func TestClient_SendDetach(t *testing.T) {
-	ts := newTestServer(testEchoHandler)
+	ts := newTestServer(testDisconnectHandler)
 	defer ts.Close()
 
 	client := NewClient(wsURL(ts.URL), nil)
@@ -816,16 +848,35 @@ func TestClient_SendDetach(t *testing.T) {
 	}
 	defer client.Close()
 
+	// A real app runs a ReceiveMessages reader; the daemon's `disconnect`
+	// notification is read there and consumed by isControlFrame, firing
+	// Disconnected(DisconnectClean) rather than being forwarded as an event.
+	rctx, rcancel := context.WithCancel(context.Background())
+	defer rcancel()
+	ch, err := client.ReceiveMessages(rctx)
+	if err != nil {
+		t.Fatalf("ReceiveMessages: %v", err)
+	}
+
 	if err := client.SendDetach(ctx); err != nil {
 		t.Fatalf("SendDetach: %v", err)
 	}
 
-	ev, err := client.ReadEvent()
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	if ev["type"] != "disconnect" {
-		t.Errorf("type: %v", ev["type"])
+	select {
+	case cause := <-client.Disconnected():
+		if cause != DisconnectClean {
+			t.Errorf("expected DisconnectClean, got %v", cause)
+		}
+		// No non-nil application event should have been forwarded for a lifecycle frame.
+		select {
+		case ev := <-ch:
+			if ev != nil {
+				t.Errorf("expected no event forwarded for disconnect, got: %v", ev)
+			}
+		default:
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("expected Disconnected() to fire on disconnect notification")
 	}
 }
 

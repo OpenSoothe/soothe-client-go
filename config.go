@@ -11,11 +11,17 @@ type Config struct {
 	DaemonURL           string        // WebSocket URL for Soothe daemon
 	VerbosityLevel      string        // Event verbosity: quiet/normal/debug
 	MaxRetries          int           // Maximum connection retry attempts
-	ReconnectDelay      time.Duration // Initial reconnect delay
+	ReconnectDelay      time.Duration // Initial reconnect delay (cold start)
 	HeartbeatInterval   time.Duration // Application-level heartbeat interval
-	DaemonReadyTimeout  time.Duration // Handshake: wait for daemon_ready
+	DaemonReadyTimeout  time.Duration // Handshake: wait for connection_ack ready
 	LoopStatusTimeout   time.Duration // After loop_new: wait for status with loop_id
 	SubscriptionTimeout time.Duration // After loop_subscribe: wait for subscription_confirmed
+
+	// Mid-session reconnect (RFC-450 §8.3 dead-connection detection).
+	ReconnectMaxAttempts  int           // Max reconnection attempts on a mid-session drop (0 = infinite)
+	ReconnectInitialDelay time.Duration // Initial backoff delay between reconnect attempts
+	ReconnectMaxDelay     time.Duration // Cap on exponential backoff delay
+	ReattachProbeTimeout  time.Duration // loop_get liveness probe timeout in ReattachAndProbe
 }
 
 // DefaultConfig returns default configuration.
@@ -29,6 +35,11 @@ func DefaultConfig() *Config {
 		DaemonReadyTimeout:  20 * time.Second,
 		LoopStatusTimeout:   60 * time.Second,
 		SubscriptionTimeout: 10 * time.Second,
+
+		ReconnectMaxAttempts:  10,
+		ReconnectInitialDelay: 500 * time.Millisecond,
+		ReconnectMaxDelay:     10 * time.Second,
+		ReattachProbeTimeout:  5 * time.Second,
 	}
 }
 

@@ -18,7 +18,11 @@ import (
 // is used as the correlation id, otherwise a new one is generated. The
 // returned map is the response "result" object.
 //
-// Events whose id does not match are skipped.
+// RequestResponse is multiplexer-aware (RFC-629 constraint #1): it registers a
+// pending call for its request id so that, if a concurrent ReceiveMessages
+// reader is active, the response is routed to this caller instead of being
+// discarded. When no concurrent reader is active, it reads synchronously via
+// ReadEvent (which itself routes other waiters' frames to the mux).
 func (c *Client) RequestResponse(ctx context.Context, payload map[string]interface{}, responseType string, timeout time.Duration) (map[string]interface{}, error) {
 	method, _ := payload["type"].(string)
 	if method == "" {
@@ -40,6 +44,10 @@ func (c *Client) RequestResponse(ctx context.Context, payload map[string]interfa
 		return nil, fmt.Errorf("send request: %w", err)
 	}
 
+	// Register a pending call so a concurrent reader can deliver the response.
+	pc, unregister := c.mux.registerRPC(rid)
+	defer unregister()
+
 	// Set a read deadline on the underlying connection to prevent blocking forever
 	if c.conn != nil {
 		c.conn.SetReadDeadline(time.Now().Add(timeout))
@@ -48,25 +56,61 @@ func (c *Client) RequestResponse(ctx context.Context, payload map[string]interfa
 
 	timeoutCh := time.After(timeout)
 	for {
+		// If a ReceiveMessages reader is active, it owns the socket read; wait
+		// purely on the mux channels (gorilla/websocket forbids concurrent
+		// readers, so RequestResponse must not call ReadEvent here).
+		if c.readerActive.Load() {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-timeoutCh:
+				return nil, fmt.Errorf("timeout after %v waiting for %s", timeout, responseType)
+			case result := <-pc.replyCh:
+				return result, nil
+			case err := <-pc.errCh:
+				return nil, err
+			}
+		}
+
+		// No concurrent reader: drain any already-routed response first.
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-timeoutCh:
 			return nil, fmt.Errorf("timeout after %v waiting for %s", timeout, responseType)
+		case result := <-pc.replyCh:
+			return result, nil
+		case err := <-pc.errCh:
+			return nil, err
 		default:
 		}
 
+		// No concurrent reader delivered yet; read synchronously. ReadEvent
+		// routes other waiters' frames to the mux and returns the first frame
+		// that belongs to nobody — which may be our own response.
 		ev, err := c.ReadEvent()
 		if err != nil {
 			return nil, fmt.Errorf("read event: %w", err)
 		}
 		if ev == nil {
-			return nil, fmt.Errorf("connection closed waiting for %s", responseType)
+			// Connection may have closed; check if a concurrent reader routed
+			// our response before returning.
+			select {
+			case result := <-pc.replyCh:
+				return result, nil
+			case err := <-pc.errCh:
+				return nil, err
+			default:
+				return nil, fmt.Errorf("connection closed waiting for %s", responseType)
+			}
 		}
 
 		// Correlate by id. The daemon echoes the request id on response/error.
 		evID, _ := ev["id"].(string)
 		if evID != rid {
+			// Not ours and not routed (unsolicited event) — re-route defensively
+			// in case a waiter appeared between the ReadEvent and now.
+			c.mux.route(ev)
 			continue
 		}
 		typ, _ := ev["type"].(string)
@@ -77,7 +121,8 @@ func (c *Client) RequestResponse(ctx context.Context, payload map[string]interfa
 				code = int(ic)
 			}
 			msg, _ := errObj["message"].(string)
-			return nil, &DaemonError{Code: code, Message: msg}
+			data, _ := errObj["data"].(map[string]interface{})
+			return nil, &DaemonError{Code: code, Message: msg, Data: data}
 		}
 		if typ == "response" {
 			result, _ := ev["result"].(map[string]interface{})
