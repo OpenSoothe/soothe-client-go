@@ -71,6 +71,7 @@ func (c *pooledConn) isConnected() bool {
 // It is the app-agnostic successor to triarch's SoothePoolManager connection
 // mechanics (RFC-629 Layer 1).
 type ConnectionPool struct {
+	url         string
 	cfg         PoolConfig
 	scfg        *soothe.Config
 	factory     ClientFactory
@@ -83,10 +84,11 @@ type ConnectionPool struct {
 	nextSlotID  int
 }
 
-// NewConnectionPool constructs a pool. If cfg is nil, DefaultPoolConfig is
-// used; if scfg is nil, soothe.DefaultConfig is used; nil factory/bootstrap
-// fall back to the defaults.
-func NewConnectionPool(cfg *PoolConfig, scfg *soothe.Config, factory ClientFactory, store SessionStore) *ConnectionPool {
+// NewConnectionPool constructs a pool for daemonURL. If cfg is nil,
+// DefaultPoolConfig is used; if scfg is nil, soothe.DefaultConfig is used; nil
+// factory falls back to DefaultClientFactory. The pool is pre-seeded with
+// cfg.PoolSize idle slots, each built via factory(daemonURL, scfg).
+func NewConnectionPool(daemonURL string, store SessionStore, cfg *PoolConfig, scfg *soothe.Config, factory ClientFactory) *ConnectionPool {
 	if cfg == nil {
 		cfg = DefaultPoolConfig()
 	}
@@ -96,7 +98,11 @@ func NewConnectionPool(cfg *PoolConfig, scfg *soothe.Config, factory ClientFacto
 	if factory == nil {
 		factory = DefaultClientFactory()
 	}
-	return &ConnectionPool{
+	if cfg.PoolSize <= 0 {
+		cfg.PoolSize = DefaultPoolConfig().PoolSize
+	}
+	p := &ConnectionPool{
+		url:         daemonURL,
 		cfg:         *cfg,
 		scfg:        scfg,
 		factory:     factory,
@@ -105,7 +111,21 @@ func NewConnectionPool(cfg *PoolConfig, scfg *soothe.Config, factory ClientFacto
 		pool:        make(chan *pooledConn, cfg.PoolSize),
 		activeSlots: make(map[string]*pooledConn),
 		registry:    make(map[int]string),
+		nextSlotID:  1,
 	}
+	for i := 0; i < cfg.PoolSize; i++ {
+		p.pool <- p.newSlot()
+	}
+	return p
+}
+
+// WithClientFactory overrides the client factory (useful for test fakes or apps
+// that wrap *soothe.Client with logging/metrics).
+func (p *ConnectionPool) WithClientFactory(f ClientFactory) *ConnectionPool {
+	if f != nil {
+		p.factory = f
+	}
+	return p
 }
 
 // WithBootstrap overrides the loop bootstrap function (useful for test fakes
@@ -115,6 +135,26 @@ func (p *ConnectionPool) WithBootstrap(f BootstrapFunc) *ConnectionPool {
 		p.bootstrap = f
 	}
 	return p
+}
+
+// Stats returns a snapshot of active and idle slot counts.
+func (p *ConnectionPool) Stats() (active, idle int) {
+	p.mu.RLock()
+	active = len(p.activeSlots)
+	p.mu.RUnlock()
+	idle = len(p.pool)
+	return active, idle
+}
+
+func (p *ConnectionPool) newSlot() *pooledConn {
+	p.mu.Lock()
+	id := p.nextSlotID
+	p.nextSlotID++
+	p.mu.Unlock()
+	return &pooledConn{
+		slotID: id,
+		client: p.factory(p.url, p.scfg),
+	}
 }
 
 // Acquire returns a live connection for sessionID, reusing an active slot or
@@ -200,7 +240,8 @@ func (p *ConnectionPool) Acquire(ctx context.Context, sessionID, workspaceID, us
 	}
 }
 
-// Release tears down the connection for sessionID and returns the slot.
+// Release tears down the connection for sessionID and returns a fresh slot to
+// the pool.
 func (p *ConnectionPool) Release(sessionID string) {
 	p.mu.Lock()
 	conn := p.activeSlots[sessionID]
@@ -219,13 +260,12 @@ func (p *ConnectionPool) Release(sessionID string) {
 	if conn.client != nil {
 		conn.client.Close()
 	}
-	conn.mu.Lock()
-	conn.sessionID = ""
-	conn.loopID = ""
-	conn.eventCh = nil
-	conn.mu.Unlock()
-	p.pool <- conn
 	log.Printf("[appkit.ConnectionPool] released slot %d for %s", conn.slotID, sessionID)
+	select {
+	case p.pool <- p.newSlot():
+	default:
+		log.Printf("[appkit.ConnectionPool] WARN: pool full when returning slot for %s", sessionID)
+	}
 }
 
 // ResetSession tears down the connection for sessionID (cancelling any query
@@ -252,6 +292,16 @@ func (p *ConnectionPool) Stop() {
 		}
 		if conn.client != nil {
 			conn.client.Close()
+		}
+	}
+	for {
+		select {
+		case conn := <-p.pool:
+			if conn.client != nil {
+				conn.client.Close()
+			}
+		default:
+			return
 		}
 	}
 }

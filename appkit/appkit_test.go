@@ -329,15 +329,48 @@ func TestQueryGate_CancelOrdering(t *testing.T) {
 // poolTestHarness wires a pool with a fake factory + bootstrap.
 func newTestPool(t *testing.T, store *memStore, fake *fakeClient) *ConnectionPool {
 	t.Helper()
-	pool := NewConnectionPool(&PoolConfig{PoolSize: 4, QueryTimeout: 5 * time.Second}, nil, nil, store)
-	pool.factory = func(url string, cfg *soothe.Config) ManagedClient { return fake }
-	pool.bootstrap = func(ctx context.Context, c ManagedClient, ws, uid string, cfg *soothe.Config) (string, error) {
+	factory := func(url string, cfg *soothe.Config) ManagedClient { return fake }
+	return NewConnectionPool(
+		"ws://test",
+		store,
+		&PoolConfig{PoolSize: 4, QueryTimeout: 5 * time.Second},
+		nil,
+		factory,
+	).WithBootstrap(func(ctx context.Context, c ManagedClient, ws, uid string, cfg *soothe.Config) (string, error) {
 		return "loop-fresh", nil
+	})
+}
+
+func TestConnectionPool_PreSeeded(t *testing.T) {
+	store := newMemStore()
+	pool := newTestPool(t, store, newFakeClient())
+	active, idle := pool.Stats()
+	if active != 0 || idle != 4 {
+		t.Fatalf("expected 0 active and 4 idle slots, got active=%d idle=%d", active, idle)
 	}
-	// Pre-seed the pool channel with one slot.
-	slot := &pooledConn{slotID: 1, client: fake}
-	pool.pool <- slot
-	return pool
+}
+
+func TestConnectionPool_Exhausted(t *testing.T) {
+	store := newMemStore()
+	pool := NewConnectionPool(
+		"ws://test",
+		store,
+		&PoolConfig{PoolSize: 1, QueryTimeout: time.Second},
+		nil,
+		func(url string, cfg *soothe.Config) ManagedClient { return newFakeClient() },
+	).WithBootstrap(func(ctx context.Context, c ManagedClient, ws, uid string, cfg *soothe.Config) (string, error) {
+		return "loop-1", nil
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	if _, err := pool.Acquire(ctx, "s1", "ws-1", "user-1"); err != nil {
+		t.Fatalf("first acquire: %v", err)
+	}
+	if _, err := pool.Acquire(ctx, "s2", "ws-1", "user-1"); !errors.Is(err, ErrPoolExhausted) {
+		t.Fatalf("expected ErrPoolExhausted, got %v", err)
+	}
 }
 
 func TestConnectionPool_BootstrapNewSession(t *testing.T) {

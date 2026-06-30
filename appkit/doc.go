@@ -16,7 +16,8 @@
 //   - Layer 2 — the application: domain types, persistence implementation,
 //     product config, user-facing copy.
 //
-// Applications construct a TurnRunner from a ConnectionPool, QueryGate,
-// EventClassifier, SessionStore, and SSEBroadcaster, then call Execute per
+// Applications construct a ConnectionPool with the daemon WebSocket URL and a
+// SessionStore implementation, then wire a TurnRunner from the pool, QueryGate,
+// EventClassifier, SessionStore, and SSEBroadcaster, and call Execute per
 // query turn. See the IG-527 implementation guide for the end-to-end flow.
 package appkit
