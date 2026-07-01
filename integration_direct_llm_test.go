@@ -475,36 +475,19 @@ func TestIntegration_IntentHintDirectLLMRemoved(t *testing.T) {
 		t.Fatalf("bootstrap: %v", err)
 	}
 
-	if err := client.SendInput(ctx, "hello",
+	// The client validates removed legacy intent_hints synchronously in SendInput
+	// (see ValidateLoopInputIntentHint / TestSendInput_RejectsLegacyIntentHint),
+	// so direct_llm never reaches the daemon. This test confirms that contract
+	// against a live daemon connection.
+	err = client.SendInput(ctx, "hello",
 		WithLoopID(loopID),
 		WithIntentHint("direct_llm"),
-	); err != nil {
-		t.Fatalf("SendInput: %v", err)
+	)
+	if err == nil {
+		t.Fatal("expected error for intent_hint=direct_llm, got nil")
 	}
-
-	deadline := time.Now().Add(15 * time.Second)
-	for time.Now().Before(deadline) {
-		if client.conn != nil {
-			_ = client.conn.SetReadDeadline(time.Now().Add(3 * time.Second))
-		}
-		ev, err := client.ReadEvent()
-		if err != nil {
-			t.Fatalf("read: %v", err)
-		}
-		if ev == nil {
-			continue
-		}
-		if typ, _ := ev["type"].(string); typ == "error" {
-			errObj, _ := ev["error"].(map[string]interface{})
-			if errObj == nil {
-				errObj = map[string]interface{}{"message": ev["message"]}
-			}
-			msgStr, _ := errObj["message"].(string)
-			if !strings.Contains(strings.ToLower(msgStr), "removed") {
-				t.Fatalf("unexpected error message: %s", msgStr)
-			}
-			return
-		}
+	if !strings.Contains(strings.ToLower(err.Error()), "removed") {
+		t.Fatalf("unexpected error message: %v", err)
 	}
-	t.Fatal("timeout: expected INVALID_REQUEST for intent_hint=direct_llm")
+	t.Logf("got expected rejection: %v", err)
 }
