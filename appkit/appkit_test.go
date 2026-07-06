@@ -31,7 +31,7 @@ func newMemStore() *memStore {
 	}
 }
 
-func (s *memStore) GetSession(id string) (*SessionEntry, error) {
+func (s *memStore) GetSession(ctx context.Context, id string) (*SessionEntry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if e, ok := s.sessions[id]; ok {
@@ -40,7 +40,7 @@ func (s *memStore) GetSession(id string) (*SessionEntry, error) {
 	}
 	return nil, nil
 }
-func (s *memStore) CreateSession(ws, sid, loop, stype string) error {
+func (s *memStore) CreateSession(ctx context.Context, ws, sid, loop, stype string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.failCreate {
@@ -49,9 +49,9 @@ func (s *memStore) CreateSession(ws, sid, loop, stype string) error {
 	s.sessions[sid] = &SessionEntry{WorkspaceID: ws, SessionID: sid, LoopID: loop, SessionType: stype, IsActive: true}
 	return nil
 }
-func (s *memStore) UpdateLastUsed(sid string) error      { return nil }
-func (s *memStore) IncrementResetCount(sid string) error { return nil }
-func (s *memStore) GetLoopIDForSession(sid string) (string, bool, error) {
+func (s *memStore) UpdateLastUsed(ctx context.Context, sid string) error      { return nil }
+func (s *memStore) IncrementResetCount(ctx context.Context, sid string) error { return nil }
+func (s *memStore) GetLoopIDForSession(ctx context.Context, sid string) (string, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if e, ok := s.sessions[sid]; ok && e.LoopID != "" {
@@ -59,7 +59,7 @@ func (s *memStore) GetLoopIDForSession(sid string) (string, bool, error) {
 	}
 	return "", false, nil
 }
-func (s *memStore) AppendMessage(sid string, m SessionMessage) error {
+func (s *memStore) AppendMessage(ctx context.Context, sid string, m SessionMessage) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.msgs[sid] = append(s.msgs[sid], m)
@@ -389,7 +389,7 @@ func TestConnectionPool_BootstrapNewSession(t *testing.T) {
 		t.Errorf("expected loop-fresh, got %s", conn.getLoopID())
 	}
 	// Session should be persisted.
-	e, _ := store.GetSession("s1")
+	e, _ := store.GetSession(ctx, "s1")
 	if e == nil || e.LoopID != "loop-fresh" {
 		t.Errorf("session not persisted correctly: %+v", e)
 	}

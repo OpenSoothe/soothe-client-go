@@ -175,7 +175,7 @@ func (p *ConnectionPool) Acquire(ctx context.Context, sessionID, workspaceID, us
 		existing.mu.Lock()
 		existing.lastUsed = time.Now()
 		existing.mu.Unlock()
-		_ = p.store.UpdateLastUsed(sessionID)
+		_ = p.store.UpdateLastUsed(ctx, sessionID)
 		return existing, nil
 	}
 
@@ -187,7 +187,7 @@ func (p *ConnectionPool) Acquire(ctx context.Context, sessionID, workspaceID, us
 		p.registry[conn.slotID] = sessionID
 		p.mu.Unlock()
 
-		loopID, hasLoop := p.loopIDFor(sessionID)
+		loopID, hasLoop := p.loopIDFor(ctx, sessionID)
 		var err error
 		if !hasLoop || loopID == "" {
 			// Fresh bootstrap.
@@ -200,7 +200,7 @@ func (p *ConnectionPool) Acquire(ctx context.Context, sessionID, workspaceID, us
 				p.Release(sessionID)
 				return nil, fmt.Errorf("bootstrap new loop: %w", err)
 			}
-			if cerr := p.store.CreateSession(workspaceID, sessionID, loopID, ""); cerr != nil {
+			if cerr := p.store.CreateSession(ctx, workspaceID, sessionID, loopID, ""); cerr != nil {
 				log.Printf("[appkit.ConnectionPool] WARN: create session failed for %s: %v", sessionID, cerr)
 			}
 		} else {
@@ -216,7 +216,7 @@ func (p *ConnectionPool) Acquire(ctx context.Context, sessionID, workspaceID, us
 					p.Release(sessionID)
 					return nil, fmt.Errorf("bootstrap after reattach fail: %w", err)
 				}
-				if cerr := p.store.CreateSession(workspaceID, sessionID, loopID, ""); cerr != nil {
+				if cerr := p.store.CreateSession(ctx, workspaceID, sessionID, loopID, ""); cerr != nil {
 					log.Printf("[appkit.ConnectionPool] WARN: create session after bootstrap failed for %s: %v", sessionID, cerr)
 				}
 			}
@@ -229,7 +229,7 @@ func (p *ConnectionPool) Acquire(ctx context.Context, sessionID, workspaceID, us
 		conn.lastUsed = time.Now()
 		conn.mu.Unlock()
 
-		_ = p.store.UpdateLastUsed(sessionID)
+		_ = p.store.UpdateLastUsed(ctx, sessionID)
 		log.Printf("[appkit.ConnectionPool] acquired slot %d for %s (loop %s)", conn.slotID, sessionID, loopID)
 		return conn, nil
 
@@ -344,8 +344,8 @@ func (p *ConnectionPool) startReader(ctx context.Context, conn *pooledConn) {
 	conn.mu.Unlock()
 }
 
-func (p *ConnectionPool) loopIDFor(sessionID string) (string, bool) {
-	loopID, ok, err := p.store.GetLoopIDForSession(sessionID)
+func (p *ConnectionPool) loopIDFor(ctx context.Context, sessionID string) (string, bool) {
+	loopID, ok, err := p.store.GetLoopIDForSession(ctx, sessionID)
 	if err != nil || !ok {
 		return "", false
 	}

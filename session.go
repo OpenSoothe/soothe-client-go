@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // LoopSessionOptions configures loop_new workspace fields (RFC-503).
@@ -87,4 +88,35 @@ func asString(v interface{}) string {
 		return s
 	}
 	return ""
+}
+
+// ---------------------------------------------------------------------------
+// Connect with retries (mirrors soothe_sdk.client.session.connect_websocket_with_retries)
+// ---------------------------------------------------------------------------
+
+// ConnectWithRetries attempts to connect to the Soothe daemon with bounded retries.
+// This handles cold-start races where the daemon may not be ready yet.
+func ConnectWithRetries(ctx context.Context, client *Client, maxRetries int, retryDelay time.Duration) error {
+	if maxRetries <= 0 {
+		maxRetries = 40
+	}
+	if retryDelay <= 0 {
+		retryDelay = 250 * time.Millisecond
+	}
+	var lastErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		connectCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		err := client.Connect(connectCtx)
+		cancel()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(retryDelay):
+		}
+	}
+	return fmt.Errorf("failed to connect after %d attempts: %w", maxRetries, lastErr)
 }

@@ -1,6 +1,9 @@
 package appkit
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // SessionEntry is the persisted mapping between an application session id and
 // the daemon loop id, plus bookkeeping for resume and reset.
@@ -36,23 +39,23 @@ type SessionMessage struct {
 type SessionStore interface {
 	// GetSession returns the persisted entry for sessionID, or
 	// (nil, nil) if no record exists.
-	GetSession(sessionID string) (*SessionEntry, error)
+	GetSession(ctx context.Context, sessionID string) (*SessionEntry, error)
 
 	// CreateSession persists a new session↔loop mapping.
-	CreateSession(workspaceID, sessionID, loopID, sessionType string) error
+	CreateSession(ctx context.Context, workspaceID, sessionID, loopID, sessionType string) error
 
 	// UpdateLastUsed stamps the session's last-used timestamp.
-	UpdateLastUsed(sessionID string) error
+	UpdateLastUsed(ctx context.Context, sessionID string) error
 
 	// IncrementResetCount bumps the reset counter (used to decide fresh
 	// bootstrap vs reattach after an explicit reset).
-	IncrementResetCount(sessionID string) error
+	IncrementResetCount(ctx context.Context, sessionID string) error
 
 	// GetLoopIDForSession returns the daemon loop id for sessionID and whether
 	// one is on file. ok==false triggers a fresh loop_new bootstrap.
-	GetLoopIDForSession(sessionID string) (loopID string, ok bool, err error)
+	GetLoopIDForSession(ctx context.Context, sessionID string) (loopID string, ok bool, err error)
 
 	// AppendMessage writes a message row (assistant reply, error, etc.) for
 	// the session. metadata carries optional query analytics.
-	AppendMessage(sessionID string, message SessionMessage) error
+	AppendMessage(ctx context.Context, sessionID string, message SessionMessage) error
 }

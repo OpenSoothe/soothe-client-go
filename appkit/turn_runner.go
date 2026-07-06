@@ -138,7 +138,7 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 	}
 	conn, err := r.pool.Acquire(ctx, sessionID, workspaceID, userID)
 	if err != nil {
-		r.persistFailed(sessionID, "", err)
+		r.persistFailed(ctx, sessionID, "", err)
 		r.broadcastError(sessionID, err)
 		if r.onError != nil {
 			r.onError(sessionID, "", err)
@@ -157,7 +157,7 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 	}
 	if err := r.gate.Acquire(sessionID, cancel, sendCancel); err != nil {
 		r.pool.Release(sessionID)
-		r.persistFailed(sessionID, loopID, err)
+		r.persistFailed(ctx, sessionID, loopID, err)
 		r.broadcastError(sessionID, err)
 		if r.onError != nil {
 			r.onError(sessionID, loopID, err)
@@ -169,7 +169,7 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 	// Send loop_input.
 	inputMsg := r.buildInput(message, loopID, attachments, opts)
 	if err := conn.client.SendMessage(timeoutCtx, inputMsg); err != nil {
-		r.persistFailed(sessionID, loopID, err)
+		r.persistFailed(ctx, sessionID, loopID, err)
 		r.broadcastError(sessionID, err)
 		if r.onError != nil {
 			r.onError(sessionID, loopID, err)
@@ -180,7 +180,7 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 	eventCh := conn.eventCh
 	if eventCh == nil {
 		err := fmt.Errorf("missing event stream for session %s (loop %s)", sessionID, loopID)
-		r.persistFailed(sessionID, loopID, err)
+		r.persistFailed(ctx, sessionID, loopID, err)
 		r.broadcastError(sessionID, err)
 		if r.onError != nil {
 			r.onError(sessionID, loopID, err)
@@ -197,7 +197,7 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 			if timeoutCtx.Err() == context.Canceled {
 				log.Printf("[appkit.TurnRunner] query cancelled for %s (loop %s)", sessionID, loopID)
 				err := context.Canceled
-				r.persistFailed(sessionID, loopID, err)
+				r.persistFailed(ctx, sessionID, loopID, err)
 				r.broadcastError(sessionID, err)
 				if r.onError != nil {
 					r.onError(sessionID, loopID, err)
@@ -208,7 +208,7 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 			if cerr := r.sendLoopCancel(context.Background(), conn, loopID); cerr != nil {
 				log.Printf("[appkit.TurnRunner] WARN: daemon cancel on timeout failed for %s loop %s: %v", sessionID, loopID, cerr)
 			}
-			r.persistFailed(sessionID, loopID, ErrQueryTimeout)
+			r.persistFailed(ctx, sessionID, loopID, ErrQueryTimeout)
 			r.broadcastError(sessionID, ErrQueryTimeout)
 			if r.onError != nil {
 				r.onError(sessionID, loopID, ErrQueryTimeout)
@@ -218,7 +218,7 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 		case msg, ok := <-eventCh:
 			if !ok {
 				err := fmt.Errorf("event stream closed")
-				r.persistFailed(sessionID, loopID, err)
+				r.persistFailed(ctx, sessionID, loopID, err)
 				r.broadcastError(sessionID, err)
 				if r.onError != nil {
 					r.onError(sessionID, loopID, err)
@@ -228,7 +228,7 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 
 			eventResult := r.classifier.Classify(msg, assistantContent)
 			if eventResult.Err != nil && eventResult.Terminal == ChatEventFailedComplete {
-				r.persistFailed(sessionID, loopID, eventResult.Err)
+				r.persistFailed(ctx, sessionID, loopID, eventResult.Err)
 				r.broadcastError(sessionID, eventResult.Err)
 				if r.onError != nil {
 					r.onError(sessionID, loopID, eventResult.Err)
@@ -260,7 +260,7 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 
 			if final, deliverable := r.classifier.ResolveDeliverableFinalContent(eventResult, assistantContent); deliverable {
 				elapsedMs := time.Since(startedAt).Milliseconds()
-				r.persistResponse(sessionID, loopID, final, startedAt, eventResult.CompletionEvent)
+				r.persistResponse(ctx, sessionID, loopID, final, startedAt, eventResult.CompletionEvent)
 				r.broadcastComplete(sessionID, final)
 				if r.onComplete != nil {
 					r.onComplete(sessionID, loopID, final, eventResult.CompletionEvent, elapsedMs)
@@ -291,7 +291,7 @@ func (r *TurnRunner) sendLoopCancel(ctx context.Context, conn *pooledConn, loopI
 	return nil
 }
 
-func (r *TurnRunner) persistResponse(sessionID, loopID, content string, startedAt time.Time, completionEvent string) {
+func (r *TurnRunner) persistResponse(ctx context.Context, sessionID, loopID, content string, startedAt time.Time, completionEvent string) {
 	if r.store == nil {
 		return
 	}
@@ -307,12 +307,12 @@ func (r *TurnRunner) persistResponse(sessionID, loopID, content string, startedA
 			"deliverable":      true,
 		},
 	}
-	if err := r.store.AppendMessage(sessionID, msg); err != nil {
+	if err := r.store.AppendMessage(ctx, sessionID, msg); err != nil {
 		log.Printf("[appkit.TurnRunner] persist response failed for %s: %v", sessionID, err)
 	}
 }
 
-func (r *TurnRunner) persistFailed(sessionID, loopID string, err error) {
+func (r *TurnRunner) persistFailed(ctx context.Context, sessionID, loopID string, err error) {
 	if r.store == nil {
 		return
 	}
@@ -324,7 +324,7 @@ func (r *TurnRunner) persistFailed(sessionID, loopID string, err error) {
 			"error_message": err.Error(),
 		},
 	}
-	if err := r.store.AppendMessage(sessionID, msg); err != nil {
+	if err := r.store.AppendMessage(ctx, sessionID, msg); err != nil {
 		log.Printf("[appkit.TurnRunner] persist failed-query failed for %s: %v", sessionID, err)
 	}
 }
