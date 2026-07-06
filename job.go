@@ -126,6 +126,9 @@ func (c *Client) JobGuidance(ctx context.Context, jobID string, text string, goa
 // AutopilotSubscribe subscribes client to autopilot worker events.
 // This bypasses the autopilot__* filter so the client receives worker lifecycle events.
 // Uses the subscribe envelope with method "autopilot_events" (RFC-450 §9.2).
+//
+// Multiplexer-aware: when a ReceiveMessages reader is active, the confirmation
+// frame is routed via the mux subscription channel instead of calling ReadEvent.
 func (c *Client) AutopilotSubscribe(ctx context.Context, timeout time.Duration) (string, error) {
 	if timeout <= 0 {
 		timeout = 15 * time.Second
@@ -135,18 +138,90 @@ func (c *Client) AutopilotSubscribe(ctx context.Context, timeout time.Duration) 
 		return "", fmt.Errorf("send subscribe: %w", err)
 	}
 
-	// Wait for subscription confirmation next event with matching id.
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
+	// Register a pending subscription so a concurrent reader can deliver the
+	// confirmation next frame.
+	streamCh, unsub := c.mux.registerSubscription(env.ID)
+	defer unsub()
+
+	if c.conn != nil {
+		c.conn.SetReadDeadline(time.Now().Add(timeout))
+		defer c.conn.SetReadDeadline(time.Time{})
+	}
+	timeoutCh := time.After(timeout)
+	for {
+		// If a ReceiveMessages reader is active, it owns the socket read; wait
+		// purely on the mux channels (gorilla/websocket forbids concurrent
+		// readers, so AutopilotSubscribe must not call ReadEvent here).
+		if c.readerActive.Load() {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-timeoutCh:
+				return "", fmt.Errorf("timeout after %v waiting for autopilot subscribe", timeout)
+			case frame := <-streamCh:
+				ev, _ := frame.(map[string]interface{})
+				if ev == nil {
+					return "", fmt.Errorf("connection closed waiting for autopilot subscribe")
+				}
+				evType, _ := ev["type"].(string)
+				if evType == "error" {
+					errObj, _ := ev["error"].(map[string]interface{})
+					msg, _ := errObj["message"].(string)
+					return "", fmt.Errorf("autopilot subscribe error: %s", msg)
+				}
+				// next or response with matching id means subscription accepted.
+				return env.ID, nil
+			}
+		}
+
+		// No concurrent reader: drain any already-routed frame first.
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-timeoutCh:
+			return "", fmt.Errorf("timeout after %v waiting for autopilot subscribe", timeout)
+		case frame := <-streamCh:
+			ev, _ := frame.(map[string]interface{})
+			if ev == nil {
+				return "", fmt.Errorf("connection closed waiting for autopilot subscribe")
+			}
+			evType, _ := ev["type"].(string)
+			if evType == "error" {
+				errObj, _ := ev["error"].(map[string]interface{})
+				msg, _ := errObj["message"].(string)
+				return "", fmt.Errorf("autopilot subscribe error: %s", msg)
+			}
+			return env.ID, nil
+		default:
+		}
+
+		// No concurrent reader delivered yet; read synchronously.
 		ev, err := c.ReadEvent()
 		if err != nil {
 			return "", fmt.Errorf("read event: %w", err)
 		}
 		if ev == nil {
-			continue
+			select {
+			case frame := <-streamCh:
+				ev, _ := frame.(map[string]interface{})
+				if ev == nil {
+					return "", fmt.Errorf("connection closed waiting for autopilot subscribe")
+				}
+				evType, _ := ev["type"].(string)
+				if evType == "error" {
+					errObj, _ := ev["error"].(map[string]interface{})
+					msg, _ := errObj["message"].(string)
+					return "", fmt.Errorf("autopilot subscribe error: %s", msg)
+				}
+				return env.ID, nil
+			default:
+				return "", fmt.Errorf("connection closed waiting for autopilot subscribe")
+			}
 		}
 		evID, _ := ev["id"].(string)
 		if evID != env.ID {
+			// Not ours — re-route defensively.
+			c.mux.route(ev)
 			continue
 		}
 		evType, _ := ev["type"].(string)
@@ -158,7 +233,6 @@ func (c *Client) AutopilotSubscribe(ctx context.Context, timeout time.Duration) 
 		// next or response with matching id means subscription accepted.
 		return env.ID, nil
 	}
-	return "", fmt.Errorf("timeout after %v waiting for autopilot subscribe", timeout)
 }
 
 // AutopilotUnsubscribe releases autopilot worker event subscription.

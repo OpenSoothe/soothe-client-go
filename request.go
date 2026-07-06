@@ -324,6 +324,10 @@ func (c *Client) LoopReattach(ctx context.Context, loopID string, timeout time.D
 // LoopSubscribe subscribes to loop events and waits for the subscription
 // confirmation `next` frame (RFC-450 §9.4). Pass empty verbosity to omit the
 // field (daemon default). Returns a map describing the subscription.
+//
+// Multiplexer-aware: when a ReceiveMessages reader is active, the confirmation
+// `next` frame is routed via the mux subscription channel instead of calling
+// ReadEvent (gorilla/websocket forbids concurrent readers).
 func (c *Client) LoopSubscribe(ctx context.Context, loopID string, verbosity string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
@@ -336,26 +340,90 @@ func (c *Client) LoopSubscribe(ctx context.Context, loopID string, verbosity str
 	if err := c.SendMessage(ctx, env); err != nil {
 		return nil, fmt.Errorf("send subscribe: %w", err)
 	}
+
+	// Register a pending subscription so a concurrent reader can deliver the
+	// confirmation next frame.
+	streamCh, unsub := c.mux.registerSubscription(env.ID)
+	defer unsub()
+
 	if c.conn != nil {
 		c.conn.SetReadDeadline(time.Now().Add(timeout))
 		defer c.conn.SetReadDeadline(time.Time{})
 	}
-	deadline := time.NewTimer(timeout)
-	defer deadline.Stop()
+	timeoutCh := time.After(timeout)
 	for {
+		// If a ReceiveMessages reader is active, it owns the socket read; wait
+		// purely on the mux channels (gorilla/websocket forbids concurrent
+		// readers, so LoopSubscribe must not call ReadEvent here).
+		if c.readerActive.Load() {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-timeoutCh:
+				return nil, fmt.Errorf("timeout after %v waiting for loop_events confirmation", timeout)
+			case frame := <-streamCh:
+				ev, _ := frame.(map[string]interface{})
+				if ev == nil {
+					return nil, fmt.Errorf("connection closed waiting for loop_events confirmation")
+				}
+				typ, _ := ev["type"].(string)
+				if typ == "error" {
+					errObj, _ := ev["error"].(map[string]interface{})
+					msg, _ := errObj["message"].(string)
+					return nil, fmt.Errorf("daemon error: %s", msg)
+				}
+				payload, _ := ev["payload"].(map[string]interface{})
+				return payload, nil
+			}
+		}
+
+		// No concurrent reader: drain any already-routed frame first.
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-deadline.C:
+		case <-timeoutCh:
 			return nil, fmt.Errorf("timeout after %v waiting for loop_events confirmation", timeout)
+		case frame := <-streamCh:
+			ev, _ := frame.(map[string]interface{})
+			if ev == nil {
+				return nil, fmt.Errorf("connection closed waiting for loop_events confirmation")
+			}
+			typ, _ := ev["type"].(string)
+			if typ == "error" {
+				errObj, _ := ev["error"].(map[string]interface{})
+				msg, _ := errObj["message"].(string)
+				return nil, fmt.Errorf("daemon error: %s", msg)
+			}
+			payload, _ := ev["payload"].(map[string]interface{})
+			return payload, nil
 		default:
 		}
+
+		// No concurrent reader delivered yet; read synchronously. ReadEvent
+		// routes other waiters' frames to the mux and returns the first frame
+		// that belongs to nobody — which may be our own confirmation.
 		ev, err := c.ReadEvent()
 		if err != nil {
 			return nil, fmt.Errorf("read event: %w", err)
 		}
 		if ev == nil {
-			return nil, fmt.Errorf("connection closed waiting for loop_events confirmation")
+			select {
+			case frame := <-streamCh:
+				ev, _ := frame.(map[string]interface{})
+				if ev == nil {
+					return nil, fmt.Errorf("connection closed waiting for loop_events confirmation")
+				}
+				typ, _ := ev["type"].(string)
+				if typ == "error" {
+					errObj, _ := ev["error"].(map[string]interface{})
+					msg, _ := errObj["message"].(string)
+					return nil, fmt.Errorf("daemon error: %s", msg)
+				}
+				payload, _ := ev["payload"].(map[string]interface{})
+				return payload, nil
+			default:
+				return nil, fmt.Errorf("connection closed waiting for loop_events confirmation")
+			}
 		}
 		typ, _ := ev["type"].(string)
 		evID, _ := ev["id"].(string)
@@ -365,6 +433,8 @@ func (c *Client) LoopSubscribe(ctx context.Context, loopID string, verbosity str
 			return nil, fmt.Errorf("daemon error: %s", msg)
 		}
 		if typ != "next" || evID != env.ID {
+			// Not ours — re-route defensively in case a waiter appeared.
+			c.mux.route(ev)
 			continue
 		}
 		payload, _ := ev["payload"].(map[string]interface{})
@@ -374,6 +444,9 @@ func (c *Client) LoopSubscribe(ctx context.Context, loopID string, verbosity str
 
 // LoopDetach detaches from a loop (unsubscribe by subscription id) and waits
 // for the daemon response.
+//
+// Multiplexer-aware: when a ReceiveMessages reader is active, the response is
+// routed via the mux RPC channel instead of calling ReadEvent.
 func (c *Client) LoopDetach(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
@@ -382,29 +455,65 @@ func (c *Client) LoopDetach(ctx context.Context, loopID string, timeout time.Dur
 	if err := c.SendMessage(ctx, env); err != nil {
 		return nil, fmt.Errorf("send unsubscribe: %w", err)
 	}
+
+	// Register a pending call so a concurrent reader can deliver the response.
+	pc, unregister := c.mux.registerRPC(env.ID)
+	defer unregister()
+
 	if c.conn != nil {
 		c.conn.SetReadDeadline(time.Now().Add(timeout))
 		defer c.conn.SetReadDeadline(time.Time{})
 	}
-	deadline := time.NewTimer(timeout)
-	defer deadline.Stop()
+	timeoutCh := time.After(timeout)
 	for {
+		// If a ReceiveMessages reader is active, it owns the socket read; wait
+		// purely on the mux channels (gorilla/websocket forbids concurrent
+		// readers, so LoopDetach must not call ReadEvent here).
+		if c.readerActive.Load() {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-timeoutCh:
+				return nil, fmt.Errorf("timeout after %v waiting for loop_detach", timeout)
+			case result := <-pc.replyCh:
+				return result, nil
+			case err := <-pc.errCh:
+				return nil, err
+			}
+		}
+
+		// No concurrent reader: drain any already-routed response first.
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-deadline.C:
+		case <-timeoutCh:
 			return nil, fmt.Errorf("timeout after %v waiting for loop_detach", timeout)
+		case result := <-pc.replyCh:
+			return result, nil
+		case err := <-pc.errCh:
+			return nil, err
 		default:
 		}
+
+		// No concurrent reader delivered yet; read synchronously.
 		ev, err := c.ReadEvent()
 		if err != nil {
 			return nil, fmt.Errorf("read event: %w", err)
 		}
 		if ev == nil {
-			return nil, fmt.Errorf("connection closed waiting for loop_detach")
+			select {
+			case result := <-pc.replyCh:
+				return result, nil
+			case err := <-pc.errCh:
+				return nil, err
+			default:
+				return nil, fmt.Errorf("connection closed waiting for loop_detach")
+			}
 		}
 		evID, _ := ev["id"].(string)
 		if evID != env.ID {
+			// Not ours — re-route defensively.
+			c.mux.route(ev)
 			continue
 		}
 		typ, _ := ev["type"].(string)
