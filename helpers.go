@@ -99,3 +99,56 @@ func FetchConfigSection(ctx context.Context, client *Client, section string, tim
 	}
 	return resp, nil
 }
+
+// RequestDaemonConfigReload requests a config reload on the daemon via RPC
+// (mirrors soothe_sdk.client.helpers.request_daemon_config_reload).
+func RequestDaemonConfigReload(ctx context.Context, client *Client, timeout time.Duration) error {
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	resp, err := client.RequestResponse(ctx, map[string]interface{}{"type": "config_reload"}, "config_reload_response", timeout)
+	if err != nil {
+		return fmt.Errorf("config reload failed: %w", err)
+	}
+	if status, _ := resp["status"].(string); status != "reloaded" && status != "ok" {
+		return fmt.Errorf("config reload not acknowledged: %v", resp)
+	}
+	return nil
+}
+
+// FetchLoopHistory requests a loop's replayable history via RPC.
+func FetchLoopHistory(ctx context.Context, client *Client, loopID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	if loopID == "" {
+		return nil, fmt.Errorf("loop_id is required")
+	}
+	return client.RequestResponse(ctx, map[string]interface{}{
+		"type":    "loop_history_fetch",
+		"loop_id": loopID,
+	}, "loop_history_fetch_response", timeout)
+}
+
+// RequestAuth submits access_key/secret_key credentials to the daemon via RPC.
+func RequestAuth(ctx context.Context, client *Client, accessKey, secretKey string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	return client.RequestResponse(ctx, map[string]interface{}{
+		"type":       "auth",
+		"access_key": accessKey,
+		"secret_key": secretKey,
+	}, "auth_response", timeout)
+}
+
+// RequestAuthRefresh submits a refresh_token to the daemon via RPC.
+func RequestAuthRefresh(ctx context.Context, client *Client, refreshToken string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	return client.RequestResponse(ctx, map[string]interface{}{
+		"type":          "auth_refresh",
+		"refresh_token": refreshToken,
+	}, "auth_refresh_response", timeout)
+}

@@ -219,19 +219,6 @@ func (c *Client) SendInvokeSkill(ctx context.Context, skill, args string, reques
 	return c.SendMessage(ctx, NewRequestEnvelopeWithID("invoke_skill", params, rid))
 }
 
-// SendCommandRequest sends a structured RPC command (rpc_command request).
-func (c *Client) SendCommandRequest(ctx context.Context, command string, loopID string, params map[string]interface{}, requestID ...string) error {
-	rid := optRequestID(requestID)
-	p := map[string]interface{}{"command": command}
-	if loopID != "" {
-		p["loop_id"] = loopID
-	}
-	if params != nil {
-		p["payload"] = params
-	}
-	return c.SendMessage(ctx, NewRequestEnvelopeWithID("rpc_command", p, rid))
-}
-
 // SendLoopList requests the list of StrangeLoop instances (request envelope).
 func (c *Client) SendLoopList(ctx context.Context, filter map[string]interface{}, limit int, requestID ...string) error {
 	rid := optRequestID(requestID)
@@ -302,7 +289,14 @@ func (c *Client) SendLoopSubscribe(ctx context.Context, loopID string, verbosity
 	if streamDelivery != "" {
 		params["stream_delivery"] = streamDelivery
 	}
-	return c.SendMessage(ctx, NewRequestEnvelopeWithID("loop_events", params, rid))
+	if rid == "" {
+		return c.SendMessage(ctx, NewSubscribeEnvelope("loop_events", params))
+	}
+	// When an explicit request id is supplied, build the subscribe envelope
+	// with that id so the caller can correlate the confirmation.
+	env := NewSubscribeEnvelope("loop_events", params)
+	env.ID = rid
+	return c.SendMessage(ctx, env)
 }
 
 // SendLoopDetach detaches from a loop (unsubscribe envelope by subscription id).
@@ -397,6 +391,64 @@ func (c *Client) SendLoopCardsFetch(ctx context.Context, loopID string, requestI
 func (c *Client) SendMCPStatus(ctx context.Context, requestID ...string) error {
 	rid := optRequestID(requestID)
 	return c.SendMessage(ctx, NewRequestEnvelopeWithID("mcp_status", map[string]interface{}{}, rid))
+}
+
+// SendLoopHistoryFetch requests the loop's replayable history (request envelope).
+func (c *Client) SendLoopHistoryFetch(ctx context.Context, loopID string, requestID ...string) error {
+	rid := optRequestID(requestID)
+	return c.SendMessage(ctx, NewRequestEnvelopeWithID("loop_history_fetch", map[string]interface{}{"loop_id": loopID}, rid))
+}
+
+// SendConfigReload requests a config reload on the daemon (request envelope).
+func (c *Client) SendConfigReload(ctx context.Context, requestID ...string) error {
+	rid := optRequestID(requestID)
+	return c.SendMessage(ctx, NewRequestEnvelopeWithID("config_reload", map[string]interface{}{}, rid))
+}
+
+// SendAuth submits access_key/secret_key credentials to the daemon (request envelope).
+func (c *Client) SendAuth(ctx context.Context, accessKey, secretKey string, requestID ...string) error {
+	rid := optRequestID(requestID)
+	params := map[string]interface{}{"access_key": accessKey, "secret_key": secretKey}
+	return c.SendMessage(ctx, NewRequestEnvelopeWithID("auth", params, rid))
+}
+
+// SendAuthRefresh submits a refresh_token to the daemon (request envelope).
+func (c *Client) SendAuthRefresh(ctx context.Context, refreshToken string, requestID ...string) error {
+	rid := optRequestID(requestID)
+	params := map[string]interface{}{"refresh_token": refreshToken}
+	return c.SendMessage(ctx, NewRequestEnvelopeWithID("auth_refresh", params, rid))
+}
+
+// SendCronAdd creates a scheduled job from natural language (request envelope).
+func (c *Client) SendCronAdd(ctx context.Context, text string, priority int, requestID ...string) error {
+	rid := optRequestID(requestID)
+	params := map[string]interface{}{"text": text}
+	if priority > 0 {
+		params["priority"] = priority
+	}
+	return c.SendMessage(ctx, NewRequestEnvelopeWithID("cron_add", params, rid))
+}
+
+// SendCronList lists scheduled jobs (request envelope).
+func (c *Client) SendCronList(ctx context.Context, status string, requestID ...string) error {
+	rid := optRequestID(requestID)
+	params := map[string]interface{}{}
+	if status != "" {
+		params["status"] = status
+	}
+	return c.SendMessage(ctx, NewRequestEnvelopeWithID("cron_list", params, rid))
+}
+
+// SendCronShow shows a specific scheduled job (request envelope).
+func (c *Client) SendCronShow(ctx context.Context, jobID string, requestID ...string) error {
+	rid := optRequestID(requestID)
+	return c.SendMessage(ctx, NewRequestEnvelopeWithID("cron_show", map[string]interface{}{"job_id": jobID}, rid))
+}
+
+// SendCronCancel cancels a scheduled job (request envelope).
+func (c *Client) SendCronCancel(ctx context.Context, jobID string, requestID ...string) error {
+	rid := optRequestID(requestID)
+	return c.SendMessage(ctx, NewRequestEnvelopeWithID("cron_cancel", map[string]interface{}{"job_id": jobID}, rid))
 }
 
 // optRequestID returns the first non-empty request id from the variadic args,

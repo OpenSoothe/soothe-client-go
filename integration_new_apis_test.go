@@ -275,15 +275,16 @@ func TestIntegration_AutopilotSubscribe(t *testing.T) {
 	}
 
 	// Subscribe to autopilot worker events
-	subResp, err := client.AutopilotSubscribe(ctx, 15*time.Second)
+	subID, err := client.AutopilotSubscribe(ctx, 15*time.Second)
 	if err != nil {
 		t.Logf("AutopilotSubscribe error: %v", err)
 	} else {
-		t.Logf("AutopilotSubscribe response: %v", subResp)
+		t.Logf("AutopilotSubscribe subscription id: %s", subID)
 	}
 
-	// Unsubscribe
-	unsubResp, err := client.AutopilotUnsubscribe(ctx, 15*time.Second)
+	// Unsubscribe — use the subscription id returned by subscribe (the daemon
+	// infers autopilot unsubscribe from the unsubscribe envelope with no loop_id).
+	unsubResp, err := client.AutopilotUnsubscribe(ctx, subID, 15*time.Second)
 	if err != nil {
 		t.Logf("AutopilotUnsubscribe error: %v", err)
 	} else {

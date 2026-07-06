@@ -64,6 +64,13 @@ func testSendError(conn *websocket.Conn, id string, code int, message string) {
 	conn.WriteMessage(websocket.TextMessage, b)
 }
 
+// testSendNext sends a protocol-1 next envelope (subscription event) correlated by id.
+func testSendNext(conn *websocket.Conn, id string, payload map[string]interface{}) {
+	env := map[string]interface{}{"proto": "1", "type": "next", "payload": payload, "id": id}
+	b, _ := json.Marshal(env)
+	conn.WriteMessage(websocket.TextMessage, b)
+}
+
 // isConnectionInit returns true if m is a protocol-1 connection_init envelope.
 func isConnectionInit(m map[string]interface{}) bool {
 	t, _ := m["type"].(string)
@@ -954,7 +961,7 @@ func TestClient_InvokeSkill(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// WaitForDaemonReady / WaitForSubscriptionConfirmed
+// WaitForDaemonReady
 // ---------------------------------------------------------------------------
 
 func TestClient_WaitForDaemonReady(t *testing.T) {

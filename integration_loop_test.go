@@ -463,7 +463,7 @@ func TestIntegration_CommandRequest(t *testing.T) {
 	t.Logf("Command '%s' executed", command)
 }
 
-func TestIntegration_SendCommandRequest(t *testing.T) {
+func TestIntegration_CommandRequest_SendAndReceive(t *testing.T) {
 	skipIfNoDaemon(t)
 
 	ctx := context.Background()

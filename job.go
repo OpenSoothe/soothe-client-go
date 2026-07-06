@@ -101,6 +101,7 @@ func (c *Client) JobDag(ctx context.Context, jobID string, timeout time.Duration
 
 // JobGuidance sends user guidance to GoalEngine for absorption.
 // goalID is optional - if empty, targets the root job goal.
+// The canonical wire field for the guidance text is "content" (RFC-450 §10.1).
 func (c *Client) JobGuidance(ctx context.Context, jobID string, text string, goalID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 30 * time.Second
@@ -112,9 +113,9 @@ func (c *Client) JobGuidance(ctx context.Context, jobID string, text string, goa
 		return nil, fmt.Errorf("text is required")
 	}
 	payload := map[string]interface{}{
-		"type":   "job_guidance",
-		"job_id": jobID,
-		"text":   text,
+		"type":    "job_guidance",
+		"job_id":  jobID,
+		"content": text,
 	}
 	if goalID != "" {
 		payload["goal_id"] = goalID
@@ -124,21 +125,166 @@ func (c *Client) JobGuidance(ctx context.Context, jobID string, text string, goa
 
 // AutopilotSubscribe subscribes client to autopilot worker events.
 // This bypasses the autopilot__* filter so the client receives worker lifecycle events.
-func (c *Client) AutopilotSubscribe(ctx context.Context, timeout time.Duration) (map[string]interface{}, error) {
+// Uses the subscribe envelope with method "autopilot_events" (RFC-450 §9.2).
+func (c *Client) AutopilotSubscribe(ctx context.Context, timeout time.Duration) (string, error) {
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	return c.RequestResponse(ctx, map[string]interface{}{
-		"type": "autopilot_subscribe",
-	}, "autopilot_subscribe_response", timeout)
+	env := NewSubscribeEnvelope("autopilot_events", map[string]interface{}{})
+	if err := c.SendMessage(ctx, env); err != nil {
+		return "", fmt.Errorf("send subscribe: %w", err)
+	}
+
+	// Wait for subscription confirmation next event with matching id.
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		ev, err := c.ReadEvent()
+		if err != nil {
+			return "", fmt.Errorf("read event: %w", err)
+		}
+		if ev == nil {
+			continue
+		}
+		evID, _ := ev["id"].(string)
+		if evID != env.ID {
+			continue
+		}
+		evType, _ := ev["type"].(string)
+		if evType == "error" {
+			errObj, _ := ev["error"].(map[string]interface{})
+			msg, _ := errObj["message"].(string)
+			return "", fmt.Errorf("autopilot subscribe error: %s", msg)
+		}
+		// next or response with matching id means subscription accepted.
+		return env.ID, nil
+	}
+	return "", fmt.Errorf("timeout after %v waiting for autopilot subscribe", timeout)
 }
 
 // AutopilotUnsubscribe releases autopilot worker event subscription.
-func (c *Client) AutopilotUnsubscribe(ctx context.Context, timeout time.Duration) (map[string]interface{}, error) {
+// Uses the unsubscribe envelope (RFC-450 §9.2): the daemon infers
+// autopilot_unsubscribe from an unsubscribe with no loop_id in params.
+func (c *Client) AutopilotUnsubscribe(ctx context.Context, subscriptionID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
+	if subscriptionID == "" {
+		return nil, fmt.Errorf("subscriptionID is required")
+	}
+	// Register a pending call so a concurrent reader can deliver the response.
+	pc, unregister := c.mux.registerRPC(subscriptionID)
+	defer unregister()
+
+	if err := c.SendMessage(ctx, NewUnsubscribeEnvelope(subscriptionID)); err != nil {
+		return nil, fmt.Errorf("send unsubscribe: %w", err)
+	}
+
+	// Set read deadline for response.
+	if c.conn != nil {
+		c.conn.SetReadDeadline(time.Now().Add(timeout))
+		defer c.conn.SetReadDeadline(time.Time{})
+	}
+
+	timeoutCh := time.After(timeout)
+	for {
+		if c.readerActive.Load() {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-timeoutCh:
+				return nil, fmt.Errorf("timeout after %v waiting for autopilot_unsubscribe", timeout)
+			case result := <-pc.replyCh:
+				return result, nil
+			case err := <-pc.errCh:
+				return nil, err
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-timeoutCh:
+			return nil, fmt.Errorf("timeout after %v waiting for autopilot_unsubscribe", timeout)
+		case result := <-pc.replyCh:
+			return result, nil
+		case err := <-pc.errCh:
+			return nil, err
+		default:
+		}
+		ev, err := c.ReadEvent()
+		if err != nil {
+			return nil, fmt.Errorf("read event: %w", err)
+		}
+		if ev == nil {
+			select {
+			case result := <-pc.replyCh:
+				return result, nil
+			default:
+			}
+			continue
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Cron IPC (RFC-229)
+// ---------------------------------------------------------------------------
+
+// CronAdd creates a scheduled job from natural language.
+func (c *Client) CronAdd(ctx context.Context, text string, priority int, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	if text == "" {
+		return nil, fmt.Errorf("text is required")
+	}
+	payload := map[string]interface{}{
+		"type": "cron_add",
+		"text": text,
+	}
+	if priority > 0 {
+		payload["priority"] = priority
+	}
+	return c.RequestResponse(ctx, payload, "cron_add_response", timeout)
+}
+
+// CronList lists scheduled jobs.
+func (c *Client) CronList(ctx context.Context, status string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	payload := map[string]interface{}{
+		"type": "cron_list",
+	}
+	if status != "" {
+		payload["status"] = status
+	}
+	return c.RequestResponse(ctx, payload, "cron_list_response", timeout)
+}
+
+// CronShow shows a specific scheduled job.
+func (c *Client) CronShow(ctx context.Context, jobID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	if jobID == "" {
+		return nil, fmt.Errorf("job_id is required")
+	}
 	return c.RequestResponse(ctx, map[string]interface{}{
-		"type": "autopilot_unsubscribe",
-	}, "autopilot_unsubscribe_response", timeout)
+		"type":   "cron_show",
+		"job_id": jobID,
+	}, "cron_show_response", timeout)
+}
+
+// CronCancel cancels a scheduled job.
+func (c *Client) CronCancel(ctx context.Context, jobID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	if jobID == "" {
+		return nil, fmt.Errorf("job_id is required")
+	}
+	return c.RequestResponse(ctx, map[string]interface{}{
+		"type":   "cron_cancel",
+		"job_id": jobID,
+	}, "cron_cancel_response", timeout)
 }

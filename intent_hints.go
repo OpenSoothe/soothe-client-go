@@ -34,19 +34,6 @@ func ValidateLoopInputIntentHint(hint string) error {
 	return nil
 }
 
-// LoopAssistantOutputPhases are mode=messages phases for user-visible assistant text.
-var LoopAssistantOutputPhases = []string{
-	"goal_completion",
-	"quiz",
-	"autonomous_goal",
-	"direct_model",
-	"text_completion",
-	"image_to_text",
-	"ocr",
-	"embed",
-	"plan_direct",
-}
-
 // DefaultDeliverablePhases is the triarch-style deliverable phase set (direct hints + agent).
 func DefaultDeliverablePhases() map[string]bool {
 	return map[string]bool{

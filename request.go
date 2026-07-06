@@ -216,54 +216,6 @@ func (c *Client) WaitForDaemonReady(timeout time.Duration) (map[string]interface
 	}
 }
 
-// WaitForSubscriptionConfirmed waits for a subscription confirmation `next`
-// frame whose payload carries the matching loop_id (RFC-450 §9.4).
-func (c *Client) WaitForSubscriptionConfirmed(loopID string, verbosity string, timeout time.Duration) error {
-	_ = verbosity
-	if timeout <= 0 {
-		timeout = 5 * time.Second
-	}
-	if c.conn != nil {
-		c.conn.SetReadDeadline(time.Now().Add(timeout))
-		defer c.conn.SetReadDeadline(time.Time{})
-	}
-	deadline := time.NewTimer(timeout)
-	defer deadline.Stop()
-
-	for {
-		select {
-		case <-deadline.C:
-			return fmt.Errorf("timeout after %v waiting for subscription confirmation", timeout)
-		default:
-		}
-
-		ev, err := c.ReadEvent()
-		if err != nil {
-			return err
-		}
-		if ev == nil {
-			return fmt.Errorf("connection closed waiting for subscription confirmation")
-		}
-		typ, _ := ev["type"].(string)
-		if typ == "error" {
-			errObj, _ := ev["error"].(map[string]interface{})
-			msg, _ := errObj["message"].(string)
-			return fmt.Errorf("daemon error: %s", msg)
-		}
-		if typ != "next" {
-			continue
-		}
-		payload, _ := ev["payload"].(map[string]interface{})
-		lid, _ := payload["loop_id"].(string)
-		if lid != loopID {
-			continue
-		}
-		if ok, _ := payload["success"].(bool); ok {
-			return nil
-		}
-	}
-}
-
 // CommandRequest sends a structured RPC command and waits for the response (RFC-404).
 func (c *Client) CommandRequest(ctx context.Context, command, loopID string, params map[string]interface{}, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {

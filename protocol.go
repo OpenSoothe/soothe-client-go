@@ -1,9 +1,7 @@
 package soothe
 
 import (
-	"bufio"
 	"encoding/json"
-	"io"
 	"strings"
 	"time"
 
@@ -108,33 +106,10 @@ func NewDisconnectEnvelope() Envelope {
 	return Envelope{Proto: ProtoVersion, Type: "disconnect"}
 }
 
-// ---------------------------------------------------------------------------
-// Legacy typed message structs (kept for compatibility with older callers).
-// Under protocol-1 the daemon speaks envelopes; these structs are only used
-// by DecodeMessage when a legacy frame shape is encountered (test servers or
-// older daemons). New code should use the Envelope helpers above.
-// ---------------------------------------------------------------------------
-
 // BaseMessage represents the common message structure with type and optional request_id.
 type BaseMessage struct {
 	RequestID string `json:"request_id,omitempty"`
 	Type      string `json:"type"`
-}
-
-// CommandMessage represents a slash command sent to the daemon.
-type CommandMessage struct {
-	BaseMessage
-	Cmd string `json:"cmd"`
-}
-
-// DaemonStatusMessage requests daemon status.
-type DaemonStatusMessage struct {
-	BaseMessage
-}
-
-// DetachMessage notifies the daemon that the client is detaching.
-type DetachMessage struct {
-	BaseMessage
 }
 
 // EventMessage represents a streaming event from the agent.
@@ -176,15 +151,6 @@ type ErrorResponse struct {
 // ---------------------------------------------------------------------------
 // Encode / Decode
 // ---------------------------------------------------------------------------
-
-// EncodeMessage encodes a message as JSON with newline delimiter.
-func EncodeMessage(msg interface{}) ([]byte, error) {
-	data, err := json.Marshal(msg)
-	if err != nil {
-		return nil, err
-	}
-	return append(data, '\n'), nil
-}
 
 // DecodeMessage decodes a JSON message and returns a typed Go struct.
 //
@@ -574,33 +540,6 @@ func SplitSootheWirePayload(data []byte) [][]byte {
 		return [][]byte{data}
 	}
 	return out
-}
-
-// DecodeStream decodes newline-delimited JSON stream.
-func DecodeStream(reader io.Reader) (<-chan interface{}, error) {
-	ch := make(chan interface{}, 100)
-
-	go func() {
-		defer close(ch)
-		scanner := bufio.NewScanner(reader)
-		for scanner.Scan() {
-			line := scanner.Bytes()
-			if len(line) == 0 {
-				continue
-			}
-			msg, err := DecodeMessage(line)
-			if err != nil {
-				continue
-			}
-			for _, expanded := range ExpandWireMessages(msg) {
-				if expanded != nil {
-					ch <- expanded
-				}
-			}
-		}
-	}()
-
-	return ch, nil
 }
 
 // ---------------------------------------------------------------------------
