@@ -1,4 +1,4 @@
-.PHONY: help build test test-short test-integration test-stress vet fmt lint clean install run deps
+.PHONY: help build test test-short test-integration test-stress vet format lint clean install run deps
 
 # Project variables
 PACKAGE := github.com/mirasoth/soothe-client-go
@@ -54,7 +54,7 @@ vet: ## Run go vet
 	@echo "Running go vet..."
 	$(GO) vet ./...
 
-fmt: ## Format code with go fmt
+format: ## Format code with go fmt
 	@echo "Formatting code..."
 	$(GO) fmt ./...
 
@@ -85,7 +85,7 @@ clean: ## Clean build artifacts
 	rm -f $(BINARY)
 
 # Utilities
-check: vet fmt lint ## Run all code quality checks
+check: vet format lint ## Run all code quality checks
 	@echo "All checks passed!"
 
 list: ## List all Go files
@@ -97,7 +97,7 @@ packages: ## List all import paths
 	$(GO) list ./...
 
 # Development
-dev: fmt vet test-short ## Format, vet, and run unit tests
+dev: format vet test-short ## Format, vet, and run unit tests
 	@echo "Development checks complete!"
 
 all: deps build test vet ## Full build and test pipeline
