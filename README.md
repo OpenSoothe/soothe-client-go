@@ -65,10 +65,14 @@ import "github.com/mirasoth/soothe-client-go"
 // Create client
 client := soothe.NewClient("ws://localhost:8080", nil)
 
-// Connect
-if err := client.Connect(ctx); err != nil {
+// Connect. For a daemon that may still be warming up, prefer ConnectWithRetries
+// (mirrors soothe_sdk.client.session.connect_websocket_with_retries). It retries
+// on connect failure with bounded attempts and honours ctx cancellation.
+if err := soothe.ConnectWithRetries(ctx, client, 40, 250*time.Millisecond); err != nil {
     log.Fatal(err)
 }
+// ConnectWithRetries defaults: maxRetries<=0 → 40, retryDelay<=0 → 250ms.
+// For a one-shot connect with no retry, use client.Connect(ctx) directly.
 
 // Wait for daemon ready
 if _, err := client.WaitForDaemonReady(10*time.Second); err != nil {
@@ -86,6 +90,51 @@ for msg := range ch {
     // Process message
 }
 ```
+
+## appkit — SessionStore & ConnectionPool
+
+The `appkit` subpackage provides higher-level building blocks for apps that
+pool daemon connections and persist session↔loop mappings:
+
+- `appkit.ConnectionPool` — manages a pool of daemon connections, one active
+  per session; bootstraps a fresh loop (`loop_new` + `subscribe`) or reattaches
+  an existing one (`loop_reattach` + `subscribe`).
+- `appkit.TurnRunner` — executes one query turn end-to-end (acquire pooled
+  connection, send `loop_input`, consume the event stream, resolve the
+  deliverable, persist the reply).
+- `appkit.SessionStore` — the persistence seam between appkit and the app's
+  storage backend. Implementations must be safe for concurrent use.
+
+### SessionStore interface (context-aware, post-v0.2.4)
+
+**Breaking change:** as of the post-v0.2.4 refactor (see
+`docs/impl/SIL-03-sessionstore-context-refactor.md`), all six `SessionStore`
+methods take a `context.Context` as their first parameter. This lets request
+cancellation, deadlines, and trace spans flow from the caller's context down
+into the storage backend.
+
+```go
+import (
+    "context"
+    "github.com/mirasoth/soothe-client-go/appkit"
+)
+
+type MyStore struct { /* ... */ }
+
+// All six methods gain a ctx context.Context first parameter:
+func (s *MyStore) GetSession(ctx context.Context, sessionID string) (*appkit.SessionEntry, error) { /* ... */ }
+func (s *MyStore) CreateSession(ctx context.Context, workspaceID, sessionID, loopID, sessionType string) error { /* ... */ }
+func (s *MyStore) UpdateLastUsed(ctx context.Context, sessionID string) error { /* ... */ }
+func (s *MyStore) IncrementResetCount(ctx context.Context, sessionID string) error { /* ... */ }
+func (s *MyStore) GetLoopIDForSession(ctx context.Context, sessionID string) (loopID string, ok bool, err error) { /* ... */ }
+func (s *MyStore) AppendMessage(ctx context.Context, sessionID string, message appkit.SessionMessage) error { /* ... */ }
+```
+
+The context should be honoured in the storage backend (e.g. forward `ctx` to
+`pgx`/Redis calls; `select` on `ctx.Done()` for blocking in-memory stores).
+`ConnectionPool.Acquire` and `TurnRunner`'s `persistResponse`/`persistFailed`
+were updated in lockstep to thread the caller's `ctx` through to every store
+call.
 
 ## Verbosity
 
