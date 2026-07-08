@@ -13,7 +13,10 @@ import (
 func TestIntegration_JobCreate(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	ctx := context.Background()
+	// Use test-level timeout to prevent hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
 
 	if err := client.Connect(ctx); err != nil {
@@ -48,7 +51,10 @@ func TestIntegration_JobCreate(t *testing.T) {
 func TestIntegration_JobStatus(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	ctx := context.Background()
+	// Use test-level timeout to prevent hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
 
 	if err := client.Connect(ctx); err != nil {
@@ -138,7 +144,10 @@ func TestIntegration_JobPauseResume(t *testing.T) {
 func TestIntegration_JobCancel(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	ctx := context.Background()
+	// Use test-level timeout to prevent hanging if daemon doesn't respond
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
 
 	if err := client.Connect(ctx); err != nil {
@@ -150,8 +159,8 @@ func TestIntegration_JobCancel(t *testing.T) {
 		t.Fatalf("Daemon not ready: %v", err)
 	}
 
-	// Create a job
-	createResp, err := client.JobCreate(ctx, "Long running task that will be cancelled", "", 30*time.Second)
+	// Create a job with reduced timeout
+	createResp, err := client.JobCreate(ctx, "Long running task that will be cancelled", "", 20*time.Second)
 	if err != nil {
 		t.Logf("JobCreate error: %v", err)
 		return
@@ -164,10 +173,14 @@ func TestIntegration_JobCancel(t *testing.T) {
 
 	t.Logf("Created job for cancel test: %s", jobID)
 
-	// Cancel the job
-	cancelResp, err := client.JobCancel(ctx, jobID, 15*time.Second)
+	// Cancel the job with reduced timeout
+	cancelResp, err := client.JobCancel(ctx, jobID, 10*time.Second)
 	if err != nil {
 		t.Logf("JobCancel error: %v", err)
+		// Check if context deadline was exceeded
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log("Test context deadline exceeded - daemon may not be responding")
+		}
 	} else {
 		t.Logf("JobCancel response: %v", cancelResp)
 		success, _ := cancelResp["success"].(bool)
@@ -180,7 +193,10 @@ func TestIntegration_JobCancel(t *testing.T) {
 func TestIntegration_JobDag(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	ctx := context.Background()
+	// Use test-level timeout to prevent hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
 
 	if err := client.Connect(ctx); err != nil {
@@ -221,7 +237,10 @@ func TestIntegration_JobDag(t *testing.T) {
 func TestIntegration_JobGuidance(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	ctx := context.Background()
+	// Use test-level timeout to prevent hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
 
 	if err := client.Connect(ctx); err != nil {
@@ -262,7 +281,10 @@ func TestIntegration_JobGuidance(t *testing.T) {
 func TestIntegration_AutopilotSubscribe(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	ctx := context.Background()
+	// Use test-level timeout to prevent hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
 
 	if err := client.Connect(ctx); err != nil {
@@ -299,7 +321,10 @@ func TestIntegration_AutopilotSubscribe(t *testing.T) {
 func TestIntegration_LoopMessages(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	ctx := context.Background()
+	// Use test-level timeout to prevent hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
 
 	if err := client.Connect(ctx); err != nil {
@@ -335,7 +360,10 @@ func TestIntegration_LoopMessages(t *testing.T) {
 func TestIntegration_LoopStateGet(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	ctx := context.Background()
+	// Use test-level timeout to prevent hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
 
 	if err := client.Connect(ctx); err != nil {
@@ -371,7 +399,10 @@ func TestIntegration_LoopStateGet(t *testing.T) {
 func TestIntegration_LoopCardsFetch(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	ctx := context.Background()
+	// Use test-level timeout to prevent hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
 
 	if err := client.Connect(ctx); err != nil {
@@ -407,7 +438,10 @@ func TestIntegration_LoopCardsFetch(t *testing.T) {
 func TestIntegration_MCPStatus(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	ctx := context.Background()
+	// Use test-level timeout to prevent hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
 
 	if err := client.Connect(ctx); err != nil {
@@ -441,7 +475,10 @@ func TestIntegration_MCPStatus(t *testing.T) {
 func TestIntegration_SendLoopMessages(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	ctx := context.Background()
+	// Use test-level timeout to prevent hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
 
 	if err := client.Connect(ctx); err != nil {
@@ -476,7 +513,10 @@ func TestIntegration_SendLoopMessages(t *testing.T) {
 func TestIntegration_SendLoopStateGet(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	ctx := context.Background()
+	// Use test-level timeout to prevent hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
 
 	if err := client.Connect(ctx); err != nil {
@@ -511,7 +551,10 @@ func TestIntegration_SendLoopStateGet(t *testing.T) {
 func TestIntegration_SendLoopCardsFetch(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	ctx := context.Background()
+	// Use test-level timeout to prevent hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
 
 	if err := client.Connect(ctx); err != nil {
@@ -546,7 +589,10 @@ func TestIntegration_SendLoopCardsFetch(t *testing.T) {
 func TestIntegration_SendMCPStatus(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	ctx := context.Background()
+	// Use test-level timeout to prevent hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
 
 	if err := client.Connect(ctx); err != nil {

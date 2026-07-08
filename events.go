@@ -94,12 +94,12 @@ const (
 
 // Autopilot system events
 const (
-	EventAutopilotStatusChanged  = "soothe.system.autopilot.status.changed"
-	EventAutopilotGoalCreated    = "soothe.system.autopilot.goal.created"
-	EventAutopilotGoalProgress   = "soothe.system.autopilot.goal.reported"
-	EventAutopilotGoalCompleted  = "soothe.system.autopilot.goal.completed"
-	EventAutopilotGoalSuspended  = "soothe.system.autopilot.goal.suspended"
-	EventAutopilotGoalBlocked    = "soothe.system.autopilot.goal.blocked"
+	EventAutopilotStatusChanged   = "soothe.system.autopilot.status.changed"
+	EventAutopilotGoalCreated     = "soothe.system.autopilot.goal.created"
+	EventAutopilotGoalProgress    = "soothe.system.autopilot.goal.reported"
+	EventAutopilotGoalCompleted   = "soothe.system.autopilot.goal.completed"
+	EventAutopilotGoalSuspended   = "soothe.system.autopilot.goal.suspended"
+	EventAutopilotGoalBlocked     = "soothe.system.autopilot.goal.blocked"
 	EventAutopilotDreamingEntered = "soothe.system.autopilot.dreaming.started"
 	EventAutopilotDreamingExited  = "soothe.system.autopilot.dreaming.completed"
 )

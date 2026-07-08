@@ -108,7 +108,6 @@ func WithAttachments(attachments []map[string]interface{}) InputOption {
 	return func(o *inputOptions) { o.attachments = attachments }
 }
 
-
 // WithModel sets an optional provider:model override.
 func WithModel(model string) InputOption {
 	return func(o *inputOptions) { o.model = model }
