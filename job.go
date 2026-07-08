@@ -10,32 +10,102 @@ import (
 // Job IPC (RFC-228 Autopilot Job Management)
 // ---------------------------------------------------------------------------
 
-// JobCreate submits a root goal to AutopilotService, creating a new autopilot job.
+// SendJobCreate submits a root goal to AutopilotService, creating a new autopilot job.
 // workspace is optional and resolves the filesystem root for goal execution.
-func (c *Client) JobCreate(ctx context.Context, goal string, workspace string, timeout time.Duration) (map[string]interface{}, error) {
-	if timeout <= 0 {
-		timeout = 15 * time.Second
-	}
+func (c *Client) SendJobCreate(ctx context.Context, goal string, workspace string, requestID ...string) error {
 	if goal == "" {
-		return nil, fmt.Errorf("goal is required")
+		return fmt.Errorf("goal is required")
 	}
+	rid := optRequestID(requestID)
 	payload := map[string]interface{}{
-		"type": "job_create",
 		"goal": goal,
 	}
 	if workspace != "" {
 		payload["workspace"] = workspace
 	}
-	return c.RequestResponse(ctx, payload, "job_create_response", timeout)
+	return c.SendMessage(ctx, NewRequestEnvelopeWithID("job_create", payload, rid))
 }
 
-// JobStatus queries job state: goal status, counts, assigned workers.
+// SendJobStatus queries job state: goal status, counts, assigned workers.
+func (c *Client) SendJobStatus(ctx context.Context, jobID string, requestID ...string) error {
+	if jobID == "" {
+		return fmt.Errorf("job_id is required")
+	}
+	rid := optRequestID(requestID)
+	return c.SendMessage(ctx, NewRequestEnvelopeWithID("job_status", map[string]interface{}{
+		"job_id": jobID,
+	}, rid))
+}
+
+// SendJobPause pauses goal execution by suspending the root goal.
+func (c *Client) SendJobPause(ctx context.Context, jobID string, requestID ...string) error {
+	if jobID == "" {
+		return fmt.Errorf("job_id is required")
+	}
+	rid := optRequestID(requestID)
+	return c.SendMessage(ctx, NewRequestEnvelopeWithID("job_pause", map[string]interface{}{
+		"job_id": jobID,
+	}, rid))
+}
+
+// SendJobResume resumes paused goal execution by reactivating the root goal.
+func (c *Client) SendJobResume(ctx context.Context, jobID string, requestID ...string) error {
+	if jobID == "" {
+		return fmt.Errorf("job_id is required")
+	}
+	rid := optRequestID(requestID)
+	return c.SendMessage(ctx, NewRequestEnvelopeWithID("job_resume", map[string]interface{}{
+		"job_id": jobID,
+	}, rid))
+}
+
+// SendJobCancel cancels job by cancelling the root goal via AutopilotService.
+func (c *Client) SendJobCancel(ctx context.Context, jobID string, requestID ...string) error {
+	if jobID == "" {
+		return fmt.Errorf("job_id is required")
+	}
+	rid := optRequestID(requestID)
+	return c.SendMessage(ctx, NewRequestEnvelopeWithID("job_cancel", map[string]interface{}{
+		"job_id": jobID,
+	}, rid))
+}
+
+// SendJobDag gets GoalEngine DAG snapshot for visualization.
+func (c *Client) SendJobDag(ctx context.Context, jobID string, requestID ...string) error {
+	if jobID == "" {
+		return fmt.Errorf("job_id is required")
+	}
+	rid := optRequestID(requestID)
+	return c.SendMessage(ctx, NewRequestEnvelopeWithID("job_dag", map[string]interface{}{
+		"job_id": jobID,
+	}, rid))
+}
+
+// ---------------------------------------------------------------------------
+// Convenience methods with blocking response
+// ---------------------------------------------------------------------------
+
+// JobCreate submits a root goal and waits for response.
+func (c *Client) JobCreate(ctx context.Context, goal string, workspace string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	if err := c.SendJobCreate(ctx, goal, workspace); err != nil {
+		return nil, err
+	}
+	return c.RequestResponse(ctx, map[string]interface{}{
+		"type": "job_create",
+		"goal": goal,
+	}, "job_create_response", timeout)
+}
+
+// JobStatus queries job state and waits for response.
 func (c *Client) JobStatus(ctx context.Context, jobID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	if jobID == "" {
-		return nil, fmt.Errorf("job_id is required")
+	if err := c.SendJobStatus(ctx, jobID); err != nil {
+		return nil, err
 	}
 	return c.RequestResponse(ctx, map[string]interface{}{
 		"type":   "job_status",
@@ -43,13 +113,13 @@ func (c *Client) JobStatus(ctx context.Context, jobID string, timeout time.Durat
 	}, "job_status_response", timeout)
 }
 
-// JobPause pauses goal execution by suspending the root goal.
+// JobPause pauses goal execution and waits for response.
 func (c *Client) JobPause(ctx context.Context, jobID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	if jobID == "" {
-		return nil, fmt.Errorf("job_id is required")
+	if err := c.SendJobPause(ctx, jobID); err != nil {
+		return nil, err
 	}
 	return c.RequestResponse(ctx, map[string]interface{}{
 		"type":   "job_pause",
@@ -57,13 +127,13 @@ func (c *Client) JobPause(ctx context.Context, jobID string, timeout time.Durati
 	}, "job_pause_response", timeout)
 }
 
-// JobResume resumes paused goal execution by reactivating the root goal.
+// JobResume resumes paused goal execution and waits for response.
 func (c *Client) JobResume(ctx context.Context, jobID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	if jobID == "" {
-		return nil, fmt.Errorf("job_id is required")
+	if err := c.SendJobResume(ctx, jobID); err != nil {
+		return nil, err
 	}
 	return c.RequestResponse(ctx, map[string]interface{}{
 		"type":   "job_resume",
@@ -71,13 +141,13 @@ func (c *Client) JobResume(ctx context.Context, jobID string, timeout time.Durat
 	}, "job_resume_response", timeout)
 }
 
-// JobCancel cancels job by cancelling the root goal via AutopilotService.
+// JobCancel cancels job and waits for response.
 func (c *Client) JobCancel(ctx context.Context, jobID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	if jobID == "" {
-		return nil, fmt.Errorf("job_id is required")
+	if err := c.SendJobCancel(ctx, jobID); err != nil {
+		return nil, err
 	}
 	return c.RequestResponse(ctx, map[string]interface{}{
 		"type":   "job_cancel",
@@ -85,13 +155,13 @@ func (c *Client) JobCancel(ctx context.Context, jobID string, timeout time.Durat
 	}, "job_cancel_response", timeout)
 }
 
-// JobDag gets GoalEngine DAG snapshot for visualization.
+// JobDag gets GoalEngine DAG snapshot and waits for response.
 func (c *Client) JobDag(ctx context.Context, jobID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	if jobID == "" {
-		return nil, fmt.Errorf("job_id is required")
+	if err := c.SendJobDag(ctx, jobID); err != nil {
+		return nil, err
 	}
 	return c.RequestResponse(ctx, map[string]interface{}{
 		"type":   "job_dag",

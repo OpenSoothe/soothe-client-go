@@ -33,9 +33,6 @@ func (c *Client) SendInput(ctx context.Context, text string, opts ...InputOption
 	if o.attachments != nil {
 		params["attachments"] = o.attachments
 	}
-	if o.interactive {
-		params["interactive"] = true
-	}
 	if o.model != "" {
 		params["model"] = o.model
 	}
@@ -77,7 +74,6 @@ type inputOptions struct {
 	autonomous           bool
 	maxIterations        *int
 	preferredSubagent    string
-	interactive          bool
 	model                string
 	modelParams          map[string]interface{}
 	attachments          []map[string]interface{}
@@ -90,7 +86,6 @@ type inputOptions struct {
 	clarificationAnswers []string
 }
 
-// WithLoopID sets the subscribed loop id for loop_input.
 func WithLoopID(loopID string) InputOption {
 	return func(o *inputOptions) { o.loopID = loopID }
 }
@@ -113,10 +108,6 @@ func WithAttachments(attachments []map[string]interface{}) InputOption {
 	return func(o *inputOptions) { o.attachments = attachments }
 }
 
-// WithInteractive enables interactive mode.
-func WithInteractive() InputOption {
-	return func(o *inputOptions) { o.interactive = true }
-}
 
 // WithModel sets an optional provider:model override.
 func WithModel(model string) InputOption {
@@ -253,14 +244,12 @@ func (c *Client) SendLoopTree(ctx context.Context, loopID, format string, reques
 }
 
 // SendLoopPrune requests pruning of old branches for a loop (request envelope).
-func (c *Client) SendLoopPrune(ctx context.Context, loopID string, retentionDays int, dryRun bool, requestID ...string) error {
+// keep_latest specifies how many recent checkpoints to preserve (minimum 1).
+func (c *Client) SendLoopPrune(ctx context.Context, loopID string, keepLatest int, requestID ...string) error {
 	rid := optRequestID(requestID)
 	params := map[string]interface{}{"loop_id": loopID}
-	if retentionDays > 0 {
-		params["retention_days"] = retentionDays
-	}
-	if dryRun {
-		params["dry_run"] = true
+	if keepLatest > 0 {
+		params["keep_latest"] = keepLatest
 	}
 	return c.SendMessage(ctx, NewRequestEnvelopeWithID("loop_prune", params, rid))
 }
@@ -278,13 +267,13 @@ func (c *Client) SendLoopReattach(ctx context.Context, loopID string, requestID 
 }
 
 // SendLoopSubscribe subscribes to loop events (subscribe envelope, method loop_events).
-// Pass empty verbosity to omit the field (daemon default).
+// Pass empty wireTier to omit the field (daemon default).
 // Pass empty streamDelivery to omit the field (daemon default is "adaptive").
-func (c *Client) SendLoopSubscribe(ctx context.Context, loopID string, verbosity string, streamDelivery string, requestID ...string) error {
+func (c *Client) SendLoopSubscribe(ctx context.Context, loopID string, wireTier string, streamDelivery string, requestID ...string) error {
 	rid := optRequestID(requestID)
 	params := map[string]interface{}{"loop_id": loopID}
-	if verbosity != "" {
-		params["verbosity"] = verbosity
+	if wireTier != "" {
+		params["wire_tier"] = wireTier
 	}
 	if streamDelivery != "" {
 		params["stream_delivery"] = streamDelivery
