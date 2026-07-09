@@ -28,7 +28,10 @@ func TestHeartbeatTracker_New(t *testing.T) {
 }
 
 func TestHeartbeatTracker_NewWithThreshold(t *testing.T) {
-	customThreshold := 10 * time.Second
+	cfg := GetCIConfig()
+
+	// Use a threshold that gives enough buffer for the test
+	customThreshold := cfg.HeartbeatThreshold
 	tracker := NewHeartbeatTrackerWithThreshold(customThreshold)
 	if tracker == nil {
 		t.Fatal("expected tracker to be created")
@@ -40,23 +43,25 @@ func TestHeartbeatTracker_NewWithThreshold(t *testing.T) {
 		"loop_id": "loop-123",
 	})
 
-	// Wait for just over the grace period (20 seconds)
-	// But we can't wait that long in a test, so we'll simulate by updating startTime
-	tracker.mu.Lock()
-	tracker.startTime = time.Now().Add(-25 * time.Second)
-	tracker.mu.Unlock()
-
 	// Should still be alive right after update
 	health := tracker.GetHealth()
 	if !health.IsAlive {
 		t.Error("expected daemon to be alive immediately after heartbeat")
 	}
 
-	// Wait for threshold + 1 second, should no longer be alive
-	time.Sleep(customThreshold + 1*time.Second)
+	// Simulate both grace period and heartbeat threshold being exceeded
+	// The grace period (20s) and threshold need to both be exceeded for daemon to be not alive
+	tracker.mu.Lock()
+	tracker.startTime = time.Now().Add(-25 * time.Second)                          // Exceed 20s grace period
+	tracker.lastHeartbeat = time.Now().Add(-customThreshold - 50*time.Millisecond) // Exceed threshold
+	tracker.mu.Unlock()
+
+	// Small additional wait to ensure threshold exceeded
+	time.Sleep(10 * time.Millisecond)
+
 	health = tracker.GetHealth()
 	if health.IsAlive {
-		t.Error("expected daemon to not be alive after threshold exceeded")
+		t.Errorf("expected daemon to not be alive after both grace period (20s) and threshold (%v) exceeded, CI=%v", customThreshold, cfg.CI)
 	}
 }
 

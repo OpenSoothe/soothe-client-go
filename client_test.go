@@ -577,6 +577,7 @@ func TestClient_RequestResponse(t *testing.T) {
 }
 
 func TestClient_RequestResponse_Timeout(t *testing.T) {
+	cfg := GetCIConfig()
 	ts := newTestServer(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -598,13 +599,14 @@ func TestClient_RequestResponse_Timeout(t *testing.T) {
 				continue
 			}
 			// Got the RPC request — never respond.
-			time.Sleep(5 * time.Second)
+			// Use CI-optimized sleep to reduce test time
+			time.Sleep(cfg.DefaultTimeout * 2)
 		}
 	})
 	defer ts.Close()
 
 	client := NewClient(wsURL(ts.URL), nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.DefaultTimeout)
 	defer cancel()
 
 	if err := client.Connect(ctx); err != nil {

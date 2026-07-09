@@ -22,6 +22,18 @@ func stressTestConfig() *Config {
 	return c
 }
 
+// ciStressConfig returns CI-optimized stress test parameters.
+// These are scaled down in CI mode for faster test execution.
+func ciStressConfig() (clients int, burstSize int, cycles int, workDuration time.Duration) {
+	cfg := GetCIConfig()
+	if cfg.CI {
+		// CI-optimized: smaller scale for fast execution
+		return 5, 10, 10, 3 * time.Second
+	}
+	// Production-like: full scale for thorough testing
+	return 10, 20, 30, 10 * time.Second
+}
+
 // ---------------------------------------------------------------------------
 // Concurrent connection stress tests
 // ---------------------------------------------------------------------------
@@ -30,7 +42,7 @@ func stressTestConfig() *Config {
 func TestStress_ConcurrentConnections(t *testing.T) {
 	skipIfShort(t)
 
-	const numClients = 10
+	numClients, _, _, _ := ciStressConfig()
 	cfg := stressTestConfig()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -70,7 +82,7 @@ func TestStress_ConcurrentConnections(t *testing.T) {
 	fails := failCount.Load()
 	t.Logf("Concurrent connections: %d success, %d failed", success, fails)
 
-	if success < numClients/2 {
+	if success < int32(numClients/2) {
 		t.Errorf("Too many connection failures: %d/%d", fails, numClients)
 	}
 
@@ -93,7 +105,7 @@ func TestStress_ConcurrentConnections(t *testing.T) {
 func TestStress_ConnectionBurst(t *testing.T) {
 	skipIfShort(t)
 
-	const burstSize = 20
+	_, burstSize, _, _ := ciStressConfig()
 	cfg := stressTestConfig()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
@@ -567,10 +579,13 @@ done:
 func TestStress_MixedWorkload(t *testing.T) {
 	skipIfShort(t)
 
-	const workers = 10
-	// OPTIMIZED: Reduced duration from 15s to 10s
-	const workDuration = 10 * time.Second
-	cfg := stressTestConfig()
+	cfg := GetCIConfig()
+	workers := 10
+	if cfg.CI {
+		workers = 5 // Fewer workers in CI
+	}
+	_, _, _, workDuration := ciStressConfig()
+	stressCfg := stressTestConfig()
 
 	ctx, cancel := context.WithTimeout(context.Background(), workDuration+30*time.Second)
 	defer cancel()
@@ -579,7 +594,11 @@ func TestStress_MixedWorkload(t *testing.T) {
 	var totalOps, errorOps atomic.Int32
 
 	// Worker 1-3: Connection cycling
-	for i := 0; i < 3; i++ {
+	connWorkers := workers / 3
+	if connWorkers < 1 {
+		connWorkers = 1
+	}
+	for i := 0; i < connWorkers; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
@@ -589,10 +608,10 @@ func TestStress_MixedWorkload(t *testing.T) {
 					return
 				default:
 				}
-				client := NewClient(cfg.DaemonURL, cfg)
+				client := NewClient(stressCfg.DaemonURL, stressCfg)
 				if err := client.Connect(ctx); err != nil {
 					errorOps.Add(1)
-					time.Sleep(500 * time.Millisecond)
+					time.Sleep(cfg.RetryDelay)
 					continue
 				}
 				client.Close()
@@ -603,17 +622,21 @@ func TestStress_MixedWorkload(t *testing.T) {
 	}
 
 	// Worker 4-6: Status requests
-	for i := 3; i < 6; i++ {
+	statusWorkers := workers / 3
+	if statusWorkers < 1 {
+		statusWorkers = 1
+	}
+	for i := connWorkers; i < connWorkers+statusWorkers; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			client := NewClient(cfg.DaemonURL, cfg)
+			client := NewClient(stressCfg.DaemonURL, stressCfg)
 			if err := client.Connect(ctx); err != nil {
 				t.Logf("Worker %d: connect failed", id)
 				return
 			}
 			defer client.Close()
-			_, _ = client.WaitForDaemonReady(cfg.DaemonReadyTimeout)
+			_, _ = client.WaitForDaemonReady(stressCfg.DaemonReadyTimeout)
 
 			for {
 				select {
@@ -624,29 +647,29 @@ func TestStress_MixedWorkload(t *testing.T) {
 				_, err := client.RequestResponse(ctx, map[string]interface{}{
 					"type":       "daemon_status",
 					"request_id": NewRequestID(),
-				}, "daemon_status_response", 5*time.Second)
+				}, "daemon_status_response", cfg.DefaultTimeout)
 				if err != nil {
 					errorOps.Add(1)
 				} else {
 					totalOps.Add(1)
 				}
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(cfg.RetryDelay)
 			}
 		}(i)
 	}
 
 	// Worker 7-10: Loop operations
-	for i := 6; i < workers; i++ {
+	for i := connWorkers + statusWorkers; i < workers; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			client := NewClient(cfg.DaemonURL, cfg)
+			client := NewClient(stressCfg.DaemonURL, stressCfg)
 			if err := client.Connect(ctx); err != nil {
 				t.Logf("Worker %d: connect failed", id)
 				return
 			}
 			defer client.Close()
-			_, _ = client.WaitForDaemonReady(cfg.DaemonReadyTimeout)
+			_, _ = client.WaitForDaemonReady(stressCfg.DaemonReadyTimeout)
 
 			for {
 				select {
@@ -657,13 +680,13 @@ func TestStress_MixedWorkload(t *testing.T) {
 				_, err := client.RequestResponse(ctx, map[string]interface{}{
 					"type":       "loop_list",
 					"request_id": NewRequestID(),
-				}, "loop_list_response", 5*time.Second)
+				}, "loop_list_response", cfg.DefaultTimeout)
 				if err != nil {
 					errorOps.Add(1)
 				} else {
 					totalOps.Add(1)
 				}
-				time.Sleep(150 * time.Millisecond)
+				time.Sleep(cfg.RetryDelay)
 			}
 		}(i)
 	}
@@ -693,7 +716,7 @@ func TestStress_MixedWorkload(t *testing.T) {
 func TestStress_ResourceCleanup(t *testing.T) {
 	skipIfShort(t)
 
-	const cycles = 30
+	_, _, cycles, _ := ciStressConfig()
 	cfg := stressTestConfig()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
@@ -746,8 +769,13 @@ func TestStress_ResourceCleanup(t *testing.T) {
 func TestStress_LoopCleanup(t *testing.T) {
 	skipIfShort(t)
 
-	// OPTIMIZED: Reduced from 25 to 15 loops to keep test under 30s
-	const loopsToCreate = 15
+	_, _, loopsToCreate, _ := func() (int, int, int, time.Duration) {
+		cfg := GetCIConfig()
+		if cfg.CI {
+			return 0, 0, 8, 0 // 8 loops in CI mode
+		}
+		return 0, 0, 15, 0 // 15 loops in production mode
+	}()
 	cfg := stressTestConfig()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)

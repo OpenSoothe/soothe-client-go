@@ -186,6 +186,7 @@ func TestConnectWithRetries_DefaultRetryDelay(t *testing.T) {
 // -----------------------------------------------------------------------
 
 func TestConnectWithRetries_ContextCancellation(t *testing.T) {
+	cfg := GetCIConfig()
 	ts := httptest.NewServer(http.HandlerFunc(rejectingHandler))
 	defer ts.Close()
 
@@ -193,14 +194,14 @@ func TestConnectWithRetries_ContextCancellation(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Cancel after 50ms — well before maxRetries×delay would complete.
+	// Cancel after short delay — well before maxRetries×delay would complete.
 	go func() {
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(cfg.RetryDelay)
 		cancel()
 	}()
 
 	start := time.Now()
-	err := ConnectWithRetries(ctx, client, 100, 20*time.Millisecond)
+	err := ConnectWithRetries(ctx, client, 100, 10*time.Millisecond)
 	elapsed := time.Since(start)
 
 	if err == nil {
