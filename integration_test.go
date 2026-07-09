@@ -2,6 +2,7 @@ package soothe
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -86,7 +87,8 @@ func TestIntegration_NewLoopCreation(t *testing.T) {
 	cfg := integrationTestConfig()
 	client := NewClient(cfg.DaemonURL, cfg)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	// Reduced from 90s to 30s for faster test execution
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := client.Connect(ctx); err != nil {
@@ -112,7 +114,8 @@ func TestIntegration_InputMessage(t *testing.T) {
 	cfg := integrationTestConfig()
 	client := NewClient(cfg.DaemonURL, cfg)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	// Reduced from 90s to 30s for faster test execution
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := client.Connect(ctx); err != nil {
@@ -137,9 +140,9 @@ func TestIntegration_InputMessage(t *testing.T) {
 	}
 	t.Log("Sent input message")
 
-	// Read some events
+	// Read some events - reduced from 10s to 8s
 	eventCount := 0
-	eventTimeout := time.After(10 * time.Second)
+	eventTimeout := time.After(8 * time.Second)
 	for {
 		select {
 		case <-eventTimeout:
@@ -448,7 +451,8 @@ func TestIntegration_InputWithIntentHintTextCompletion(t *testing.T) {
 	cfg := integrationTestConfig()
 	client := NewClient(cfg.DaemonURL, cfg)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	// Use shorter context timeout - test should complete in <30s
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := client.Connect(ctx); err != nil {
@@ -474,13 +478,15 @@ func TestIntegration_InputWithIntentHintTextCompletion(t *testing.T) {
 	}
 	t.Log("Sent input message with intent_hint=text_completion")
 
-	// Read events until we get an assistant response or timeout
+	// Read events until we get an assistant response, error, or idle state
+	// Exit early when we receive the response to avoid unnecessary waiting
 	eventCount := 0
-	eventTimeout := time.After(10 * time.Second)
+	eventTimeout := time.After(8 * time.Second)
+	var sawAssistant bool
 	for {
 		select {
 		case <-eventTimeout:
-			t.Logf("Received %d events", eventCount)
+			t.Logf("Received %d events (assistant=%v)", eventCount, sawAssistant)
 			return
 		case msg := <-eventCh:
 			if msg == nil {
@@ -490,11 +496,57 @@ func TestIntegration_InputWithIntentHintTextCompletion(t *testing.T) {
 			switch m := msg.(type) {
 			case EventMessage:
 				t.Logf("Event #%d: mode=%s event_type=%s", eventCount, m.Mode, m.EventType())
+				// Early exit when we receive assistant content (text_completion success)
+				if m.Mode == "messages" || m.Mode == "content" {
+					if txt, ok := extractAssistantText(m); ok && txt != "" {
+						t.Logf("Received assistant response: %q", txt)
+						sawAssistant = true
+						return // Exit immediately on success
+					}
+				}
+			case StatusResponse:
+				// Early exit when daemon goes idle (response complete)
+				if m.State == "idle" {
+					t.Logf("Daemon idle after %d events", eventCount)
+					return
+				}
 			case ErrorResponse:
 				t.Logf("Error: code=%s, message=%s", m.Code, m.Message)
+				// Don't fail on error - some daemons may not support text_completion
+				return
 			default:
 				t.Logf("Event #%d: type=%T", eventCount, msg)
 			}
 		}
 	}
+}
+
+// extractAssistantText extracts plain text from an EventMessage if it contains assistant content.
+func extractAssistantText(m EventMessage) (string, bool) {
+	// Try LoopAIMessage interface first
+	if loopMsg, ok := m.LoopAIMessage(); ok {
+		if txt := strings.TrimSpace(loopMsg.LoopAIText()); txt != "" {
+			return txt, true
+		}
+	}
+	// Fallback to data extraction for "messages" mode
+	if m.Mode != "messages" {
+		return "", false
+	}
+	items, ok := m.Data.([]interface{})
+	if !ok || len(items) == 0 {
+		return "", false
+	}
+	msgMap, ok := items[0].(map[string]interface{})
+	if !ok {
+		return "", false
+	}
+	ctype, _ := msgMap["type"].(string)
+	switch ctype {
+	case "ai", "AIMessage", "assistant":
+		if c, ok := msgMap["content"].(string); ok {
+			return strings.TrimSpace(c), true
+		}
+	}
+	return "", false
 }

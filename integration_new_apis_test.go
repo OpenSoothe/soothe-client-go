@@ -13,8 +13,8 @@ import (
 func TestIntegration_JobCreate(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	// Use test-level timeout to prevent hanging
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	// Reduced from 60s to 35s for faster test execution
+	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
 	defer cancel()
 
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
@@ -28,8 +28,8 @@ func TestIntegration_JobCreate(t *testing.T) {
 		t.Fatalf("Daemon not ready: %v", err)
 	}
 
-	// Create an autopilot job
-	response, err := client.JobCreate(ctx, "Write a simple hello world program", "", 30*time.Second)
+	// Create an autopilot job with reduced timeout - 15s instead of 30s
+	response, err := client.JobCreate(ctx, "Write a simple hello world program", "", 15*time.Second)
 	if err != nil {
 		t.Logf("JobCreate error: %v", err)
 		return
@@ -44,15 +44,15 @@ func TestIntegration_JobCreate(t *testing.T) {
 	t.Logf("Created autopilot job: %s", jobID)
 	t.Logf("JobCreate response: %v", response)
 
-	// Clean up: cancel the job
-	_, _ = client.JobCancel(ctx, jobID, 10*time.Second)
+	// Clean up: cancel the job - reduced from 10s to 5s
+	_, _ = client.JobCancel(ctx, jobID, 5*time.Second)
 }
 
 func TestIntegration_JobStatus(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	// Use test-level timeout to prevent hanging
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	// Reduced from 60s to 35s for faster test execution
+	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
 	defer cancel()
 
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
@@ -193,8 +193,8 @@ func TestIntegration_JobCancel(t *testing.T) {
 func TestIntegration_JobDag(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	// Use test-level timeout to prevent hanging
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	// Use test-level timeout to prevent hanging - reduced from 60s to 35s
+	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
 	defer cancel()
 
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
@@ -208,8 +208,8 @@ func TestIntegration_JobDag(t *testing.T) {
 		t.Fatalf("Daemon not ready: %v", err)
 	}
 
-	// Create a job
-	createResp, err := client.JobCreate(ctx, "Simple task for DAG visualization", "", 30*time.Second)
+	// Create a job with reduced timeout - 15s instead of 30s
+	createResp, err := client.JobCreate(ctx, "Simple task for DAG visualization", "", 15*time.Second)
 	if err != nil {
 		t.Logf("JobCreate error: %v", err)
 		return
@@ -222,23 +222,23 @@ func TestIntegration_JobDag(t *testing.T) {
 
 	t.Logf("Created job for DAG test: %s", jobID)
 
-	// Request DAG visualization
-	dagResp, err := client.JobDag(ctx, jobID, 15*time.Second)
+	// Request DAG visualization with reduced timeout - 8s instead of 15s
+	dagResp, err := client.JobDag(ctx, jobID, 8*time.Second)
 	if err != nil {
 		t.Logf("JobDag error: %v", err)
 	} else {
 		t.Logf("JobDag response: %v", dagResp)
 	}
 
-	// Clean up
-	_, _ = client.JobCancel(ctx, jobID, 10*time.Second)
+	// Clean up with reduced timeout - 5s instead of 10s
+	_, _ = client.JobCancel(ctx, jobID, 5*time.Second)
 }
 
 func TestIntegration_JobGuidance(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	// Use test-level timeout to prevent hanging
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	// Use test-level timeout - reduced from 60s to 35s
+	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
 	defer cancel()
 
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
@@ -252,8 +252,8 @@ func TestIntegration_JobGuidance(t *testing.T) {
 		t.Fatalf("Daemon not ready: %v", err)
 	}
 
-	// Create a job
-	createResp, err := client.JobCreate(ctx, "A task to receive guidance", "", 30*time.Second)
+	// Create a job with reduced timeout - 15s instead of 30s
+	createResp, err := client.JobCreate(ctx, "A task to receive guidance", "", 15*time.Second)
 	if err != nil {
 		t.Logf("JobCreate error: %v", err)
 		return
@@ -266,23 +266,23 @@ func TestIntegration_JobGuidance(t *testing.T) {
 
 	t.Logf("Created job for guidance test: %s", jobID)
 
-	// Send guidance to the job
-	guidanceResp, err := client.JobGuidance(ctx, jobID, "Please focus on quality over speed", "", 30*time.Second)
+	// Send guidance to the job with reduced timeout - 10s instead of 30s
+	guidanceResp, err := client.JobGuidance(ctx, jobID, "Please focus on quality over speed", "", 10*time.Second)
 	if err != nil {
 		t.Logf("JobGuidance error: %v", err)
 	} else {
 		t.Logf("JobGuidance response: %v", guidanceResp)
 	}
 
-	// Clean up
-	_, _ = client.JobCancel(ctx, jobID, 10*time.Second)
+	// Clean up with reduced timeout - 5s instead of 10s
+	_, _ = client.JobCancel(ctx, jobID, 5*time.Second)
 }
 
 func TestIntegration_AutopilotSubscribe(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	// Use test-level timeout to prevent hanging
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	// Use test-level timeout - reduced from 60s to 30s
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
@@ -296,8 +296,8 @@ func TestIntegration_AutopilotSubscribe(t *testing.T) {
 		t.Fatalf("Daemon not ready: %v", err)
 	}
 
-	// Subscribe to autopilot worker events
-	subID, err := client.AutopilotSubscribe(ctx, 15*time.Second)
+	// Subscribe to autopilot worker events - reduced from 15s to 8s
+	subID, err := client.AutopilotSubscribe(ctx, 8*time.Second)
 	if err != nil {
 		t.Logf("AutopilotSubscribe error: %v", err)
 	} else {
@@ -306,7 +306,8 @@ func TestIntegration_AutopilotSubscribe(t *testing.T) {
 
 	// Unsubscribe — use the subscription id returned by subscribe (the daemon
 	// infers autopilot unsubscribe from the unsubscribe envelope with no loop_id).
-	unsubResp, err := client.AutopilotUnsubscribe(ctx, subID, 15*time.Second)
+	// Reduced from 15s to 8s
+	unsubResp, err := client.AutopilotUnsubscribe(ctx, subID, 8*time.Second)
 	if err != nil {
 		t.Logf("AutopilotUnsubscribe error: %v", err)
 	} else {
@@ -399,8 +400,8 @@ func TestIntegration_LoopStateGet(t *testing.T) {
 func TestIntegration_LoopCardsFetch(t *testing.T) {
 	skipIfNoDaemon(t)
 
-	// Use test-level timeout to prevent hanging
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	// Use test-level timeout - reduced from 45s to 25s
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 
 	client := NewClient("ws://localhost:8765", integrationTestConfig())
@@ -414,8 +415,8 @@ func TestIntegration_LoopCardsFetch(t *testing.T) {
 		t.Fatalf("Daemon not ready: %v", err)
 	}
 
-	// Create a loop
-	newResp, err := client.LoopNew(ctx, 15*time.Second)
+	// Create a loop with reduced timeout - 8s instead of 15s
+	newResp, err := client.LoopNew(ctx, 8*time.Second)
 	if err != nil {
 		t.Fatalf("Failed to create loop: %v", err)
 	}
@@ -425,8 +426,8 @@ func TestIntegration_LoopCardsFetch(t *testing.T) {
 	}
 	t.Logf("Created test loop: %s", loopID)
 
-	// Request display cards
-	response, err := client.LoopCardsFetch(ctx, loopID, 15*time.Second)
+	// Request display cards with reduced timeout - 8s instead of 15s
+	response, err := client.LoopCardsFetch(ctx, loopID, 8*time.Second)
 	if err != nil {
 		t.Logf("LoopCardsFetch error: %v", err)
 		return

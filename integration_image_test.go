@@ -36,7 +36,8 @@ func TestIntegration_ImageUnderstanding(t *testing.T) {
 	cfg := integrationTestConfig()
 	client := NewClient("ws://localhost:8765", cfg)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	// Reduced from 120s to 45s for faster test execution
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 
 	if err := client.Connect(ctx); err != nil {
@@ -77,7 +78,9 @@ func TestIntegration_ImageUnderstanding(t *testing.T) {
 	// Collect events and look for a response
 	eventTypes := make(map[string]int)
 	var gotAIResponse bool
-	streamTimeout := time.After(30 * time.Second)
+	var gotIdleState bool
+	// Reduced from 30s to 15s for faster test completion
+	streamTimeout := time.After(15 * time.Second)
 
 	for {
 		select {
@@ -107,8 +110,30 @@ func TestIntegration_ImageUnderstanding(t *testing.T) {
 					gotAIResponse = true
 					t.Logf("Received AI response event: %s", eventType)
 				}
+				// Early exit on idle state (daemon finished processing)
+				if m.Mode == "status" {
+					if dataMap, ok := m.Data.(map[string]interface{}); ok {
+						if state, ok := dataMap["state"].(string); ok && state == "idle" {
+							gotIdleState = true
+							t.Log("Daemon reached idle state")
+						}
+					}
+				}
+				// Early exit: if we got AI response and daemon is idle, we're done
+				if gotAIResponse && gotIdleState {
+					t.Log("Early exit: AI response received and daemon idle")
+					return
+				}
 			case ErrorResponse:
 				t.Logf("Error from daemon: code=%s message=%s", m.Code, m.Message)
+			case StatusResponse:
+				if m.State == "idle" {
+					gotIdleState = true
+					if gotAIResponse {
+						t.Log("Early exit: AI response received and daemon idle")
+						return
+					}
+				}
 			}
 		}
 	}
@@ -122,7 +147,8 @@ func TestIntegration_ImageAttachmentPayload(t *testing.T) {
 	cfg := integrationTestConfig()
 	client := NewClient("ws://localhost:8765", cfg)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	// Reduced from 120s to 30s for faster test execution
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := client.Connect(ctx); err != nil {
@@ -160,7 +186,8 @@ func TestIntegration_ImageAttachmentPayload(t *testing.T) {
 	}
 
 	// Read events via channel to confirm the message was accepted (no immediate error)
-	streamTimeout := time.After(15 * time.Second)
+	// Reduced from 15s to 10s
+	streamTimeout := time.After(10 * time.Second)
 	gotError := false
 	gotStatus := false
 
@@ -202,7 +229,8 @@ func TestIntegration_MultipleImageAttachments(t *testing.T) {
 	cfg := integrationTestConfig()
 	client := NewClient("ws://localhost:8765", cfg)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	// Reduced from 120s to 30s for faster test execution
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := client.Connect(ctx); err != nil {
@@ -238,8 +266,9 @@ func TestIntegration_MultipleImageAttachments(t *testing.T) {
 	t.Log("Sent input with multiple image attachments")
 
 	// Stream events briefly to confirm no immediate rejection
+	// Reduced from 15s to 10s
 	eventTypes := make(map[string]int)
-	streamTimeout := time.After(15 * time.Second)
+	streamTimeout := time.After(10 * time.Second)
 
 	for {
 		select {
