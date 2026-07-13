@@ -12,7 +12,10 @@ import (
 // to monitor daemon health and prevent timeouts during long operations.
 func Example_heartbeatTracking() {
 	// Create client with heartbeat tracking enabled
-	client := soothe.NewClientWithHeartbeat("ws://localhost:8765", nil)
+	md := NewMockDaemon(nil)
+	defer md.Close()
+
+	client := soothe.NewClientWithHeartbeat(md.URL, nil)
 
 	ctx := context.Background()
 
@@ -24,7 +27,7 @@ func Example_heartbeatTracking() {
 	defer client.Close()
 
 	// Start receiving messages (heartbeat events will be processed automatically)
-	eventCh, err := client.ReceiveMessages(ctx)
+	_, err := client.ReceiveMessages(ctx)
 	if err != nil {
 		fmt.Printf("ReceiveMessages error: %v\n", err)
 		return
@@ -38,47 +41,26 @@ func Example_heartbeatTracking() {
 	}
 
 	fmt.Printf("Loop ID: %s\n", loopID)
-
-	// Check daemon health before sending a long-running query
-	health := client.GetDaemonHealth()
-	if health != nil {
-		fmt.Printf("Daemon state: %s\n", health.State)
-		fmt.Printf("Daemon alive: %v\n", health.IsAlive)
-		fmt.Printf("Last heartbeat: %v\n", health.LastHeartbeat)
-	}
+	fmt.Printf("Daemon alive: %v\n", client.IsDaemonAlive())
 
 	// Send input that might take a long time to process
 	if err := client.SendInput(ctx, "Analyze this large codebase", soothe.WithLoopID(loopID)); err != nil {
 		fmt.Printf("Send error: %v\n", err)
 		return
 	}
-
-	// Process events while monitoring daemon health
-	// Heartbeats will automatically update the tracker during long operations
-	tracker := client.GetHeartbeatTracker()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case msg := <-eventCh:
-			if msg == nil {
-				return
-			}
-
-			// Check daemon health periodically
-			if tracker != nil {
-				fmt.Printf("Daemon processing: %v\n", tracker.IsProcessing())
-			}
-
-			// Process event
-			// ... handle event based on type ...
-		}
-	}
+	fmt.Println("Input sent with heartbeat tracking")
+	// Output:
+	// Loop ID: loop-1
+	// Daemon alive: true
+	// Input sent with heartbeat tracking
 }
 
 // Example_waitForDaemonAlive demonstrates waiting for daemon to be alive before proceeding.
 func Example_waitForDaemonAlive() {
-	client := soothe.NewClientWithHeartbeat("ws://localhost:8765", nil)
+	md := NewMockDaemon(nil)
+	defer md.Close()
+
+	client := soothe.NewClientWithHeartbeat(md.URL, nil)
 
 	ctx := context.Background()
 
@@ -97,7 +79,6 @@ func Example_waitForDaemonAlive() {
 	// Wait for daemon to be alive before proceeding
 	tracker := client.GetHeartbeatTracker()
 	if tracker != nil {
-		// Wait up to 30 seconds for daemon to be alive
 		if err := tracker.WaitForAlive(30 * time.Second); err != nil {
 			fmt.Printf("Daemon not alive: %v\n", err)
 			return
@@ -114,12 +95,18 @@ func Example_waitForDaemonAlive() {
 	_ = eventCh // background reader for heartbeat traffic
 
 	fmt.Printf("Loop ID: %s\n", loopID)
+	// Output:
+	// Daemon is alive!
+	// Loop ID: loop-1
 }
 
 // Example_customHeartbeatThreshold demonstrates using a custom alive threshold.
 func Example_customHeartbeatThreshold() {
+	md := NewMockDaemon(nil)
+	defer md.Close()
+
 	// Create client with custom heartbeat threshold (25 seconds instead of default 15)
-	client := soothe.NewClient("ws://localhost:8765", nil)
+	client := soothe.NewClient(md.URL, nil)
 	client.EnableHeartbeatTrackingWithThreshold(25 * time.Second)
 
 	ctx := context.Background()
@@ -136,13 +123,19 @@ func Example_customHeartbeatThreshold() {
 	if client.IsDaemonAlive() {
 		fmt.Println("Daemon is alive (within 25 second threshold)")
 	}
+	// Output:
+	// Daemon is alive (within 25 second threshold)
 }
 
 // Example_heartbeatStateMonitoring demonstrates monitoring daemon state changes.
 func Example_heartbeatStateMonitoring() {
-	client := soothe.NewClientWithHeartbeat("ws://localhost:8765", nil)
+	md := NewMockDaemon(nil)
+	defer md.Close()
 
-	ctx := context.Background()
+	client := soothe.NewClientWithHeartbeat(md.URL, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
 
 	if err := client.Connect(ctx); err != nil {
 		fmt.Printf("Connect error: %v\n", err)
@@ -157,36 +150,35 @@ func Example_heartbeatStateMonitoring() {
 	}
 
 	tracker := client.GetHeartbeatTracker()
+	if tracker == nil {
+		fmt.Println("No heartbeat tracker")
+		return
+	}
 
-	// Monitor daemon state changes
-	lastState := ""
+	// Monitor daemon state changes until context expires.
+	// In a real deployment, the daemon sends periodic status frames with state
+	// changes (idle -> running -> idle). The mock daemon doesn't send unsolicited
+	// status frames, so no state transitions are observed here.
+	lastState := tracker.GetState()
+	fmt.Printf("Initial state: %q\n", lastState)
+loop:
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			break loop
 		case msg := <-eventCh:
 			if msg == nil {
-				return
+				break loop
 			}
-
-			// Check for state changes
-			if tracker != nil {
-				currentState := tracker.GetState()
-				if currentState != lastState {
-					fmt.Printf("Daemon state changed: %s -> %s\n", lastState, currentState)
-					lastState = currentState
-
-					// React to state changes
-					if currentState == "idle" {
-						fmt.Println("Daemon is now idle, ready for new queries")
-					} else if currentState == "running" {
-						fmt.Printf("Daemon is processing loop: %s\n", tracker.GetLoopID())
-					}
-				}
+			currentState := tracker.GetState()
+			if currentState != lastState {
+				fmt.Printf("Daemon state: %s\n", currentState)
+				lastState = currentState
 			}
-
-			// Process event
-			// ... handle event ...
 		}
 	}
+	fmt.Println("Monitoring complete")
+	// Output:
+	// Initial state: ""
+	// Monitoring complete
 }
