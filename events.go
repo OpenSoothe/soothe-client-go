@@ -22,7 +22,7 @@ const (
 	EventGoalDirectivesApplied = "soothe.cognition.goal.directives.applied"
 )
 
-// Explore subagent events (built-in wire, IG-339)
+// Explore subagent events (built-in wire types)
 const (
 	EventExploreStarted       = "soothe.subagent.explore.started"
 	EventExploreMilestone     = "soothe.subagent.explore.milestone"
@@ -30,7 +30,7 @@ const (
 	EventExploreCompleted     = "soothe.subagent.explore.completed"
 )
 
-// Tacitus subagent events (built-in wire, IG-339)
+// Tacitus subagent events (built-in wire types)
 const (
 	EventTacitusStarted       = "soothe.subagent.tacitus.started"
 	EventTacitusGatherSummary = "soothe.subagent.tacitus.gather.summary"
@@ -43,7 +43,7 @@ const (
 	EventLoopReattachedWire = "loop_reattached"
 )
 
-// Card ledger replay frames (RFC-413, card_binder design)
+// Card ledger replay frames (card_binder design)
 const (
 	EventCardReplayBegin = "card.replay_begin"
 	EventCardCreated     = "card.created"
@@ -57,7 +57,7 @@ const (
 	EventToolError     = "soothe.tool.execution.error"
 )
 
-// Stream tool call events (RFC-450, IG-416)
+// Stream tool call events
 const (
 	EventStreamToolCallUpdate = "soothe.stream.tool_call.update"
 	EventToolCallUpdatesBatch = "tool_call_updates_batch"

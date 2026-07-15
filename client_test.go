@@ -13,7 +13,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Test WebSocket server helpers (RFC-450 protocol-1)
+// Test WebSocket server helpers (protocol-1)
 // ---------------------------------------------------------------------------
 
 var upgrader = websocket.Upgrader{}
@@ -21,7 +21,7 @@ var upgrader = websocket.Upgrader{}
 // testSendHandshake responds to connection_init with a leading status frame
 // and a connection_ack reporting readiness_state "ready".
 func testSendHandshake(conn *websocket.Conn, m map[string]interface{}) {
-	conn.WriteMessage(websocket.TextMessage, []byte(`{"proto":"1","type":"status","state":"idle","input_history":[]}`))
+	_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"proto":"1","type":"status","state":"idle","input_history":[]}`))
 	clientCaps, _ := m["capabilities"].([]interface{})
 	daemonCaps := []string{"streaming", "batch", "heartbeat", "receipts"}
 	capSet := map[string]bool{}
@@ -47,28 +47,28 @@ func testSendHandshake(conn *websocket.Conn, m map[string]interface{}) {
 		},
 	}
 	b, _ := json.Marshal(ack)
-	conn.WriteMessage(websocket.TextMessage, b)
+	_ = conn.WriteMessage(websocket.TextMessage, b)
 }
 
 // testSendResponse sends a protocol-1 response envelope correlated by id.
 func testSendResponse(conn *websocket.Conn, id string, result map[string]interface{}) {
 	env := map[string]interface{}{"proto": "1", "type": "response", "result": result, "id": id}
 	b, _ := json.Marshal(env)
-	conn.WriteMessage(websocket.TextMessage, b)
+	_ = conn.WriteMessage(websocket.TextMessage, b)
 }
 
 // testSendError sends a protocol-1 error envelope correlated by id.
 func testSendError(conn *websocket.Conn, id string, code int, message string) {
 	env := map[string]interface{}{"proto": "1", "type": "error", "error": map[string]interface{}{"code": code, "message": message}, "id": id}
 	b, _ := json.Marshal(env)
-	conn.WriteMessage(websocket.TextMessage, b)
+	_ = conn.WriteMessage(websocket.TextMessage, b)
 }
 
 // testSendNext sends a protocol-1 next envelope (subscription event) correlated by id.
 func testSendNext(conn *websocket.Conn, id string, payload map[string]interface{}) {
 	env := map[string]interface{}{"proto": "1", "type": "next", "payload": payload, "id": id}
 	b, _ := json.Marshal(env)
-	conn.WriteMessage(websocket.TextMessage, b)
+	_ = conn.WriteMessage(websocket.TextMessage, b)
 }
 
 // isConnectionInit returns true if m is a protocol-1 connection_init envelope.
@@ -83,7 +83,7 @@ func testEchoHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
@@ -97,54 +97,7 @@ func testEchoHandler(w http.ResponseWriter, r *http.Request) {
 			testSendHandshake(conn, m)
 			continue
 		}
-		conn.WriteMessage(websocket.TextMessage, msg)
-	}
-}
-
-// testFullBootstrapHandler simulates the full daemon handshake + loop lifecycle.
-func testFullBootstrapHandler(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		return
-	}
-	defer conn.Close()
-
-	for {
-		_, msg, err := conn.ReadMessage()
-		if err != nil {
-			return
-		}
-		var m map[string]interface{}
-		if err := json.Unmarshal(msg, &m); err != nil {
-			continue
-		}
-		if isConnectionInit(m) {
-			testSendHandshake(conn, m)
-			continue
-		}
-		typ, _ := m["type"].(string)
-		method, _ := m["method"].(string)
-		id, _ := m["id"].(string)
-		params, _ := m["params"].(map[string]interface{})
-		if params == nil {
-			params = map[string]interface{}{}
-		}
-
-		switch {
-		case typ == "request" && method == "loop_new":
-			testSendResponse(conn, id, map[string]interface{}{"loop_id": "test-loop-123", "success": true})
-		case typ == "subscribe" && method == "loop_events":
-			lid, _ := params["loop_id"].(string)
-			payload := map[string]interface{}{"loop_id": lid, "event": "subscribed", "success": true, "client_id": "c1"}
-			b, _ := json.Marshal(map[string]interface{}{"proto": "1", "type": "next", "id": id, "payload": payload})
-			conn.WriteMessage(websocket.TextMessage, b)
-		case typ == "notification" && method == "loop_input":
-			lid, _ := params["loop_id"].(string)
-			b, _ := json.Marshal(map[string]interface{}{"proto": "1", "type": "status", "state": "running", "loop_id": lid, "workspace": "/tmp"})
-			conn.WriteMessage(websocket.TextMessage, b)
-		default:
-			conn.WriteMessage(websocket.TextMessage, msg)
-		}
+		_ = conn.WriteMessage(websocket.TextMessage, msg)
 	}
 }
 
@@ -154,12 +107,12 @@ func testNDJSONHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	// First message: connection_init → handshake. Second message: trigger → NDJSON.
-	conn.ReadMessage()
+	_, _, _ = conn.ReadMessage()
 	testSendHandshake(conn, map[string]interface{}{"capabilities": []interface{}{}})
-	conn.ReadMessage()
-	conn.WriteMessage(websocket.TextMessage, []byte(
+	_, _, _ = conn.ReadMessage()
+	_ = conn.WriteMessage(websocket.TextMessage, []byte(
 		`{"proto":"1","type":"next","payload":{"namespace":["soothe","output"],"mode":"messages","data":[{"type":"AIMessageChunk","content":"hello","phase":"quiz"},{}],"loop_id":"ndjson-loop"}}`+"\n"+
 			`{"proto":"1","type":"status","state":"idle","loop_id":"ndjson-loop"}`,
 	))
@@ -171,7 +124,7 @@ func testRequestResponseHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	for {
 		_, msg, err := conn.ReadMessage()
@@ -273,7 +226,7 @@ func TestClient_SendReceive(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	msg := map[string]interface{}{"proto": "1", "type": "test", "data": "hello"}
 	if err := client.SendMessage(ctx, msg); err != nil {
@@ -300,7 +253,7 @@ func TestClient_ReceiveMessages(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	ch, err := client.ReceiveMessages(ctx)
 	if err != nil {
@@ -343,7 +296,7 @@ func TestClient_NDJSONReceive(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	ch, err := client.ReceiveMessages(ctx)
 	if err != nil {
@@ -419,7 +372,7 @@ func testEventBatchHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
@@ -469,7 +422,7 @@ func TestClient_ReceiveMessages_EventBatch(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	ch, err := client.ReceiveMessages(ctx)
 	if err != nil {
@@ -481,7 +434,7 @@ func TestClient_ReceiveMessages_EventBatch(t *testing.T) {
 
 	var gotEvent, gotIdle bool
 	timeout := time.After(3 * time.Second)
-	for !(gotEvent && gotIdle) {
+	for !gotEvent || !gotIdle {
 		select {
 		case raw := <-ch:
 			if raw == nil {
@@ -514,7 +467,7 @@ func TestClient_ReceiveMessages_LoopAIMessageEvent(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	ch, err := client.ReceiveMessages(ctx)
 	if err != nil {
@@ -563,7 +516,7 @@ func TestClient_RequestResponse(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	resp, err := client.RequestResponse(ctx, map[string]interface{}{
 		"type": "daemon_status",
@@ -583,7 +536,7 @@ func TestClient_RequestResponse_Timeout(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		// Handshake so Connect() completes, then never answer the RPC.
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -612,7 +565,7 @@ func TestClient_RequestResponse_Timeout(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	_, err := client.RequestResponse(ctx, map[string]interface{}{
 		"type": "daemon_status",
@@ -633,7 +586,7 @@ func TestClient_RequestResponse_DaemonError(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	_, err := client.RequestResponse(ctx, map[string]interface{}{
 		"type": "error_test",
@@ -658,7 +611,7 @@ func TestClient_SendInput(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	err := client.SendInput(ctx, "hello", WithLoopID("t1"), WithModel("openai:gpt-4"))
 	if err != nil {
@@ -699,7 +652,7 @@ func TestClient_SendInput_PreferredSubagent(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	err := client.SendInput(ctx, "hello", WithLoopID("t1"), WithSubagent("research"))
 	if err != nil {
@@ -730,7 +683,7 @@ func TestClient_RequestResponse_PreservesRequestID(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	fixed := "fixed-rid-abc"
 	resp, err := client.RequestResponse(ctx, map[string]interface{}{
@@ -758,7 +711,7 @@ func TestClient_SendInput_Autonomous(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	maxIter := 5
 	err := client.SendInput(ctx, "do stuff", WithLoopID("t1"), WithAutonomous(&maxIter))
@@ -793,7 +746,7 @@ func TestClient_SendCommand(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if err := client.SendCommand(ctx, "/help"); err != nil {
 		t.Fatalf("SendCommand: %v", err)
@@ -813,14 +766,14 @@ func TestClient_SendCommand(t *testing.T) {
 }
 
 // testDisconnectHandler handshakes, then on any post-handshake message sends
-// a `disconnect` notification (RFC-450 §9.2) and holds the connection open so
+// a `disconnect` notification and holds the connection open so
 // the client can read the frame before any teardown.
 func testDisconnectHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	sentDisconnect := false
 	for {
 		_, msg, err := conn.ReadMessage()
@@ -838,7 +791,7 @@ func testDisconnectHandler(w http.ResponseWriter, r *http.Request) {
 		// Respond to the first post-handshake frame with a clean disconnect,
 		// then keep reading so the socket stays open until the client closes.
 		if !sentDisconnect {
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"proto":"1","type":"disconnect"}`))
+			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"proto":"1","type":"disconnect"}`))
 			sentDisconnect = true
 		}
 	}
@@ -855,7 +808,7 @@ func TestClient_SendDetach(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// A real app runs a ReceiveMessages reader; the daemon's `disconnect`
 	// notification is read there and consumed by isControlFrame, firing
@@ -904,7 +857,7 @@ func TestClient_ListSkills(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	resp, err := client.ListSkills(ctx, 3*time.Second)
 	if err != nil {
@@ -927,7 +880,7 @@ func TestClient_ListModels(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	resp, err := client.ListModels(ctx, 3*time.Second)
 	if err != nil {
@@ -950,7 +903,7 @@ func TestClient_InvokeSkill(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	resp, err := client.InvokeSkill(ctx, "research", "search for X", 3*time.Second)
 	if err != nil {
@@ -979,7 +932,7 @@ func TestClient_WaitForDaemonReady(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	ev, err := client.WaitForDaemonReady(3 * time.Second)
 	if err != nil {
@@ -1005,7 +958,7 @@ func TestClient_ConnectionRecovery(t *testing.T) {
 	if err := client1.Connect(ctx); err != nil {
 		t.Fatalf("connect1: %v", err)
 	}
-	client1.Close()
+	_ = client1.Close()
 	if client1.IsConnected() {
 		t.Error("client1 should be disconnected")
 	}
@@ -1017,5 +970,5 @@ func TestClient_ConnectionRecovery(t *testing.T) {
 	if !client2.IsConnected() {
 		t.Error("client2 should be connected")
 	}
-	client2.Close()
+	_ = client2.Close()
 }

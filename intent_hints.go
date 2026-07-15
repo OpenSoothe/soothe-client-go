@@ -34,7 +34,14 @@ func ValidateLoopInputIntentHint(hint string) error {
 	return nil
 }
 
-// DefaultDeliverablePhases is the triarch-style deliverable phase set (direct hints + agent).
+// DefaultDeliverablePhases returns the default set of loop message phases that
+// may end a query with a user-facing reply (quiz, goal_completion, direct-model
+// hints, and the named direct-model phases).
+//
+// Loop-assistant phases (see IsLoopAssistantPhase) are a broader set used for
+// streaming assistant text. Deliverable phases are the subset that may also
+// finish a TurnRunner turn. plan_direct is planning narration only and is not
+// included here — final answers use goal_completion, quiz, or direct-model phases.
 func DefaultDeliverablePhases() map[string]bool {
 	return map[string]bool{
 		"quiz":            true,

@@ -24,18 +24,18 @@ type Client struct {
 	mu               sync.Mutex // guards conn writes and closed flag
 	closed           bool
 	heartbeatTracker *HeartbeatTracker // optional heartbeat tracker for daemon health monitoring
-	// Protocol-1 handshake state (RFC-450 §8.2)
+	// Protocol-1 handshake state
 	handshakeComplete      bool
 	negotiatedCapabilities map[string]struct{}
 	protocolVersion        string
 	readinessState         string
 	heartbeatIntervalMs    int
-	// Mid-session drop signal (RFC-450 §8.3). disconnCh is closed exactly once
+	// Mid-session drop signal. disconnCh is closed exactly once
 	// when the connection drops; disconnCause carries clean vs unclean.
 	disconnCh    chan DisconnectCause
 	disconnOnce  sync.Once
 	disconnCause DisconnectCause
-	// Pending-request/subscription multiplexer (RFC-629 constraint #1).
+	// Pending-request/subscription multiplexer.
 	// Routes inbound frames by (type, id) instead of discarding non-matching events.
 	mux *mux
 	// readerActive is non-zero while a ReceiveMessages goroutine is reading
@@ -104,7 +104,7 @@ func NewClientWithHeartbeat(url string, cfg *Config) *Client {
 }
 
 // Connect dials the Soothe daemon WebSocket and completes the protocol-1
-// connection_init/connection_ack handshake (RFC-450 §8.2). Returns an error
+// connection_init/connection_ack handshake. Returns an error
 // if the daemon does not report readiness_state "ready" within the configured
 // DaemonReadyTimeout.
 func (c *Client) Connect(ctx context.Context) error {
@@ -143,7 +143,7 @@ func (c *Client) Connect(ctx context.Context) error {
 }
 
 // handshake sends connection_init and waits for connection_ack with
-// readiness_state "ready" (RFC-450 §8.2). Discards the leading status frame.
+// readiness_state "ready". Discards the leading status frame.
 func (c *Client) handshake(ctx context.Context) error {
 	timeout := c.config.DaemonReadyTimeout
 	if timeout <= 0 {
@@ -151,7 +151,7 @@ func (c *Client) handshake(ctx context.Context) error {
 	}
 	if c.conn != nil {
 		_ = c.conn.SetReadDeadline(time.Now().Add(timeout))
-		defer c.conn.SetReadDeadline(time.Time{})
+		defer func() { _ = c.conn.SetReadDeadline(time.Time{}) }()
 	}
 
 	sendInit := func() error {
@@ -175,8 +175,8 @@ func (c *Client) handshake(ctx context.Context) error {
 		if typ == "status" {
 			continue
 		}
-		// Handle Warn-severity error frames during the handshake window
-		// (RFC-450 §7.3): DAEMON_STARTING (-32001), DAEMON_BUSY (-32002),
+		// Handle Warn-severity error frames during the handshake window:
+		// DAEMON_STARTING (-32001), DAEMON_BUSY (-32002),
 		// DAEMON_DEGRADED (-32003) are retryable; other errors are fatal.
 		if typ == "error" {
 			errObj, _ := ev["error"].(map[string]interface{})
@@ -281,14 +281,14 @@ func (c *Client) Close() error {
 	_ = conn.WriteControl(websocket.CloseMessage,
 		websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
 		time.Now().Add(time.Second))
-	conn.Close()
+	_ = conn.Close()
 	// Release any waiters blocked on Disconnected().
 	c.signalDisconnect(DisconnectUnclean)
 	return nil
 }
 
-// Reconnect re-dials the daemon and re-handshakes after a connection drop
-// (RFC-450 §8.3). It does not re-establish loop subscriptions; follow with
+// Reconnect re-dials the daemon and re-handshakes after a connection drop.
+// It does not re-establish loop subscriptions; follow with
 // ReattachAndProbe to resume a loop session. The caller should invoke this
 // after Disconnected() fires. Reuses the same Client, resetting the disconnect
 // signal and multiplexer.
@@ -315,14 +315,14 @@ func (c *Client) Reconnect(ctx context.Context) error {
 // input. Returns *StaleLoopError when the probe fails; callers should fall
 // back to a fresh loop_new bootstrap.
 //
-// Per RFC-629: connection-level readiness is the handshake's readiness_state
+// Connection-level readiness is the handshake's readiness_state
 // (+ daemon_status); loop_get is a loop-scoped probe only, not a readiness probe.
 func (c *Client) ReattachAndProbe(ctx context.Context, loopID string) error {
 	if loopID == "" {
 		return fmt.Errorf("soothe: ReattachAndProbe requires a loop id")
 	}
 
-	// 1. loop_reattach (RFC-450 §9.2): reconstruct event history and replay.
+	// 1. loop_reattach: reconstruct event history and replay.
 	reattachTimeout := c.config.LoopStatusTimeout
 	if reattachTimeout <= 0 {
 		reattachTimeout = 15 * time.Second
@@ -334,7 +334,7 @@ func (c *Client) ReattachAndProbe(ctx context.Context, loopID string) error {
 		return fmt.Errorf("loop_reattach: %w", err)
 	}
 
-	// 2. Re-subscribe to the loop event stream (RFC-450 §9.4: subscribe +
+	// 2. Re-subscribe to the loop event stream (subscribe +
 	//    method:"loop_events"). Confirmation arrives as a `next` frame.
 	subTimeout := c.config.SubscriptionTimeout
 	if subTimeout <= 0 {
@@ -344,7 +344,7 @@ func (c *Client) ReattachAndProbe(ctx context.Context, loopID string) error {
 		return fmt.Errorf("loop_subscribe: %w", err)
 	}
 
-	// 3. loop_get liveness probe — side-effect-free read (RFC-450 §9.2).
+	// 3. loop_get liveness probe — side-effect-free read.
 	//    A LOOP_NOT_FOUND (-32200) or timeout means the loop is stale: it
 	//    accepted the reattach handshake but is not actually live.
 	probeTimeout := c.config.ReattachProbeTimeout
@@ -463,7 +463,7 @@ func (c *Client) sendPong() {
 // isControlFrame returns true if the decoded envelope is a ping/pong heartbeat
 // frame and handles it (responds to ping with pong). Returns true when the
 // frame was consumed and should NOT be forwarded to the application channel.
-// A `disconnect` notification (RFC-450 §9.2) is a clean lifecycle frame: it is
+// A `disconnect` notification is a clean lifecycle frame: it is
 // consumed here and fires a clean Disconnected() signal.
 func (c *Client) isControlFrame(msg interface{}) bool {
 	env, ok := msg.(Envelope)
@@ -547,7 +547,7 @@ func (c *Client) ReceiveMessages(ctx context.Context) (<-chan interface{}, error
 					continue
 				}
 				for _, expanded := range ExpandWireMessages(msg) {
-					// Intercept protocol-level ping/pong/disconnect (RFC-450 §8.3, §9.2).
+					// Intercept protocol-level ping/pong/disconnect.
 					if c.isControlFrame(expanded) {
 						continue
 					}
@@ -591,8 +591,7 @@ func (c *Client) ReceiveMessages(ctx context.Context) (<-chan interface{}, error
 //
 // ReadEvent consults the multiplexer: a frame matching another pending RPC or
 // subscription waiter is routed to that waiter (and skipped), so concurrent
-// in-flight RPCs on a shared reader no longer discard each other's responses
-// (RFC-629 constraint #1).
+// in-flight RPCs on a shared reader no longer discard each other's responses.
 func (c *Client) ReadEvent() (map[string]interface{}, error) {
 	if c.conn == nil {
 		return nil, fmt.Errorf("soothe: not connected")
@@ -627,7 +626,7 @@ func (c *Client) ReadEvent() (map[string]interface{}, error) {
 			continue
 		}
 		for _, expanded := range ExpandWireMessages(msg) {
-			// Intercept protocol-level ping/pong/disconnect (RFC-450 §8.3, §9.2).
+			// Intercept protocol-level ping/pong/disconnect.
 			if c.isControlFrame(expanded) {
 				continue
 			}
@@ -652,7 +651,7 @@ func (c *Client) ReadEvent() (map[string]interface{}, error) {
 }
 
 // isRetryableWarnCode reports whether a daemon error code is a Warn-severity
-// transient failure the client should retry after a delay (RFC-450 §7.2/§7.3).
+// transient failure the client should retry after a delay.
 func isRetryableWarnCode(code int) bool {
 	switch code {
 	case -32001, -32002, -32003: // DAEMON_STARTING, DAEMON_BUSY, DAEMON_DEGRADED

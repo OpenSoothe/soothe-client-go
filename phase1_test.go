@@ -21,7 +21,7 @@ func testConcurrentRPCHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	var writeMu sync.Mutex // serializes server-side writes (gorilla forbids concurrent writes)
 
@@ -72,7 +72,7 @@ func testConcurrentRPCHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // TestClient_RequestResponse_ConcurrentOutOfOrder is the multiplexer regression
-// test (IG-527): two concurrent RequestResponse calls with out-of-order
+// test: two concurrent RequestResponse calls with out-of-order
 // responses must both resolve to the correct caller. Without the (type, id)
 // multiplexer, the second caller would discard the first caller's response.
 func TestClient_RequestResponse_ConcurrentOutOfOrder(t *testing.T) {
@@ -86,7 +86,7 @@ func TestClient_RequestResponse_ConcurrentOutOfOrder(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Start a ReceiveMessages reader so the multiplexer's concurrent path is
 	// exercised (the reader routes frames to waiters).
@@ -155,7 +155,7 @@ func TestClient_Disconnected_Unclean(t *testing.T) {
 			if isConnectionInit(m) {
 				testSendHandshake(conn, m)
 				// Abrupt close (no close frame).
-				conn.Close()
+				_ = conn.Close()
 				return
 			}
 		}
@@ -169,7 +169,7 @@ func TestClient_Disconnected_Unclean(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	rctx, rcancel := context.WithCancel(context.Background())
 	defer rcancel()
@@ -196,7 +196,7 @@ func testReattachHandler(stale bool) http.HandlerFunc {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		for {
 			_, msg, err := conn.ReadMessage()
 			if err != nil {
@@ -220,7 +220,7 @@ func testReattachHandler(stale bool) http.HandlerFunc {
 				// subscribe confirmation: next frame with success=true
 				env := map[string]interface{}{"proto": "1", "type": "next", "id": id, "payload": map[string]interface{}{"loop_id": "loop-x", "success": true}}
 				b, _ := json.Marshal(env)
-				conn.WriteMessage(websocket.TextMessage, b)
+				_ = conn.WriteMessage(websocket.TextMessage, b)
 			case typ == "request" && method == "loop_get":
 				if stale {
 					testSendError(conn, id, -32200, "loop not found")
@@ -243,7 +243,7 @@ func TestClient_ReattachAndProbe_Live(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if err := client.ReattachAndProbe(ctx, "loop-x"); err != nil {
 		t.Errorf("ReattachAndProbe (live) failed: %v", err)
@@ -259,7 +259,7 @@ func TestClient_ReattachAndProbe_Stale(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	err := client.ReattachAndProbe(ctx, "loop-x")
 	if err == nil {
@@ -282,7 +282,7 @@ func testWarnThenReadyHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	sentWarn := false
 	for {
 		_, msg, err := conn.ReadMessage()
@@ -298,12 +298,12 @@ func testWarnThenReadyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if !sentWarn {
 			// First init: emit a Warn-severity error, then a status, then the ack.
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"proto":"1","type":"status","state":"idle"}`))
+			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"proto":"1","type":"status","state":"idle"}`))
 			errEnv, _ := json.Marshal(map[string]interface{}{
 				"proto": "1", "type": "error", "id": m["id"],
 				"error": map[string]interface{}{"code": -32001, "message": "daemon starting"},
 			})
-			conn.WriteMessage(websocket.TextMessage, errEnv)
+			_ = conn.WriteMessage(websocket.TextMessage, errEnv)
 			sentWarn = true
 			continue
 		}
@@ -321,7 +321,7 @@ func TestClient_Handshake_RetryOnWarnCode(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect should succeed after Warn retry: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	if !client.IsHandshakeComplete() {
 		t.Error("handshake should be complete after Warn retry")
 	}
@@ -334,7 +334,7 @@ func testReconnectHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
@@ -381,7 +381,7 @@ func TestClient_Reconnect(t *testing.T) {
 	if err := client.Reconnect(ctx); err != nil {
 		t.Fatalf("reconnect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	if !client.IsConnected() {
 		t.Error("should be connected after reconnect")
 	}

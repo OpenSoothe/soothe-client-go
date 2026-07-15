@@ -17,7 +17,7 @@ type Config struct {
 	LoopStatusTimeout   time.Duration // After loop_new: wait for status with loop_id
 	SubscriptionTimeout time.Duration // After loop_subscribe: wait for subscription_confirmed
 
-	// Mid-session reconnect (RFC-450 §8.3 dead-connection detection).
+	// Mid-session reconnect (dead-connection detection via ping/pong).
 	ReconnectMaxAttempts  int           // Max reconnection attempts on a mid-session drop (0 = infinite)
 	ReconnectInitialDelay time.Duration // Initial backoff delay between reconnect attempts
 	ReconnectMaxDelay     time.Duration // Cap on exponential backoff delay

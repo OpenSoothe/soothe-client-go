@@ -11,17 +11,70 @@ import (
 	soothe "github.com/mirasoth/soothe-client-go"
 )
 
-// ErrQueryTimeout is returned when a turn exceeds the configured timeout.
+// ErrQueryTimeout is returned when a turn exceeds the configured timeout
+// and OnQueryTimeout is TimeoutPolicyFail (default).
 var ErrQueryTimeout = errors.New("appkit: query timeout")
+
+// ErrIdleTimeout is returned when no events arrive within IdleTimeout
+// and OnIdleTimeout is TimeoutPolicyFail (default).
+var ErrIdleTimeout = errors.New("appkit: idle timeout")
+
+// TimeoutPolicy selects fail vs soft-complete behaviour for idle, query, and
+// stream-close terminals.
+type TimeoutPolicy int
+
+const (
+	// TimeoutPolicyFail ends the turn with an error (default).
+	TimeoutPolicyFail TimeoutPolicy = iota
+	// TimeoutPolicySoftComplete persists/broadcasts accumulated content as
+	// success when any text was received; otherwise falls back to Fail.
+	TimeoutPolicySoftComplete
+)
+
+// StreamClosePolicy is an alias of TimeoutPolicy for OnStreamClose.
+type StreamClosePolicy = TimeoutPolicy
+
+const (
+	StreamCloseFail         = TimeoutPolicyFail
+	StreamCloseSoftComplete = TimeoutPolicySoftComplete
+)
 
 // TurnConfig configures a TurnRunner.
 type TurnConfig struct {
 	// QueryTimeout is the per-turn deadline. Defaults to 30m if zero.
 	QueryTimeout time.Duration
+
+	// IdleTimeout is the maximum silence between consecutive classified
+	// events. Zero disables (default). Each received event resets the timer.
+	IdleTimeout time.Duration
+
+	// MinIdleTimeoutWithAttachments, when > 0, raises IdleTimeout for a turn
+	// that has attachments if IdleTimeout is positive but below this floor
+	// (useful for image_to_text gaps). Zero = no floor.
+	MinIdleTimeoutWithAttachments time.Duration
+
+	// OnIdleTimeout selects fail vs soft-complete when the idle watchdog fires.
+	// Default TimeoutPolicyFail.
+	OnIdleTimeout TimeoutPolicy
+
+	// OnQueryTimeout selects fail vs soft-complete when QueryTimeout fires.
+	// Default TimeoutPolicyFail.
+	OnQueryTimeout TimeoutPolicy
+
+	// OnStreamClose selects fail vs soft-complete when the event channel closes.
+	// Default StreamCloseFail.
+	OnStreamClose StreamClosePolicy
+
+	// CompactAttachmentsBeforeSend runs CompactAttachments on the turn's
+	// attachment maps before buildInput. Default false.
+	CompactAttachmentsBeforeSend bool
+
+	// CompactImageOpts overrides defaults for CompactAttachmentsBeforeSend.
+	CompactImageOpts *CompactImageOptions
 }
 
-// InputOpts carries the optional daemon hints on a loop_input payload. Apps
-// build this from their product modes (e.g. triarch's ask/agent/deep-research).
+// InputOpts carries optional daemon hints on a loop_input payload (intent,
+// subagent preference, structured-output schema, and related fields).
 type InputOpts struct {
 	IntentHint           string
 	PreferredSubagent    string
@@ -30,9 +83,8 @@ type InputOpts struct {
 	ResponseSchemaStrict *bool
 }
 
-// InputMessageForLoop builds a loop_input payload with optional attachments
-// (IG-327: each attachment is {mime_type, data(base64)}). Ported from
-// triarch's soothe_hints so apps can construct consistent payloads.
+// InputMessageForLoop builds a loop_input payload. Each attachment map should
+// use mime_type plus base64 data under the key "data".
 func InputMessageForLoop(text, loopID string, attachments []map[string]interface{}, opts *InputOpts) map[string]interface{} {
 	msg := map[string]interface{}{
 		"type":    "loop_input",
@@ -67,7 +119,6 @@ func InputMessageForLoop(text, loopID string, attachments []map[string]interface
 // TurnRunner executes one query turn end-to-end: acquire a pooled connection,
 // enforce single-flight, send loop_input, consume the event stream, classify
 // events, resolve the deliverable, persist the reply, and broadcast completion.
-// It is the app-agnostic successor to triarch's ExecuteQuery (RFC-629 Layer 1).
 type TurnRunner struct {
 	pool        *ConnectionPool
 	gate        *QueryGate
@@ -124,10 +175,21 @@ func (r *TurnRunner) WithOnError(f func(sessionID, loopID string, err error)) *T
 	return r
 }
 
+func idleTimeoutForTurn(cfg TurnConfig, hasAttachments bool) time.Duration {
+	idle := cfg.IdleTimeout
+	if idle <= 0 {
+		return 0
+	}
+	if hasAttachments && cfg.MinIdleTimeoutWithAttachments > 0 && idle < cfg.MinIdleTimeoutWithAttachments {
+		return cfg.MinIdleTimeoutWithAttachments
+	}
+	return idle
+}
+
 // Execute runs one query turn. The response is broadcast via the SSE
 // broadcaster and persisted via the SessionStore; it is not returned to the
 // caller (SSE subscribers receive it). Returns nil on success, an error on
-// failure (ErrQueryTimeout, context.Canceled, or a daemon/processing error).
+// failure (ErrQueryTimeout, ErrIdleTimeout, context.Canceled, or a daemon/processing error).
 func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, workspaceID string, attachments []map[string]interface{}, opts *InputOpts) error {
 	if opts != nil {
 		if h := strings.TrimSpace(opts.IntentHint); h != "" {
@@ -166,8 +228,13 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 	}
 	defer r.gate.Release(sessionID)
 
+	atts := attachments
+	if r.cfg.CompactAttachmentsBeforeSend && len(atts) > 0 {
+		atts = CompactAttachments(atts, r.cfg.CompactImageOpts)
+	}
+
 	// Send loop_input.
-	inputMsg := r.buildInput(message, loopID, attachments, opts)
+	inputMsg := r.buildInput(message, loopID, atts, opts)
 	if err := conn.client.SendMessage(timeoutCtx, inputMsg); err != nil {
 		r.persistFailed(ctx, sessionID, loopID, err)
 		r.broadcastError(sessionID, err)
@@ -191,6 +258,28 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 	var assistantContent string
 	startedAt := time.Now()
 
+	idleForTurn := idleTimeoutForTurn(r.cfg, len(attachments) > 0)
+	var idleTimer *time.Timer
+	var idleCh <-chan time.Time
+	if idleForTurn > 0 {
+		idleTimer = time.NewTimer(idleForTurn)
+		defer idleTimer.Stop()
+		idleCh = idleTimer.C
+	}
+
+	resetIdle := func() {
+		if idleTimer == nil {
+			return
+		}
+		if !idleTimer.Stop() {
+			select {
+			case <-idleTimer.C:
+			default:
+			}
+		}
+		idleTimer.Reset(idleForTurn)
+	}
+
 	for {
 		select {
 		case <-timeoutCtx.Done():
@@ -204,19 +293,22 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 				}
 				return err
 			}
-			// Timeout: tell the daemon to stop, then persist/broadcast.
 			if cerr := r.sendLoopCancel(context.Background(), conn, loopID); cerr != nil {
 				log.Printf("[appkit.TurnRunner] WARN: daemon cancel on timeout failed for %s loop %s: %v", sessionID, loopID, cerr)
 			}
-			r.persistFailed(ctx, sessionID, loopID, ErrQueryTimeout)
-			r.broadcastError(sessionID, ErrQueryTimeout)
-			if r.onError != nil {
-				r.onError(sessionID, loopID, ErrQueryTimeout)
+			return r.finishTimeout(ctx, sessionID, loopID, assistantContent, startedAt, ErrQueryTimeout, "query_timeout", r.cfg.OnQueryTimeout)
+
+		case <-idleCh:
+			if cerr := r.sendLoopCancel(context.Background(), conn, loopID); cerr != nil {
+				log.Printf("[appkit.TurnRunner] WARN: daemon cancel on idle timeout failed for %s loop %s: %v", sessionID, loopID, cerr)
 			}
-			return ErrQueryTimeout
+			return r.finishTimeout(ctx, sessionID, loopID, assistantContent, startedAt, ErrIdleTimeout, "idle_timeout", r.cfg.OnIdleTimeout)
 
 		case msg, ok := <-eventCh:
 			if !ok {
+				if r.cfg.OnStreamClose == StreamCloseSoftComplete && strings.TrimSpace(assistantContent) != "" {
+					return r.completeTurn(ctx, sessionID, loopID, assistantContent, startedAt, "stream_closed")
+				}
 				err := fmt.Errorf("event stream closed")
 				r.persistFailed(ctx, sessionID, loopID, err)
 				r.broadcastError(sessionID, err)
@@ -225,6 +317,7 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 				}
 				return err
 			}
+			resetIdle()
 
 			eventResult := r.classifier.Classify(msg, assistantContent)
 			if eventResult.Err != nil && eventResult.Terminal == ChatEventFailedComplete {
@@ -241,10 +334,6 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 			}
 
 			if eventResult.Content != "" {
-				// Derive the newly-arrived text to stream as a delta. The
-				// daemon may send either cumulative content (each event holds
-				// the full text so far, prefixed by what we already have) or
-				// true streaming chunks (each event holds only the new text).
 				var delta string
 				if strings.HasPrefix(eventResult.Content, assistantContent) {
 					delta = strings.TrimPrefix(eventResult.Content, assistantContent)
@@ -259,20 +348,36 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 			}
 
 			if final, deliverable := r.classifier.ResolveDeliverableFinalContent(eventResult, assistantContent); deliverable {
-				elapsedMs := time.Since(startedAt).Milliseconds()
-				r.persistResponse(ctx, sessionID, loopID, final, startedAt, eventResult.CompletionEvent)
-				r.broadcastComplete(sessionID, final)
-				if r.onComplete != nil {
-					r.onComplete(sessionID, loopID, final, eventResult.CompletionEvent, elapsedMs)
-				}
-				return nil
+				return r.completeTurn(ctx, sessionID, loopID, final, startedAt, eventResult.CompletionEvent)
 			}
 		}
 	}
 }
 
+func (r *TurnRunner) finishTimeout(ctx context.Context, sessionID, loopID, content string, startedAt time.Time, failErr error, completionEvent string, policy TimeoutPolicy) error {
+	if policy == TimeoutPolicySoftComplete && strings.TrimSpace(content) != "" {
+		return r.completeTurn(ctx, sessionID, loopID, content, startedAt, completionEvent)
+	}
+	r.persistFailed(ctx, sessionID, loopID, failErr)
+	r.broadcastError(sessionID, failErr)
+	if r.onError != nil {
+		r.onError(sessionID, loopID, failErr)
+	}
+	return failErr
+}
+
+func (r *TurnRunner) completeTurn(ctx context.Context, sessionID, loopID, final string, startedAt time.Time, completionEvent string) error {
+	elapsedMs := time.Since(startedAt).Milliseconds()
+	r.persistResponse(ctx, sessionID, loopID, final, startedAt, completionEvent)
+	r.broadcastComplete(sessionID, final)
+	if r.onComplete != nil {
+		r.onComplete(sessionID, loopID, final, completionEvent, elapsedMs)
+	}
+	return nil
+}
+
 // sendLoopCancel asks the daemon to cooperatively stop the loop runner on a
-// detached timeout context. Mirrors triarch's sendLoopCancelCommand.
+// detached timeout context (command_request with command "cancel").
 func (r *TurnRunner) sendLoopCancel(ctx context.Context, conn *pooledConn, loopID string) error {
 	loopID = strings.TrimSpace(loopID)
 	if conn == nil || conn.client == nil || loopID == "" {
@@ -333,20 +438,13 @@ func (r *TurnRunner) broadcastThinkingStep(sessionID, step string) {
 	if r.broadcaster == nil || strings.TrimSpace(step) == "" {
 		return
 	}
-	// Distinct from "delta": a thinking step is a progress line (e.g. "Tool:
-	// search"), not assistant content. Bridges that only stream assistant
-	// text can ignore "thinking_step"; those that surface progress can map it
-	// to their own event vocabulary.
 	r.broadcaster.Broadcast(sessionID, SSEEvent{
 		Type: "thinking_step",
 		Data: strings.TrimSpace(step) + "\n",
 	})
 }
 
-// broadcastDelta streams a newly-arrived fragment of assistant content. The
-// concatenation of all deltas for a turn equals the final "complete" payload
-// (barring deliverable-phase replacement). Streaming is best-effort: a nil
-// broadcaster or empty delta is a no-op.
+// broadcastDelta streams a newly-arrived fragment of assistant content.
 func (r *TurnRunner) broadcastDelta(sessionID, delta string) {
 	if r.broadcaster == nil || delta == "" {
 		return

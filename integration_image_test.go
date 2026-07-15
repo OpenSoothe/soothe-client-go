@@ -43,7 +43,7 @@ func TestIntegration_ImageUnderstanding(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	wsDir := t.TempDir()
 	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
@@ -154,7 +154,7 @@ func TestIntegration_ImageAttachmentPayload(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	wsDir := t.TempDir()
 	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
@@ -236,7 +236,7 @@ func TestIntegration_MultipleImageAttachments(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	wsDir := t.TempDir()
 	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)

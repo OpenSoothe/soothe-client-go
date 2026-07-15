@@ -1,41 +1,34 @@
 package soothe
 
-import (
-	"context"
-	"strings"
-	"testing"
-)
+import "testing"
 
-func TestValidateLoopInputIntentHint_RemovedLegacy(t *testing.T) {
-	for _, hint := range []string{"direct_llm", "DIRECT_LLM", " quiz ", "quiz"} {
-		err := ValidateLoopInputIntentHint(hint)
-		if err == nil {
-			t.Fatalf("expected error for hint %q", hint)
-		}
+func TestDefaultDeliverablePhases_ExcludesPlanDirect(t *testing.T) {
+	phases := DefaultDeliverablePhases()
+	if phases["plan_direct"] {
+		t.Fatal("plan_direct must not be a default deliverable phase")
 	}
 }
 
-func TestValidateLoopInputIntentHint_AllowedPassThrough(t *testing.T) {
-	for _, hint := range []string{
-		IntentHintTextCompletion,
-		"resume_clarification",
-		"skill:search",
+func TestDefaultDeliverablePhases_IncludesDirectHints(t *testing.T) {
+	phases := DefaultDeliverablePhases()
+	for _, want := range []string{
+		"quiz", "goal_completion", "direct_model",
+		"text_completion", "image_to_text", "ocr", "embed",
 	} {
-		if err := ValidateLoopInputIntentHint(hint); err != nil {
-			t.Fatalf("hint %q: unexpected error: %v", hint, err)
+		if !phases[want] {
+			t.Errorf("DefaultDeliverablePhases missing %q", want)
 		}
 	}
 }
 
-func TestSendInput_RejectsLegacyIntentHint(t *testing.T) {
-	client := NewClient("ws://localhost:8765", nil)
-	ctx := context.Background()
-
-	err := client.SendInput(ctx, "hello", WithLoopID("loop-1"), WithIntentHint("direct_llm"))
-	if err == nil {
-		t.Fatal("expected error for direct_llm intent_hint")
+func TestIsLoopAssistantPhase_IncludesPlanDirect(t *testing.T) {
+	if !IsLoopAssistantPhase("plan_direct") {
+		t.Fatal("plan_direct must be a loop-assistant phase for text extraction")
 	}
-	if !strings.Contains(err.Error(), "direct_llm is removed") {
-		t.Fatalf("unexpected error: %v", err)
+	if !IsLoopAssistantPhase("goal_completion") {
+		t.Fatal("goal_completion must be a loop-assistant phase")
+	}
+	if IsLoopAssistantPhase("execute_step") {
+		t.Fatal("execute_step must not be a loop-assistant phase")
 	}
 }

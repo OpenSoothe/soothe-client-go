@@ -14,10 +14,9 @@ type SSEEvent struct {
 }
 
 // SSEBroadcaster is a generic, string-keyed pub/sub fan-out for SSE-style
-// event delivery. It is the app-agnostic successor to triarch's broadcaster,
-// which was keyed by a domain-specific TaskId type; applications convert at
-// their own boundary. Non-blocking sends drop on a full subscriber channel so
-// a slow consumer cannot stall the broadcaster.
+// event delivery. Applications map their own session ids at the boundary.
+// Non-blocking sends drop on a full subscriber channel so a slow consumer
+// cannot stall the broadcaster.
 type SSEBroadcaster struct {
 	subscribers map[string]map[string]chan SSEEvent
 	mu          sync.RWMutex

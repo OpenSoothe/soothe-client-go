@@ -22,7 +22,7 @@ func NewConnectionError(url string, attempt int, err error) *ConnectionError {
 	return &ConnectionError{URL: url, Attempt: attempt, Err: err}
 }
 
-// DaemonError represents an error reported by the Soothe daemon (RFC-450 §7).
+// DaemonError represents an error reported by the Soothe daemon.
 // The daemon's structured error object carries a numeric code from the
 // reserved ranges, a human-readable message, and optional data.
 type DaemonError struct {
@@ -58,7 +58,7 @@ func NewTimeoutError(operation, duration string) *TimeoutError {
 	return &TimeoutError{Operation: operation, Duration: duration}
 }
 
-// DisconnectCause distinguishes clean vs unclean connection loss (RFC-450 §4, §8.3).
+// DisconnectCause distinguishes clean vs unclean connection loss.
 // A clean drop follows a `disconnect` notification (loops keep running server-side);
 // an unclean drop is a read/write error or a missed pong (in-flight queries are cancelled).
 type DisconnectCause int

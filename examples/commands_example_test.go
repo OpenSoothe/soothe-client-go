@@ -8,7 +8,7 @@ import (
 	soothe "github.com/mirasoth/soothe-client-go"
 )
 
-// Example_commandRequest sends a structured RPC command (RFC-404) and waits
+// Example_commandRequest sends a structured RPC command and waits
 // for the response. This is the generic command wrapper.
 func Example_commandRequest() {
 	md := NewMockDaemon(nil)
@@ -21,7 +21,7 @@ func Example_commandRequest() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 
@@ -37,7 +37,7 @@ func Example_commandRequest() {
 }
 
 // Example_commandClear cancels the current query and clears conversation
-// history for a loop (RFC-404).
+// history for a loop.
 func Example_commandClear() {
 	md := NewMockDaemon(nil)
 	defer md.Close()
@@ -49,7 +49,7 @@ func Example_commandClear() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 
@@ -77,7 +77,7 @@ func Example_commandCancel() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 
@@ -104,7 +104,7 @@ func Example_commandMemory() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 
@@ -130,7 +130,7 @@ func Example_commandHistory() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 
@@ -156,7 +156,7 @@ func Example_commandPlan() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 
@@ -185,7 +185,7 @@ func Example_commandDetachExit() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 
@@ -230,7 +230,7 @@ func Example_commandPolicyConfig() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Policy: query the daemon's policy profile (no loop_id needed).
 	policy, err := client.CommandPolicy(ctx, 10*time.Second)
@@ -264,7 +264,7 @@ func Example_commandReview() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 
@@ -290,7 +290,7 @@ func Example_commandAutopilotDashboard() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 
@@ -317,7 +317,7 @@ func Example_sendCommand() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// SendCommand sends a slash_command notification (no response expected).
 	if err := client.SendCommand(ctx, "/clear"); err != nil {

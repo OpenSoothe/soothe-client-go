@@ -13,7 +13,7 @@ const eventLoopHistoryReplayed = "soothe.lifecycle.loop.history.replayed"
 
 const maxThinkingStepRunes = 280
 
-// Default thinking-step event allowlist (triarch's set). Overridable via
+// Default thinking-step event allowlist. Overridable via
 // ClassifierConfig.ThinkingStepEvents.
 var defaultThinkingStepEvents = map[string]bool{
 	"soothe.cognition.plan.step.started":   true,
@@ -29,8 +29,8 @@ var defaultThinkingStepEvents = map[string]bool{
 }
 
 // extractThinkingStep maps an allowlisted progress event to one structured UI
-// line. Free-form streams (tokens, reports, reasoning) are excluded. Ported
-// from triarch's thinking_step.go with the allowlist made configurable.
+// line. Free-form streams (tokens, reports, reasoning) are excluded. The
+// allowlist is configurable via ClassifierConfig.ThinkingStepEvents.
 func (cl *EventClassifier) extractThinkingStep(eventType string, data map[string]interface{}) (string, bool) {
 	if eventType == "" || data == nil {
 		return "", false

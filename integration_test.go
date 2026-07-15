@@ -34,7 +34,7 @@ func skipIfNoDaemon(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Skip("Soothe daemon not running at ws://localhost:8765")
 	}
-	client.Close()
+	_ = client.Close()
 }
 
 // ---------------------------------------------------------------------------
@@ -52,7 +52,7 @@ func TestIntegration_ConnectAndClose(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect to daemon at %s: %v", cfg.DaemonURL, err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if !client.IsConnected() {
 		t.Error("Client should be connected after Connect()")
@@ -71,7 +71,7 @@ func TestIntegration_DaemonReady(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Connect() performs the protocol-1 handshake; WaitForDaemonReady returns
 	// immediately once the handshake reports readiness_state "ready".
@@ -94,7 +94,7 @@ func TestIntegration_NewLoopCreation(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	wsDir := t.TempDir()
 	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
@@ -121,7 +121,7 @@ func TestIntegration_InputMessage(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	wsDir := t.TempDir()
 	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
@@ -176,7 +176,7 @@ func TestIntegration_DaemonStatus(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Connect() completes the protocol-1 handshake; the daemon is ready.
 	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
@@ -204,7 +204,7 @@ func TestIntegration_SkillsList(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Connect() completes the protocol-1 handshake; the daemon is ready.
 	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
@@ -229,7 +229,7 @@ func TestIntegration_ModelsList(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Connect() completes the protocol-1 handshake; the daemon is ready.
 	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
@@ -265,7 +265,7 @@ func TestIntegration_ConnectionRecovery(t *testing.T) {
 		t.Fatalf("Initial connection failed: %v", err)
 	}
 	t.Log("Initial connection established")
-	client1.Close()
+	_ = client1.Close()
 	if client1.IsConnected() {
 		t.Error("Client should not be connected after Close()")
 	}
@@ -278,7 +278,7 @@ func TestIntegration_ConnectionRecovery(t *testing.T) {
 		t.Error("Second client should be connected")
 	}
 	t.Log("Successfully connected with new client after previous close")
-	client2.Close()
+	_ = client2.Close()
 }
 
 func TestIntegration_ConfigGet(t *testing.T) {
@@ -292,7 +292,7 @@ func TestIntegration_ConfigGet(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Connect() completes the protocol-1 handshake; the daemon is ready.
 	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
@@ -317,7 +317,7 @@ func TestIntegration_FullConversation(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	wsDir := t.TempDir()
 	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
@@ -376,7 +376,7 @@ func TestIntegration_SendDetach(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Connect() completes the protocol-1 handshake; the daemon is ready.
 	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
@@ -400,7 +400,7 @@ func TestIntegration_CheckDaemonStatus(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Connect() completes the protocol-1 handshake; the daemon is ready.
 	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
@@ -425,7 +425,7 @@ func TestIntegration_FetchSkillsCatalog(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Connect() completes the protocol-1 handshake; the daemon is ready.
 	if _, err := client.WaitForDaemonReady(cfg.DaemonReadyTimeout); err != nil {
@@ -458,7 +458,7 @@ func TestIntegration_InputWithIntentHintTextCompletion(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	wsDir := t.TempDir()
 	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
@@ -482,11 +482,10 @@ func TestIntegration_InputWithIntentHintTextCompletion(t *testing.T) {
 	// Exit early when we receive the response to avoid unnecessary waiting
 	eventCount := 0
 	eventTimeout := time.After(8 * time.Second)
-	var sawAssistant bool
 	for {
 		select {
 		case <-eventTimeout:
-			t.Logf("Received %d events (assistant=%v)", eventCount, sawAssistant)
+			t.Logf("Received %d events", eventCount)
 			return
 		case msg := <-eventCh:
 			if msg == nil {
@@ -500,7 +499,6 @@ func TestIntegration_InputWithIntentHintTextCompletion(t *testing.T) {
 				if m.Mode == "messages" || m.Mode == "content" {
 					if txt, ok := extractAssistantText(m); ok && txt != "" {
 						t.Logf("Received assistant response: %q", txt)
-						sawAssistant = true
 						return // Exit immediately on success
 					}
 				}

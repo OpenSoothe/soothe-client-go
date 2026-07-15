@@ -21,7 +21,7 @@ func Example_sendInputBasic() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 
@@ -50,7 +50,7 @@ func Example_sendInputAutonomous() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 	maxIter := 10
@@ -81,7 +81,7 @@ func Example_sendInputWithModel() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 
@@ -115,7 +115,7 @@ func Example_sendInputWithAttachments() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 
@@ -154,7 +154,7 @@ func Example_sendInputStructuredOutput() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 
@@ -197,7 +197,7 @@ func Example_sendInputWithSubagent() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 
@@ -227,7 +227,7 @@ func Example_sendInputClarification() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 
@@ -276,7 +276,7 @@ func Example_sendLoopInput() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 

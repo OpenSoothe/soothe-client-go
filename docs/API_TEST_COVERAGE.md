@@ -11,7 +11,7 @@
 | `integration_loop_test.go` | Loop management and command RPC integration tests |
 | `integration_image_test.go` | Image attachment integration tests |
 
-## Loop management (RFC-503, RFC-504, RFC-411)
+## Loop management
 
 | API | Typical test |
 |-----|----------------|

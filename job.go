@@ -7,7 +7,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Job IPC (RFC-228 Autopilot Job Management)
+// Job IPC (Autopilot Job Management)
 // ---------------------------------------------------------------------------
 
 // SendJobCreate submits a root goal to AutopilotService, creating a new autopilot job.
@@ -171,7 +171,7 @@ func (c *Client) JobDag(ctx context.Context, jobID string, timeout time.Duration
 
 // JobGuidance sends user guidance to GoalEngine for absorption.
 // goalID is optional - if empty, targets the root job goal.
-// The canonical wire field for the guidance text is "content" (RFC-450 §10.1).
+// The canonical wire field for the guidance text is "content".
 func (c *Client) JobGuidance(ctx context.Context, jobID string, text string, goalID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 30 * time.Second
@@ -195,7 +195,7 @@ func (c *Client) JobGuidance(ctx context.Context, jobID string, text string, goa
 
 // AutopilotSubscribe subscribes client to autopilot worker events.
 // This bypasses the autopilot__* filter so the client receives worker lifecycle events.
-// Uses the subscribe envelope with method "autopilot_events" (RFC-450 §9.2).
+// Uses the subscribe envelope with method "autopilot_events".
 //
 // Multiplexer-aware: when a ReceiveMessages reader is active, the confirmation
 // frame is routed via the mux subscription channel instead of calling ReadEvent.
@@ -214,8 +214,8 @@ func (c *Client) AutopilotSubscribe(ctx context.Context, timeout time.Duration) 
 	defer unsub()
 
 	if c.conn != nil {
-		c.conn.SetReadDeadline(time.Now().Add(timeout))
-		defer c.conn.SetReadDeadline(time.Time{})
+		_ = c.conn.SetReadDeadline(time.Now().Add(timeout))
+		defer func() { _ = c.conn.SetReadDeadline(time.Time{}) }()
 	}
 	timeoutCh := time.After(timeout)
 	for {
@@ -306,7 +306,7 @@ func (c *Client) AutopilotSubscribe(ctx context.Context, timeout time.Duration) 
 }
 
 // AutopilotUnsubscribe releases autopilot worker event subscription.
-// Uses the unsubscribe envelope (RFC-450 §9.2): the daemon infers
+// Uses the unsubscribe envelope: the daemon infers
 // autopilot_unsubscribe from an unsubscribe with no loop_id in params.
 func (c *Client) AutopilotUnsubscribe(ctx context.Context, subscriptionID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
@@ -325,8 +325,8 @@ func (c *Client) AutopilotUnsubscribe(ctx context.Context, subscriptionID string
 
 	// Set read deadline for response.
 	if c.conn != nil {
-		c.conn.SetReadDeadline(time.Now().Add(timeout))
-		defer c.conn.SetReadDeadline(time.Time{})
+		_ = c.conn.SetReadDeadline(time.Now().Add(timeout))
+		defer func() { _ = c.conn.SetReadDeadline(time.Time{}) }()
 	}
 
 	timeoutCh := time.After(timeout)
@@ -370,7 +370,7 @@ func (c *Client) AutopilotUnsubscribe(ctx context.Context, subscriptionID string
 }
 
 // ---------------------------------------------------------------------------
-// Cron IPC (RFC-229)
+// Cron IPC
 // ---------------------------------------------------------------------------
 
 // CronAdd creates a scheduled job from natural language.

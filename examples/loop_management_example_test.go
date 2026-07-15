@@ -23,7 +23,7 @@ func Example_loopLifecycle() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Start the event reader before subscribing (multiplexer-aware).
 	eventCh, err := client.ReceiveMessages(ctx)
@@ -94,7 +94,7 @@ func Example_loopSubscribeUnsubscribe() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	eventCh, err := client.ReceiveMessages(ctx)
 	if err != nil {
@@ -141,7 +141,7 @@ func Example_loopMessagesState() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 
@@ -172,7 +172,7 @@ func Example_loopMessagesState() {
 }
 
 // Example_loopTreeAndCards fetches the checkpoint tree and display card ledger
-// for a loop (RFC-413).
+// for a loop.
 func Example_loopTreeAndCards() {
 	md := NewMockDaemon(nil)
 	defer md.Close()
@@ -184,7 +184,7 @@ func Example_loopTreeAndCards() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 
@@ -232,7 +232,7 @@ func Example_loopReattachResume() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	_, _ = client.ReceiveMessages(ctx)
 
@@ -267,7 +267,7 @@ func Example_loopPrune() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	loopID := "existing-loop-id"
 

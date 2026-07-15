@@ -24,7 +24,7 @@ func Example_heartbeatTracking() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Start receiving messages (heartbeat events will be processed automatically)
 	_, err := client.ReceiveMessages(ctx)
@@ -68,7 +68,7 @@ func Example_waitForDaemonAlive() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	eventCh, err := client.ReceiveMessages(ctx)
 	if err != nil {
@@ -115,7 +115,7 @@ func Example_customHeartbeatThreshold() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// ... rest of client usage ...
 
@@ -141,7 +141,7 @@ func Example_heartbeatStateMonitoring() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	eventCh, err := client.ReceiveMessages(ctx)
 	if err != nil {

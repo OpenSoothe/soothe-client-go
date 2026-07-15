@@ -151,7 +151,7 @@ func (t *HeartbeatTracker) ProcessHeartbeatEvent(event map[string]interface{}) b
 	}
 
 	// Catalog daemon heartbeats (soothe.internal.*) are server-only and are not
-	// broadcast to WebSocket clients (IG-435).
+	// broadcast to WebSocket clients.
 	_ = data
 	return false
 }

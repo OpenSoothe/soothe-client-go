@@ -31,10 +31,10 @@ type ChatEventResult struct {
 }
 
 // ClassifierConfig supplies the product-specific decisions an EventClassifier
-// needs. The DeliverablePhases set is the key product knob: which message
-// `phase` values count as user-facing deliverables (triarch uses quiz,
-// goal_completion, direct_model, text_completion, image_to_text, ocr, embed;
-// other apps pass their own).
+// needs. DeliverablePhases is the main knob: which message phase values count
+// as user-facing final replies (e.g. quiz, goal_completion, text_completion).
+// plan_direct is planning narration and should not be listed unless the
+// product intentionally ends turns on it.
 type ClassifierConfig struct {
 	// DeliverablePhases recognizes loop-tagged message phases that may end a
 	// query with user-facing text. Required.
@@ -46,16 +46,20 @@ type ClassifierConfig struct {
 	MinDeliverableRunes int
 
 	// ThinkingStepEvents, if non-nil, overrides the default allowlist of event
-	// types mapped to a one-line thinking step (RFC-629 open question). If nil,
-	// the library default allowlist is used.
+	// types mapped to a one-line thinking step. If nil, the library default
+	// allowlist is used.
 	ThinkingStepEvents map[string]bool
+
+	// TreatStatusIdleAsComplete: when true, a StatusResponse with State=="idle"
+	// and non-empty accumulated assistant text is ChatEventDeliverableComplete
+	// (typical for direct-model turns). Default false keeps historical
+	// Continue-on-status behaviour.
+	TreatStatusIdleAsComplete bool
 }
 
 // EventClassifier maps a stream of decoded daemon events into
-// deliverable/streaming/terminal outcomes, keyed on (namespace, mode, phase)
-// per RFC-614/RFC-403 (RFC-629 constraint #4). It is the app-agnostic
-// successor to triarch's ProcessChatEvent, with the deliverable phase set
-// promoted from hardcoded constants to configuration.
+// deliverable, streaming, or failed outcomes using (namespace, mode, phase).
+// DeliverablePhases is supplied by the application rather than hard-coded.
 type EventClassifier struct {
 	cfg ClassifierConfig
 }
@@ -80,11 +84,16 @@ func (cl *EventClassifier) Classify(msg interface{}, accumulated string) ChatEve
 }
 
 // IsDeliverableCompletionEvent reports whether a persisted completion_event is
-// user-facing. Uses the configured deliverable phase set; recognizes the
-// protocol output namespace and final_report component as deliverable.
+// user-facing. Uses the configured deliverable phase set; recognizes protocol
+// output namespaces and final_report. Also accepts TurnRunner-generated
+// completion markers: status.idle, idle_timeout, query_timeout, stream_closed.
 func (cl *EventClassifier) IsDeliverableCompletionEvent(eventType string) bool {
 	if eventType == "" {
 		return false
+	}
+	switch eventType {
+	case "status.idle", "idle_timeout", "query_timeout", "stream_closed":
+		return true
 	}
 	if eventType == soothe.EventFinalReport {
 		return true
@@ -158,7 +167,7 @@ func isTerminalMessageType(msgType string) bool {
 
 // messagesModeAssistantContent extracts plain assistant text from mode="messages"
 // events that carry a terminal AIMessage without loop-tagged phase metadata
-// (legacy direct_llm turns before phase tagging; prefer DeliverablePhases with text_completion).
+// (legacy turns before phase tagging; prefer DeliverablePhases with text_completion).
 func (cl *EventClassifier) messagesModeAssistantContent(m soothe.EventMessage) (string, bool) {
 	if m.Mode != "messages" {
 		return "", false
@@ -234,8 +243,7 @@ func extractContentFromMessage(msgMap map[string]interface{}) string {
 	return ""
 }
 
-// processChatEvent is the event→outcome mapper, ported from triarch's
-// ProcessChatEvent with the deliverable phase set made configurable.
+// processChatEvent is the event→outcome mapper keyed on namespace, mode, and phase.
 func (cl *EventClassifier) processChatEvent(msg interface{}, accumulated string) ChatEventResult {
 	switch m := msg.(type) {
 	case soothe.EventMessage:
@@ -378,6 +386,11 @@ func (cl *EventClassifier) processChatEvent(msg interface{}, accumulated string)
 
 	case soothe.StatusResponse:
 		log.Printf("[appkit.EventClassifier] Status: state=%s, loopID=%s", m.State, m.LoopID)
+		if cl.cfg.TreatStatusIdleAsComplete &&
+			strings.EqualFold(strings.TrimSpace(m.State), "idle") &&
+			cl.IsSubstantiveAssistantReply(accumulated) {
+			return cl.deliverableResult(strings.TrimSpace(accumulated), "status.idle")
+		}
 		return ChatEventResult{Terminal: ChatEventContinue}
 
 	default:
@@ -387,13 +400,40 @@ func (cl *EventClassifier) processChatEvent(msg interface{}, accumulated string)
 	return ChatEventResult{Terminal: ChatEventContinue}
 }
 
+// isSubscriptionMetadataMap reports loop subscription / sequence acknowledgements
+// that must not be treated as assistant text (maps carrying loop_id + latest_seq
+// without content fields).
+func isSubscriptionMetadataMap(data map[string]interface{}) bool {
+	if data == nil {
+		return false
+	}
+	_, hasLoop := data["loop_id"]
+	_, hasSeq := data["latest_seq"]
+	if !hasLoop || !hasSeq {
+		return false
+	}
+	// If any common text field is present, treat as content-bearing.
+	for _, key := range []string{"content", "text", "response", "output", "message", "report", "answer"} {
+		if v, ok := data[key].(string); ok && strings.TrimSpace(v) != "" {
+			return false
+		}
+	}
+	return true
+}
+
 func extractContentFromData(data map[string]interface{}) (string, bool) {
+	if isSubscriptionMetadataMap(data) {
+		return "", false
+	}
 	for _, key := range []string{"final_stdout_message", "completion_summary", "content", "text", "response", "output", "message", "report"} {
 		if val, ok := data[key].(string); ok && val != "" {
 			return val, true
 		}
 	}
 	if nested, ok := data["data"].(map[string]interface{}); ok {
+		if isSubscriptionMetadataMap(nested) {
+			return "", false
+		}
 		for _, key := range []string{"final_stdout_message", "completion_summary", "content", "text", "response", "output", "message", "report"} {
 			if val, ok := nested[key].(string); ok && val != "" {
 				return val, true

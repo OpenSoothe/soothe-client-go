@@ -11,14 +11,11 @@ import (
 // ErrQueryBusy is returned when a session already has an in-flight query.
 var ErrQueryBusy = errors.New("appkit: query already in progress for session")
 
-// QueryGate enforces single-flight query execution per session id and the
+// QueryGate enforces single-flight query execution per session id and
 // cancel-before-context ordering: when a query is cancelled, the daemon is
 // told to stop (command_request{command:"cancel"}) BEFORE the local context
 // is cancelled, on a detached timeout so the caller's cancellation cannot
 // block the wire send.
-//
-// It is the app-agnostic successor to triarch's AcquireQuery/CancelQuery/
-// sendLoopCancelCommand.
 type QueryGate struct {
 	mu          sync.Mutex
 	cancels     map[string]context.CancelFunc          // sessionID → query cancel
@@ -67,7 +64,7 @@ func (g *QueryGate) Cancel(sessionID string) error {
 		return nil
 	}
 
-	// Send daemon cancel first, on a detached timeout (IG-398 ordering).
+	// Send daemon cancel first, on a detached timeout, then cancel locally.
 	if sendCancel != nil {
 		ctx, c := context.WithTimeout(context.Background(), 10*time.Second)
 		defer c()

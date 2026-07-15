@@ -10,17 +10,17 @@ import (
 // Content at a given tier is only visible if the user's verbosity level is high enough.
 func Example_shouldShow() {
 	// At quiet verbosity, only TierQuiet content is visible.
-	fmt.Println(soothe.ShouldShow(soothe.TierQuiet, soothe.VerbosityQuiet))   // true
-	fmt.Println(soothe.ShouldShow(soothe.TierNormal, soothe.VerbosityQuiet))  // false
+	fmt.Println(soothe.ShouldShow(soothe.TierQuiet, soothe.VerbosityQuiet))    // true
+	fmt.Println(soothe.ShouldShow(soothe.TierNormal, soothe.VerbosityQuiet))   // false
 	fmt.Println(soothe.ShouldShow(soothe.TierDetailed, soothe.VerbosityQuiet)) // false
 
 	// At normal verbosity, quiet + normal tiers are visible.
-	fmt.Println(soothe.ShouldShow(soothe.TierQuiet, soothe.VerbosityNormal))  // true
-	fmt.Println(soothe.ShouldShow(soothe.TierNormal, soothe.VerbosityNormal)) // true
+	fmt.Println(soothe.ShouldShow(soothe.TierQuiet, soothe.VerbosityNormal))    // true
+	fmt.Println(soothe.ShouldShow(soothe.TierNormal, soothe.VerbosityNormal))   // true
 	fmt.Println(soothe.ShouldShow(soothe.TierDetailed, soothe.VerbosityNormal)) // false
 
 	// At debug verbosity, everything except TierInternal is visible.
-	fmt.Println(soothe.ShouldShow(soothe.TierDebug, soothe.VerbosityDebug)) // true
+	fmt.Println(soothe.ShouldShow(soothe.TierDebug, soothe.VerbosityDebug))    // true
 	fmt.Println(soothe.ShouldShow(soothe.TierInternal, soothe.VerbosityDebug)) // false
 	// Output:
 	// true
@@ -38,9 +38,9 @@ func Example_shouldShow() {
 func Example_isValidVerbosityLevel() {
 	fmt.Println(soothe.IsValidVerbosityLevel("quiet"))  // true
 	fmt.Println(soothe.IsValidVerbosityLevel("normal")) // true
-	fmt.Println(soothe.IsValidVerbosityLevel("debug")) // true
-	fmt.Println(soothe.IsValidVerbosityLevel("trace")) // false
-	fmt.Println(soothe.IsValidVerbosityLevel(""))      // false
+	fmt.Println(soothe.IsValidVerbosityLevel("debug"))  // true
+	fmt.Println(soothe.IsValidVerbosityLevel("trace"))  // false
+	fmt.Println(soothe.IsValidVerbosityLevel(""))       // false
 	// Output:
 	// true
 	// true
@@ -52,7 +52,7 @@ func Example_isValidVerbosityLevel() {
 // Example_verbosityLevels shows the typed verbosity level and tier constants.
 func Example_verbosityLevels() {
 	// VerbosityLevel is a string type.
-	var level soothe.VerbosityLevel = soothe.VerbosityDebug
+	level := soothe.VerbosityDebug
 	fmt.Println(level) // debug
 
 	// VerbosityTier is an int type.

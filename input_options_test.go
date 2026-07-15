@@ -6,7 +6,7 @@ import (
 )
 
 // =============================================================================
-// Unit Tests for Input Options (RFC-622 Clarification Relay)
+// Unit Tests for Input Options (Clarification Relay)
 // =============================================================================
 
 func TestWithClarificationMode(t *testing.T) {

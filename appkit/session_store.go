@@ -29,8 +29,8 @@ type SessionMessage struct {
 }
 
 // SessionStore is the persistence seam between appkit and the application's
-// storage backend (triarch: Postgres; other apps: in-memory, Redis, etc.).
-// Implementations must be safe for concurrent use.
+// storage backend (in-memory, Postgres, Redis, etc.). Implementations must be
+// safe for concurrent use.
 //
 // appkit's ConnectionPool consults the store to decide whether to bootstrap a
 // fresh loop (no loop id on file) or reattach to an existing one, and records

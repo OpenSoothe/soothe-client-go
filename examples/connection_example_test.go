@@ -26,7 +26,7 @@ func Example_basicConnection() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Check readiness after the handshake.
 	fmt.Printf("Handshake complete: %v\n", client.IsHandshakeComplete())
@@ -65,7 +65,7 @@ func Example_connectWithRetries() {
 		fmt.Printf("Connect failed: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	fmt.Printf("Connected: %v\n", client.IsConnected())
 	// Output:
@@ -99,7 +99,7 @@ func Example_disconnectMonitoring() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Start the event reader so the read loop can detect drops.
 	_, err := client.ReceiveMessages(ctx)
@@ -123,7 +123,7 @@ func Example_disconnectMonitoring() {
 }
 
 // Example_customConfig shows a Config with custom timeouts and reconnect
-// backoff parameters (RFC-450 §8.3 dead-connection detection).
+// backoff parameters for dead-connection detection.
 func Example_customConfig() {
 	cfg := &soothe.Config{
 		DaemonURL:             "ws://localhost:8765",

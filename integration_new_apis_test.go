@@ -7,7 +7,7 @@ import (
 )
 
 // =============================================================================
-// Job IPC Integration Tests (RFC-228)
+// Job IPC Integration Tests
 // =============================================================================
 
 func TestIntegration_JobCreate(t *testing.T) {
@@ -22,7 +22,7 @@ func TestIntegration_JobCreate(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
 		t.Fatalf("Daemon not ready: %v", err)
@@ -60,7 +60,7 @@ func TestIntegration_JobStatus(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
 		t.Fatalf("Daemon not ready: %v", err)
@@ -101,7 +101,7 @@ func TestIntegration_JobPauseResume(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
 		t.Fatalf("Daemon not ready: %v", err)
@@ -153,7 +153,7 @@ func TestIntegration_JobCancel(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
 		t.Fatalf("Daemon not ready: %v", err)
@@ -202,7 +202,7 @@ func TestIntegration_JobDag(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
 		t.Fatalf("Daemon not ready: %v", err)
@@ -246,7 +246,7 @@ func TestIntegration_JobGuidance(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
 		t.Fatalf("Daemon not ready: %v", err)
@@ -290,7 +290,7 @@ func TestIntegration_AutopilotSubscribe(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
 		t.Fatalf("Daemon not ready: %v", err)
@@ -316,7 +316,7 @@ func TestIntegration_AutopilotSubscribe(t *testing.T) {
 }
 
 // =============================================================================
-// Additional Loop Methods Integration Tests (RFC-503 extensions)
+// Additional Loop Methods Integration Tests
 // =============================================================================
 
 func TestIntegration_LoopMessages(t *testing.T) {
@@ -331,7 +331,7 @@ func TestIntegration_LoopMessages(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
 		t.Fatalf("Daemon not ready: %v", err)
@@ -370,7 +370,7 @@ func TestIntegration_LoopStateGet(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
 		t.Fatalf("Daemon not ready: %v", err)
@@ -409,7 +409,7 @@ func TestIntegration_LoopCardsFetch(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
 		t.Fatalf("Daemon not ready: %v", err)
@@ -448,7 +448,7 @@ func TestIntegration_MCPStatus(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
 		t.Fatalf("Daemon not ready: %v", err)
@@ -485,7 +485,7 @@ func TestIntegration_SendLoopMessages(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
 		t.Fatalf("Daemon not ready: %v", err)
@@ -523,7 +523,7 @@ func TestIntegration_SendLoopStateGet(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
 		t.Fatalf("Daemon not ready: %v", err)
@@ -561,7 +561,7 @@ func TestIntegration_SendLoopCardsFetch(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
 		t.Fatalf("Daemon not ready: %v", err)
@@ -599,7 +599,7 @@ func TestIntegration_SendMCPStatus(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
 		t.Fatalf("Daemon not ready: %v", err)

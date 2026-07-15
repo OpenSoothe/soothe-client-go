@@ -21,7 +21,7 @@ func Example_jobLifecycle() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Start the event reader so responses are multiplexed.
 	_, err := client.ReceiveMessages(ctx)
@@ -108,7 +108,7 @@ func Example_sendJobMethods() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	_, _ = client.ReceiveMessages(ctx)
 
@@ -138,7 +138,7 @@ func Example_sendJobMethods() {
 	// Job requests sent
 }
 
-// Example_autopilotSubscribe subscribes to autopilot worker events (RFC-228).
+// Example_autopilotSubscribe subscribes to autopilot worker events.
 // AutopilotSubscribe returns a subscription ID for later unsubscription.
 func Example_autopilotSubscribe() {
 	md := NewMockDaemon(nil)
@@ -151,7 +151,7 @@ func Example_autopilotSubscribe() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	eventCh, err := client.ReceiveMessages(ctx)
 	if err != nil {
@@ -202,7 +202,7 @@ func Example_cronLifecycle() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	_, _ = client.ReceiveMessages(ctx)
 
@@ -257,7 +257,7 @@ func Example_sendCronMethods() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	_, _ = client.ReceiveMessages(ctx)
 

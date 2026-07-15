@@ -65,16 +65,3 @@ func getEnvBool(key string, defaultValue bool) bool {
 	}
 	return b
 }
-
-// getEnvDuration reads a duration environment variable with a default value.
-func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
-	val := os.Getenv(key)
-	if val == "" {
-		return defaultValue
-	}
-	d, err := time.ParseDuration(val)
-	if err != nil {
-		return defaultValue
-	}
-	return d
-}

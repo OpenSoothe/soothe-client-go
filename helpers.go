@@ -27,13 +27,10 @@ func IsDaemonLive(wsURL string, timeout time.Duration) bool {
 	if err := client.Connect(ctx); err != nil {
 		return false
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	_, err := CheckDaemonStatus(ctx, client, timeout)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 // RequestDaemonShutdown requests daemon shutdown via RPC

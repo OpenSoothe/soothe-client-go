@@ -11,14 +11,14 @@ import (
 // ---------------------------------------------------------------------------
 
 // RequestResponse sends a protocol-1 request envelope and waits for the
-// matching response (or error) correlated by id (RFC-450 §5/§9).
+// matching response (or error) correlated by id.
 //
 // The payload's "type" field is used as the RPC method; all other fields are
 // moved into the envelope "params". If the payload carries a "request_id" it
 // is used as the correlation id, otherwise a new one is generated. The
 // returned map is the response "result" object.
 //
-// RequestResponse is multiplexer-aware (RFC-629 constraint #1): it registers a
+// RequestResponse is multiplexer-aware: it registers a
 // pending call for its request id so that, if a concurrent ReceiveMessages
 // reader is active, the response is routed to this caller instead of being
 // discarded. When no concurrent reader is active, it reads synchronously via
@@ -50,8 +50,8 @@ func (c *Client) RequestResponse(ctx context.Context, payload map[string]interfa
 
 	// Set a read deadline on the underlying connection to prevent blocking forever
 	if c.conn != nil {
-		c.conn.SetReadDeadline(time.Now().Add(timeout))
-		defer c.conn.SetReadDeadline(time.Time{}) // clear deadline
+		_ = c.conn.SetReadDeadline(time.Now().Add(timeout))
+		defer func() { _ = c.conn.SetReadDeadline(time.Time{}) }() // clear deadline
 	}
 
 	timeoutCh := time.After(timeout)
@@ -154,7 +154,7 @@ func (c *Client) ListModels(ctx context.Context, timeout time.Duration) (map[str
 	return c.RequestResponse(ctx, map[string]interface{}{"type": "models_list"}, "models_list_response", timeout)
 }
 
-// InvokeSkill resolves a skill on the daemon host and receives echo (RFC-400).
+// InvokeSkill resolves a skill on the daemon host and receives echo.
 func (c *Client) InvokeSkill(ctx context.Context, skill, args string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 120 * time.Second
@@ -184,8 +184,8 @@ func (c *Client) WaitForDaemonReady(timeout time.Duration) (map[string]interface
 	}
 
 	if c.conn != nil {
-		c.conn.SetReadDeadline(time.Now().Add(timeout))
-		defer c.conn.SetReadDeadline(time.Time{})
+		_ = c.conn.SetReadDeadline(time.Now().Add(timeout))
+		defer func() { _ = c.conn.SetReadDeadline(time.Time{}) }()
 	}
 	deadline := time.NewTimer(timeout)
 	defer deadline.Stop()
@@ -216,7 +216,7 @@ func (c *Client) WaitForDaemonReady(timeout time.Duration) (map[string]interface
 	}
 }
 
-// CommandRequest sends a structured RPC command and waits for the response (RFC-404).
+// CommandRequest sends a structured RPC command and waits for the response.
 func (c *Client) CommandRequest(ctx context.Context, command, loopID string, params map[string]interface{}, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 30 * time.Second
@@ -310,7 +310,7 @@ func (c *Client) LoopDelete(ctx context.Context, loopID string, timeout time.Dur
 	}, "loop_delete_response", timeout)
 }
 
-// LoopReattach requests loop reattachment and waits for the response (RFC-411).
+// LoopReattach requests loop reattachment and waits for the response.
 func (c *Client) LoopReattach(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 15 * time.Second
@@ -322,7 +322,7 @@ func (c *Client) LoopReattach(ctx context.Context, loopID string, timeout time.D
 }
 
 // LoopSubscribe subscribes to loop events and waits for the subscription
-// confirmation `next` frame (RFC-450 §9.4). Pass empty verbosity to omit the
+// confirmation `next` frame. Pass empty verbosity to omit the
 // field (daemon default). Returns a map describing the subscription.
 //
 // Multiplexer-aware: when a ReceiveMessages reader is active, the confirmation
@@ -347,8 +347,8 @@ func (c *Client) LoopSubscribe(ctx context.Context, loopID string, verbosity str
 	defer unsub()
 
 	if c.conn != nil {
-		c.conn.SetReadDeadline(time.Now().Add(timeout))
-		defer c.conn.SetReadDeadline(time.Time{})
+		_ = c.conn.SetReadDeadline(time.Now().Add(timeout))
+		defer func() { _ = c.conn.SetReadDeadline(time.Time{}) }()
 	}
 	timeoutCh := time.After(timeout)
 	for {
@@ -461,8 +461,8 @@ func (c *Client) LoopDetach(ctx context.Context, loopID string, timeout time.Dur
 	defer unregister()
 
 	if c.conn != nil {
-		c.conn.SetReadDeadline(time.Now().Add(timeout))
-		defer c.conn.SetReadDeadline(time.Time{})
+		_ = c.conn.SetReadDeadline(time.Now().Add(timeout))
+		defer func() { _ = c.conn.SetReadDeadline(time.Time{}) }()
 	}
 	timeoutCh := time.After(timeout)
 	for {
@@ -532,7 +532,7 @@ func (c *Client) LoopDetach(ctx context.Context, loopID string, timeout time.Dur
 	}
 }
 
-// LoopNew creates a new loop and waits for the response (RFC-503).
+// LoopNew creates a new loop and waits for the response.
 // Optional workspace and user can be set via the returned map.
 func (c *Client) LoopNew(ctx context.Context, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
@@ -543,7 +543,7 @@ func (c *Client) LoopNew(ctx context.Context, timeout time.Duration) (map[string
 	}, "loop_new_response", timeout)
 }
 
-// LoopInput sends input to a loop and waits for the response (RFC-503).
+// LoopInput sends input to a loop and waits for the response.
 // Content is the user prompt text (same wire shape as Python send_loop_input).
 func (c *Client) LoopInput(ctx context.Context, loopID string, content string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
@@ -558,7 +558,7 @@ func (c *Client) LoopInput(ctx context.Context, loopID string, content string, t
 }
 
 // ---------------------------------------------------------------------------
-// RPC Command convenience methods (RFC-404)
+// RPC Command convenience methods
 // These wrap CommandRequest for common daemon slash commands
 // ---------------------------------------------------------------------------
 
@@ -659,7 +659,7 @@ func (c *Client) CommandAutopilotDashboard(ctx context.Context, loopID string, t
 }
 
 // ---------------------------------------------------------------------------
-// Additional loop methods (RFC-503 extensions)
+// Additional loop methods
 // ---------------------------------------------------------------------------
 
 // LoopMessages requests persisted conversation/activity rows for a loop.
@@ -710,7 +710,7 @@ func (c *Client) LoopStateUpdate(ctx context.Context, loopID string, values map[
 	return c.RequestResponse(ctx, payload, "loop_state_update_response", timeout)
 }
 
-// LoopCardsFetch requests display card ledger snapshot (RFC-413).
+// LoopCardsFetch requests display card ledger snapshot.
 func (c *Client) LoopCardsFetch(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 15 * time.Second

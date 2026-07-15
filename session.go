@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// LoopSessionOptions configures loop_new workspace fields (RFC-503).
+// LoopSessionOptions configures loop_new workspace fields.
 type LoopSessionOptions struct {
 	ClientWorkspace   string
 	UserID            string

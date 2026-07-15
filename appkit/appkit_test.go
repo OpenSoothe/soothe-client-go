@@ -76,14 +76,15 @@ func (s *memStore) messages(sid string) []SessionMessage {
 // fakeClient is a ManagedClient fake that handshakes on Connect and replays
 // a scripted event stream on ReceiveMessages.
 type fakeClient struct {
-	mu          sync.Mutex
-	connected   bool
-	closed      bool
-	disconnCh   chan soothe.DisconnectCause
-	scripted    []interface{} // events to emit on the reader channel
-	sendCapture []map[string]interface{}
-	reattachErr error
-	connectErr  error
+	mu               sync.Mutex
+	connected        bool
+	closed           bool
+	disconnCh        chan soothe.DisconnectCause
+	scripted         []interface{} // events to emit on the reader channel
+	closeAfterScript bool          // if true, close ch after script (stream-close tests)
+	sendCapture      []map[string]interface{}
+	reattachErr      error
+	connectErr       error
 }
 
 func newFakeClient(events ...interface{}) *fakeClient {
@@ -91,6 +92,12 @@ func newFakeClient(events ...interface{}) *fakeClient {
 		disconnCh: make(chan soothe.DisconnectCause, 1),
 		scripted:  events,
 	}
+}
+
+func newFakeClientCloseAfter(events ...interface{}) *fakeClient {
+	f := newFakeClient(events...)
+	f.closeAfterScript = true
+	return f
 }
 
 func (f *fakeClient) Connect(ctx context.Context) error {
@@ -124,6 +131,9 @@ func (f *fakeClient) ReceiveMessages(ctx context.Context) (<-chan interface{}, e
 			case <-ctx.Done():
 				return
 			}
+		}
+		if f.closeAfterScript {
+			return
 		}
 		// Hold the channel open until cancelled so the turn loop doesn't see
 		// a premature close; the deliverable event ends the turn first.
@@ -222,14 +232,14 @@ func TestSSEBroadcaster_DropOnFull(t *testing.T) {
 // EventClassifier
 // ---------------------------------------------------------------------------
 
-func triarchClassifier() *EventClassifier {
+func defaultClassifier() *EventClassifier {
 	return NewEventClassifier(ClassifierConfig{
 		DeliverablePhases: soothe.DefaultDeliverablePhases(),
 	})
 }
 
-func TestEventClassifier_DeliverablePhase_TriarchSet(t *testing.T) {
-	cl := triarchClassifier()
+func TestEventClassifier_DeliverablePhase_DefaultSet(t *testing.T) {
+	cl := defaultClassifier()
 	msg := eventMessageFromJSON(t, deliverableEvent("quiz", "Hello, this is the answer."))
 	r := cl.Classify(msg, "")
 	if r.Terminal != ChatEventDeliverableComplete {
@@ -253,7 +263,7 @@ func TestEventClassifier_PhaseNotInConfig_NotDeliverable(t *testing.T) {
 }
 
 func TestEventClassifier_StreamingChunk_Continue(t *testing.T) {
-	cl := triarchClassifier()
+	cl := defaultClassifier()
 	msg := eventMessageFromJSON(t, `{"proto":"1","type":"event","namespace":["soothe","protocol","message"],"mode":"messages","data":[{"type":"AIMessageChunk","content":"partial"}],"loop_id":"loop-1"}`)
 	r := cl.Classify(msg, "")
 	if r.Terminal != ChatEventContinue {
@@ -265,7 +275,7 @@ func TestEventClassifier_StreamingChunk_Continue(t *testing.T) {
 }
 
 func TestEventClassifier_SubstantiveReplyGuard(t *testing.T) {
-	cl := triarchClassifier()
+	cl := defaultClassifier()
 	// A short stub ACK ("...") in a deliverable phase should NOT be persisted.
 	msg := eventMessageFromJSON(t, deliverableEvent("quiz", "..."))
 	r := cl.Classify(msg, "")
@@ -427,7 +437,7 @@ func TestTurnRunner_DeliverableTurn(t *testing.T) {
 	fake := newFakeClient(deliverable)
 	pool := newTestPool(t, store, fake)
 	gate := NewQueryGate()
-	cl := triarchClassifier()
+	cl := defaultClassifier()
 	b := NewSSEBroadcaster()
 	tr := NewTurnRunner(pool, gate, cl, store, b, TurnConfig{QueryTimeout: 2 * time.Second})
 
@@ -518,7 +528,7 @@ func TestTurnRunner_StreamsContentDeltas(t *testing.T) {
 	fake := newFakeClient(chunk1, chunk2, final)
 	pool := newTestPool(t, store, fake)
 	gate := NewQueryGate()
-	cl := triarchClassifier()
+	cl := defaultClassifier()
 	b := NewSSEBroadcaster()
 	tr := NewTurnRunner(pool, gate, cl, store, b, TurnConfig{QueryTimeout: 2 * time.Second})
 
@@ -555,7 +565,7 @@ func TestTurnRunner_CumulativeContent(t *testing.T) {
 	fake := newFakeClient(c1, c2, final)
 	pool := newTestPool(t, store, fake)
 	gate := NewQueryGate()
-	cl := triarchClassifier()
+	cl := defaultClassifier()
 	b := NewSSEBroadcaster()
 	tr := NewTurnRunner(pool, gate, cl, store, b, TurnConfig{QueryTimeout: 2 * time.Second})
 
@@ -584,7 +594,7 @@ func TestTurnRunner_Timeout(t *testing.T) {
 	fake := newFakeClient( /* no events that complete */ )
 	pool := newTestPool(t, store, fake)
 	gate := NewQueryGate()
-	cl := triarchClassifier()
+	cl := defaultClassifier()
 	tr := NewTurnRunner(pool, gate, cl, store, NewSSEBroadcaster(), TurnConfig{QueryTimeout: 100 * time.Millisecond})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

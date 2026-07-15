@@ -142,7 +142,7 @@ func TestHeartbeatTracker_ProcessHeartbeatEvent(t *testing.T) {
 		t.Error("expected ProcessHeartbeatEvent to return false for non-event message")
 	}
 
-	// Catalog heartbeat-shaped events are not delivered to clients (IG-435).
+	// Catalog heartbeat-shaped events are not delivered to clients.
 	heartbeatEvent := map[string]interface{}{
 		"type": "event",
 		"data": map[string]interface{}{

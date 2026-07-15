@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mirasoth/soothe-client-go/appkit"
 	soothe "github.com/mirasoth/soothe-client-go"
+	"github.com/mirasoth/soothe-client-go/appkit"
 )
 
 // Example_sseBroadcaster demonstrates the SSE fan-out broadcaster for
@@ -106,7 +106,7 @@ func Example_eventClassifier() {
 	fmt.Printf("Final: %s ok=%v\n", final, ok)
 
 	// Check substantive reply length.
-	fmt.Printf("Substantive: %v\n", cl.IsSubstantiveAssistantReply("hi"))       // too short
+	fmt.Printf("Substantive: %v\n", cl.IsSubstantiveAssistantReply("hi"))                 // too short
 	fmt.Printf("Substantive: %v\n", cl.IsSubstantiveAssistantReply("A full reply here.")) // ok
 	// Output:
 	// Terminal: 1
@@ -262,9 +262,9 @@ func Example_turnRunnerConstruction() {
 
 // Example_chatEventTerminal shows the terminal classification constants.
 func Example_chatEventTerminal() {
-	fmt.Println(int(appkit.ChatEventContinue))              // 0
-	fmt.Println(int(appkit.ChatEventDeliverableComplete))   // 1
-	fmt.Println(int(appkit.ChatEventFailedComplete))        // 2
+	fmt.Println(int(appkit.ChatEventContinue))            // 0
+	fmt.Println(int(appkit.ChatEventDeliverableComplete)) // 1
+	fmt.Println(int(appkit.ChatEventFailedComplete))      // 2
 	// Output:
 	// 0
 	// 1

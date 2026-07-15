@@ -21,7 +21,7 @@ func Example_requestAuth() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	resp, err := soothe.RequestAuth(ctx, client, "my-access-key", "my-secret-key", 15*time.Second)
 	if err != nil {
@@ -46,7 +46,7 @@ func Example_requestAuthRefresh() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	resp, err := soothe.RequestAuthRefresh(ctx, client, "my-refresh-token", 15*time.Second)
 	if err != nil {
@@ -71,7 +71,7 @@ func Example_sendAuth() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	_, _ = client.ReceiveMessages(ctx)
 

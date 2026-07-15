@@ -36,13 +36,10 @@ in-memory stores that do blocking I/O should `select` on `ctx.Done()`).
 
 ### Consumers already migrated
 
-The two `SessionStore` implementations that ship in **mizar-airway** were
-updated in lockstep with this refactor:
-
-- `mizar-airway/internal/agent/mem_session_store.go` — `MemSessionStore`
-  (in-memory, no-op on `ctx` but signature-compliant)
-- `mizar-airway/internal/agent/pg_session_store.go` — `PGSessionStore`
-  (Postgres via `pgx`; `ctx` is forwarded into `pgx` queries)
+Application `SessionStore` implementations must update all six method
+signatures to take `context.Context` first. In-memory stores may ignore `ctx`
+aside from signature compliance; database-backed stores should forward `ctx`
+into their driver calls.
 
 Callers inside the client itself (`appkit/pool.go`, `appkit/turn_runner.go`)
 were updated in the same commit to thread the caller's `ctx` through to every
@@ -97,11 +94,9 @@ still valid for stateless deployments.
 
 ## Release checklist (do before tagging `v0.2.5`)
 
-- [ ] Remove the local `replace` directive in `mizar-airway/go.mod` once a
-      published module at the new tag is available.
 - [ ] `git tag v0.2.5` and `git push --tags`.
-- [ ] Confirm `mizar-airway` `go.mod` `require` line bumps to the new tag and
-      builds without the `replace`.
+- [ ] Bump downstream `go.mod` require lines to the new tag and drop any local
+      `replace` directives used during development.
 - [ ] (Optional, tracked separately) add a unit test for `ConnectWithRetries`
       covering the `maxRetries<=0` default, `retryDelay<=0` default, and
-      `ctx.Done()` cancellation path — see SIL-04.
+      `ctx.Done()` cancellation path.

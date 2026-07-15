@@ -15,7 +15,7 @@ func TestCheckDaemonStatus(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -23,7 +23,7 @@ func TestCheckDaemonStatus(t *testing.T) {
 				return
 			}
 			var m map[string]interface{}
-			json.Unmarshal(msg, &m)
+			_ = json.Unmarshal(msg, &m)
 			if isConnectionInit(m) {
 				testSendHandshake(conn, m)
 				continue
@@ -41,7 +41,7 @@ func TestCheckDaemonStatus(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	resp, err := CheckDaemonStatus(ctx, client, 3*time.Second)
 	if err != nil {
@@ -58,7 +58,7 @@ func TestIsDaemonLive_Success(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -66,7 +66,7 @@ func TestIsDaemonLive_Success(t *testing.T) {
 				return
 			}
 			var m map[string]interface{}
-			json.Unmarshal(msg, &m)
+			_ = json.Unmarshal(msg, &m)
 			if isConnectionInit(m) {
 				testSendHandshake(conn, m)
 				continue
@@ -94,7 +94,7 @@ func TestRequestDaemonShutdown(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -102,7 +102,7 @@ func TestRequestDaemonShutdown(t *testing.T) {
 				return
 			}
 			var m map[string]interface{}
-			json.Unmarshal(msg, &m)
+			_ = json.Unmarshal(msg, &m)
 			if isConnectionInit(m) {
 				testSendHandshake(conn, m)
 				continue
@@ -120,7 +120,7 @@ func TestRequestDaemonShutdown(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if err := RequestDaemonShutdown(ctx, client, 3*time.Second); err != nil {
 		t.Fatalf("RequestDaemonShutdown: %v", err)
@@ -133,7 +133,7 @@ func TestRequestDaemonShutdown_NotAcknowledged(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -141,7 +141,7 @@ func TestRequestDaemonShutdown_NotAcknowledged(t *testing.T) {
 				return
 			}
 			var m map[string]interface{}
-			json.Unmarshal(msg, &m)
+			_ = json.Unmarshal(msg, &m)
 			if isConnectionInit(m) {
 				testSendHandshake(conn, m)
 				continue
@@ -159,7 +159,7 @@ func TestRequestDaemonShutdown_NotAcknowledged(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	err := RequestDaemonShutdown(ctx, client, 3*time.Second)
 	if err == nil {
@@ -173,7 +173,7 @@ func TestFetchSkillsCatalog(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -181,7 +181,7 @@ func TestFetchSkillsCatalog(t *testing.T) {
 				return
 			}
 			var m map[string]interface{}
-			json.Unmarshal(msg, &m)
+			_ = json.Unmarshal(msg, &m)
 			if isConnectionInit(m) {
 				testSendHandshake(conn, m)
 				continue
@@ -202,7 +202,7 @@ func TestFetchSkillsCatalog(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	skills, err := FetchSkillsCatalog(ctx, client, 3*time.Second)
 	if err != nil {
@@ -222,7 +222,7 @@ func TestFetchSkillsCatalog_Empty(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -230,7 +230,7 @@ func TestFetchSkillsCatalog_Empty(t *testing.T) {
 				return
 			}
 			var m map[string]interface{}
-			json.Unmarshal(msg, &m)
+			_ = json.Unmarshal(msg, &m)
 			if isConnectionInit(m) {
 				testSendHandshake(conn, m)
 				continue
@@ -248,7 +248,7 @@ func TestFetchSkillsCatalog_Empty(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	skills, err := FetchSkillsCatalog(ctx, client, 3*time.Second)
 	if err != nil {
@@ -265,7 +265,7 @@ func TestFetchConfigSection(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -273,7 +273,7 @@ func TestFetchConfigSection(t *testing.T) {
 				return
 			}
 			var m map[string]interface{}
-			json.Unmarshal(msg, &m)
+			_ = json.Unmarshal(msg, &m)
 			if isConnectionInit(m) {
 				testSendHandshake(conn, m)
 				continue
@@ -295,7 +295,7 @@ func TestFetchConfigSection(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	config, err := FetchConfigSection(ctx, client, "providers", 3*time.Second)
 	if err != nil {
@@ -312,7 +312,7 @@ func TestRequestDaemonConfigReload(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -320,7 +320,7 @@ func TestRequestDaemonConfigReload(t *testing.T) {
 				return
 			}
 			var m map[string]interface{}
-			json.Unmarshal(msg, &m)
+			_ = json.Unmarshal(msg, &m)
 			if isConnectionInit(m) {
 				testSendHandshake(conn, m)
 				continue
@@ -338,7 +338,7 @@ func TestRequestDaemonConfigReload(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if err := RequestDaemonConfigReload(ctx, client, 3*time.Second); err != nil {
 		t.Fatalf("RequestDaemonConfigReload: %v", err)
@@ -351,7 +351,7 @@ func TestFetchLoopHistory(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -359,7 +359,7 @@ func TestFetchLoopHistory(t *testing.T) {
 				return
 			}
 			var m map[string]interface{}
-			json.Unmarshal(msg, &m)
+			_ = json.Unmarshal(msg, &m)
 			if isConnectionInit(m) {
 				testSendHandshake(conn, m)
 				continue
@@ -383,7 +383,7 @@ func TestFetchLoopHistory(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	resp, err := FetchLoopHistory(ctx, client, "loop-123", 3*time.Second)
 	if err != nil {
@@ -404,7 +404,7 @@ func TestRequestAuth(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -412,7 +412,7 @@ func TestRequestAuth(t *testing.T) {
 				return
 			}
 			var m map[string]interface{}
-			json.Unmarshal(msg, &m)
+			_ = json.Unmarshal(msg, &m)
 			if isConnectionInit(m) {
 				testSendHandshake(conn, m)
 				continue
@@ -434,7 +434,7 @@ func TestRequestAuth(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	resp, err := RequestAuth(ctx, client, "ak-123", "sk-456", 3*time.Second)
 	if err != nil {
@@ -451,7 +451,7 @@ func TestRequestAuthRefresh(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -459,7 +459,7 @@ func TestRequestAuthRefresh(t *testing.T) {
 				return
 			}
 			var m map[string]interface{}
-			json.Unmarshal(msg, &m)
+			_ = json.Unmarshal(msg, &m)
 			if isConnectionInit(m) {
 				testSendHandshake(conn, m)
 				continue
@@ -481,7 +481,7 @@ func TestRequestAuthRefresh(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	resp, err := RequestAuthRefresh(ctx, client, "rt-789", 3*time.Second)
 	if err != nil {
@@ -498,7 +498,7 @@ func TestCronAdd(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -506,7 +506,7 @@ func TestCronAdd(t *testing.T) {
 				return
 			}
 			var m map[string]interface{}
-			json.Unmarshal(msg, &m)
+			_ = json.Unmarshal(msg, &m)
 			if isConnectionInit(m) {
 				testSendHandshake(conn, m)
 				continue
@@ -531,7 +531,7 @@ func TestCronAdd(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	resp, err := client.CronAdd(ctx, "every day at 9am run backup", 0, 3*time.Second)
 	if err != nil {
@@ -548,7 +548,7 @@ func TestJobGuidance_UsesContentField(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -556,7 +556,7 @@ func TestJobGuidance_UsesContentField(t *testing.T) {
 				return
 			}
 			var m map[string]interface{}
-			json.Unmarshal(msg, &m)
+			_ = json.Unmarshal(msg, &m)
 			if isConnectionInit(m) {
 				testSendHandshake(conn, m)
 				continue
@@ -585,7 +585,7 @@ func TestJobGuidance_UsesContentField(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	resp, err := client.JobGuidance(ctx, "job-001", "focus on quality", "", 3*time.Second)
 	if err != nil {
@@ -602,7 +602,7 @@ func TestSendLoopSubscribe_UsesSubscribeEnvelope(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -610,7 +610,7 @@ func TestSendLoopSubscribe_UsesSubscribeEnvelope(t *testing.T) {
 				return
 			}
 			var m map[string]interface{}
-			json.Unmarshal(msg, &m)
+			_ = json.Unmarshal(msg, &m)
 			if isConnectionInit(m) {
 				testSendHandshake(conn, m)
 				continue
@@ -640,7 +640,7 @@ func TestSendLoopSubscribe_UsesSubscribeEnvelope(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if err := client.SendLoopSubscribe(ctx, "loop-123", "", ""); err != nil {
 		t.Fatalf("SendLoopSubscribe: %v", err)

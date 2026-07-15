@@ -5,8 +5,8 @@ import (
 )
 
 // multiplexer routes inbound protocol-1 frames to the correct waiter by
-// (type, id) instead of discarding non-matching events (RFC-629 constraint #1,
-// RFC-450 §5.2/§5.5).
+// (type, id) instead of discarding non-matching events. Concurrent RPCs and
+// subscriptions share one read loop; each waiter is keyed by envelope id.
 //
 // Routing rules:
 //   - response/error with id in pending RPCs        → pendingCall (RPC waiter)
@@ -178,14 +178,4 @@ func (m *mux) route(frame map[string]interface{}) bool {
 	}
 
 	return false
-}
-
-// hasRPCWaiter reports whether an RPC waiter is registered for id. Used by the
-// synchronous ReadEvent path to decide whether a frame should be routed rather
-// than returned to the caller.
-func (m *mux) hasRPCWaiter(id string) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	_, ok := m.rpcs[id]
-	return ok
 }

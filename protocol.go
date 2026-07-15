@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// ProtoVersion is the protocol-1 version string (RFC-450 §8.1).
+// ProtoVersion is the protocol-1 version string.
 const ProtoVersion = "1"
 
 // DefaultClientCapabilities are declared in the connection_init handshake.
@@ -18,12 +18,12 @@ var DefaultClientCapabilities = []string{"streaming", "batch", "heartbeat", "rec
 const ClientVersion = "0.1.0"
 
 // ---------------------------------------------------------------------------
-// Protocol-1 wire envelope (RFC-450 §5.2)
+// Protocol-1 wire envelope
 // ---------------------------------------------------------------------------
 
 // Envelope is the unified {proto, type, method, params, id} base structure.
 // Field tags use the protocol-1 wire names. Optional fields use omitempty so
-// the wire form is compact and matches the RFC-450 §5 examples.
+// the wire form is compact.
 type Envelope struct {
 	Proto   string                 `json:"proto"`
 	Type    string                 `json:"type"`
@@ -36,7 +36,7 @@ type Envelope struct {
 	Receipt string                 `json:"receipt,omitempty"`
 }
 
-// ErrorObject is the structured error nested under envelope.error (RFC-450 §7.1).
+// ErrorObject is the structured error nested under envelope.error.
 type ErrorObject struct {
 	Code    int                    `json:"code"`
 	Message string                 `json:"message"`
@@ -172,7 +172,7 @@ func DecodeMessage(data []byte) (interface{}, error) {
 		return nil, err
 	}
 
-	// Protocol-1 envelope types (RFC-450 §9.1). Decode into the unified
+	// Protocol-1 envelope types. Decode into the unified
 	// Envelope struct so callers can inspect type/method/id/result/error/payload.
 	switch probe.Type {
 	case "connection_init", "connection_ack",
@@ -244,7 +244,7 @@ func DecodeMessage(data []byte) (interface{}, error) {
 // EventMessage when the payload carries a wrapped legacy event frame.
 //
 // The daemon wraps legacy free-form frames as
-// {payload:{namespace, mode:<orig type>, data:<orig frame>}} (RFC-450 §9.3).
+// {payload:{namespace, mode:<orig type>, data:<orig frame>}}.
 // The original event frame (with its own type/mode/data/loop_id) lives inside
 // payload.data, so we project from the inner frame to preserve the legacy
 // EventMessage shape (Mode, Data, LoopID, Namespace) that consumers expect.
@@ -490,6 +490,13 @@ func isLoopAssistantPhase(phase string) bool {
 	}
 }
 
+// IsLoopAssistantPhase reports whether phase tags streamable loop assistant
+// output (including plan_direct narration). This is broader than
+// DefaultDeliverablePhases, which only lists phases that may end a turn.
+func IsLoopAssistantPhase(phase string) bool {
+	return isLoopAssistantPhase(phase)
+}
+
 // LoopAIText extracts plain text from loop-tagged assistant payload content.
 func (m LoopAIMessage) LoopAIText() string {
 	switch c := m.Content.(type) {
@@ -546,7 +553,7 @@ func SplitSootheWirePayload(data []byte) [][]byte {
 // Message factory functions
 // ---------------------------------------------------------------------------
 
-// NewRequestID generates a new UUID request correlation id (RFC-450 §5.2).
+// NewRequestID generates a new UUID request correlation id.
 func NewRequestID() string {
 	return uuid.New().String()
 }

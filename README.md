@@ -8,7 +8,7 @@ WebSocket client in Go for soothe-daemon
 
 This client implements the WebSocket protocol for Soothe daemon, providing full access to:
 
-- Loop lifecycle APIs (RFC-503, RFC-504: new, list, get, tree, prune, delete, reattach, subscribe, detach, input)
+- Loop lifecycle APIs (new, list, get, tree, prune, delete, reattach, subscribe, detach, input)
 - Skills/models discovery APIs
 - Daemon control APIs (status, shutdown, health monitoring)
 - Input/command APIs with autonomous mode support
@@ -17,7 +17,7 @@ This client implements the WebSocket protocol for Soothe daemon, providing full 
 
 ### Limitations
 
-**Autopilot endpoints (RFC-204) are NOT available via WebSocket** - they require HTTP REST API:
+**Autopilot HTTP endpoints are NOT available via WebSocket** - they require HTTP REST API:
 
 - `/api/v1/autopilot/status` - Get autopilot state
 - `/api/v1/autopilot/goals` - List/submit/approve/reject goals

@@ -24,7 +24,7 @@ type PoolConfig struct {
 	HealthCheckInterval time.Duration
 }
 
-// DefaultPoolConfig returns env-overridable defaults (mirrors triarch).
+// DefaultPoolConfig returns conservative pool defaults suitable for most apps.
 func DefaultPoolConfig() *PoolConfig {
 	return &PoolConfig{
 		PoolSize:            1000,
@@ -67,9 +67,6 @@ func (c *pooledConn) isConnected() bool {
 // loop (loop_new + subscribe) or reattaches an existing one (loop_reattach +
 // subscribe + ReattachAndProbe). Persistence of session↔loop mappings is
 // abstracted behind SessionStore.
-//
-// It is the app-agnostic successor to triarch's SoothePoolManager connection
-// mechanics (RFC-629 Layer 1).
 type ConnectionPool struct {
 	url         string
 	cfg         PoolConfig
@@ -258,7 +255,7 @@ func (p *ConnectionPool) Release(sessionID string) {
 		conn.streamCancel = nil
 	}
 	if conn.client != nil {
-		conn.client.Close()
+		_ = conn.client.Close()
 	}
 	log.Printf("[appkit.ConnectionPool] released slot %d for %s", conn.slotID, sessionID)
 	select {
@@ -291,14 +288,14 @@ func (p *ConnectionPool) Stop() {
 			conn.streamCancel()
 		}
 		if conn.client != nil {
-			conn.client.Close()
+			_ = conn.client.Close()
 		}
 	}
 	for {
 		select {
 		case conn := <-p.pool:
 			if conn.client != nil {
-				conn.client.Close()
+				_ = conn.client.Close()
 			}
 		default:
 			return

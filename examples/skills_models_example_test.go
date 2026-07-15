@@ -21,7 +21,7 @@ func Example_listSkills() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// ListSkills sends skills_list and blocks for the response.
 	result, err := client.ListSkills(ctx, 15*time.Second)
@@ -59,7 +59,7 @@ func Example_fetchSkillsCatalog() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	skills, err := soothe.FetchSkillsCatalog(ctx, client, 15*time.Second)
 	if err != nil {
@@ -87,7 +87,7 @@ func Example_listModels() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	result, err := client.ListModels(ctx, 15*time.Second)
 	if err != nil {
@@ -100,7 +100,7 @@ func Example_listModels() {
 }
 
 // Example_invokeSkill resolves a skill on the daemon host and receives
-// its echo response (RFC-400). Uses the blocking InvokeSkill wrapper.
+// its echo response. Uses the blocking InvokeSkill wrapper.
 func Example_invokeSkill() {
 	md := NewMockDaemon(nil)
 	defer md.Close()
@@ -112,7 +112,7 @@ func Example_invokeSkill() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// InvokeSkill resolves a skill by name and passes args as a string.
 	// The default timeout is 120s (skills may be long-running).
@@ -139,7 +139,7 @@ func Example_sendSkillsAndModels() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Start the event reader so responses are multiplexed.
 	eventCh, err := client.ReceiveMessages(ctx)

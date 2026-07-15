@@ -21,7 +21,7 @@ func Example_checkDaemonStatus() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	status, err := soothe.CheckDaemonStatus(ctx, client, 5*time.Second)
 	if err != nil {
@@ -65,10 +65,10 @@ func Example_waitForDaemonReady() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// WaitForDaemonReady returns immediately if handshake completed during Connect.
-	result, err := client.WaitForDaemonReady(10*time.Second)
+	result, err := client.WaitForDaemonReady(10 * time.Second)
 	if err != nil {
 		fmt.Printf("WaitForDaemonReady error: %v\n", err)
 		return
@@ -91,7 +91,7 @@ func Example_daemonShutdown() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if err := soothe.RequestDaemonShutdown(ctx, client, 10*time.Second); err != nil {
 		fmt.Printf("Shutdown error: %v\n", err)
@@ -115,7 +115,7 @@ func Example_configGetReload() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Fetch the "models" config section via the package-level helper.
 	sec, err := soothe.FetchConfigSection(ctx, client, "models", 5*time.Second)
@@ -149,7 +149,7 @@ func Example_sendDaemonStatus() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	_, _ = client.ReceiveMessages(ctx)
 
@@ -189,7 +189,7 @@ func Example_mcpStatus() {
 		fmt.Printf("Connect error: %v\n", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Blocking: MCPStatus sends mcp_status and waits for the response.
 	result, err := client.MCPStatus(ctx, 15*time.Second)

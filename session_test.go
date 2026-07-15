@@ -31,7 +31,7 @@ func acceptingHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
@@ -47,7 +47,7 @@ func acceptingHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		// Echo other messages.
-		conn.WriteMessage(websocket.TextMessage, msg)
+		_ = conn.WriteMessage(websocket.TextMessage, msg)
 	}
 }
 

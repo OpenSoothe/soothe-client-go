@@ -11,7 +11,7 @@ The `soothe-client-go` package speaks the Soothe daemon **WebSocket** protocol w
 3. **Skills / models** — `skills_list`, `models_list`, `invoke_skill`
 4. **Daemon** — `daemon_ready`, `daemon_status`, `daemon_shutdown`, `config_get`
 5. **Input** — `loop_input` / `SendInput` with `WithLoopID`, autonomous options, attachments (see SDK parity)
-6. **Structured commands** — `command_request` with `loop_id` (RFC-404 wrappers in `request.go`)
+6. **Structured commands** — `command_request` with `loop_id` (wrappers in `request.go`)
 8. **Health** — optional heartbeat tracking (`HeartbeatTracker`, `loop_id` in heartbeat payloads)
 
 ## REST-only features
@@ -28,6 +28,7 @@ Some endpoints exist only on **HTTP REST** (not this package), for example riche
 - `docs/API_TEST_COVERAGE.md` — which tests cover which APIs
 - `docs/heartbeat.md` — heartbeat tracker and `DaemonHealth.LoopID`
 - `docs/impl/SIL-03-sessionstore-context-refactor.md` — breaking `SessionStore` context.Context refactor (post-v0.2.4)
+- `docs/impl/SIL-04-appkit-turn-lifecycle.md` — idle timeout, status-idle, compaction, soft stream-close
 
 ## Context propagation (post-v0.2.4 refactor)
 
@@ -72,9 +73,8 @@ Before the refactor, `SessionStore` methods had no `context.Context`, so:
 - the `TurnRunner` query-timeout deadline could not reach the DB driver;
 - trace spans attached to the caller's context did not reach the store.
 
-All three are fixed by the context parameter. The two `SessionStore`
-implementations in **mizar-airway** (`MemSessionStore`, `PGSessionStore`) were
-updated in lockstep.
+All three are fixed by the context parameter. Application `SessionStore`
+implementations should accept and honor `ctx` the same way.
 
 ### Not yet wired
 

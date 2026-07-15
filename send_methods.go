@@ -334,7 +334,7 @@ func (c *Client) SendLoopInput(ctx context.Context, loopID string, content strin
 }
 
 // ---------------------------------------------------------------------------
-// Additional loop send methods (RFC-503 extensions)
+// Additional loop send methods
 // ---------------------------------------------------------------------------
 
 // SendLoopMessages requests persisted conversation/activity rows (request envelope).

@@ -67,7 +67,7 @@ func TestIntegration_IntentHintTextCompletion(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	wsDir := t.TempDir()
 	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
@@ -136,7 +136,6 @@ func TestIntegration_IntentHintTextCompletion(t *testing.T) {
 				case "running":
 					sawRunning = true
 				case "idle":
-					sawIdle = true
 					if assistant != "" {
 						t.Logf("text_completion assistant: %q", assistant)
 						return
@@ -169,7 +168,7 @@ func TestIntegration_IntentHintImageToText(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	wsDir := t.TempDir()
 	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
@@ -260,7 +259,7 @@ func TestIntegration_IntentHintImageToText_RejectsWithoutAttachments(t *testing.
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	wsDir := t.TempDir()
 	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
@@ -343,7 +342,7 @@ func TestIntegration_IntentHintTextCompletionStructured(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	wsDir := t.TempDir()
 	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
@@ -425,7 +424,7 @@ func TestIntegration_IntentHintStructured_RejectsWithoutStructuredHint(t *testin
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	wsDir := t.TempDir()
 	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)
@@ -491,7 +490,7 @@ func TestIntegration_IntentHintDirectLLMRemoved(t *testing.T) {
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	wsDir := t.TempDir()
 	loopID, err := BootstrapLoopSession(ctx, client, "", wsDir, cfg)

@@ -74,7 +74,7 @@ func (md *MockDaemon) Close() {
 	md.mu.Lock()
 	defer md.mu.Unlock()
 	for _, c := range md.conns {
-		c.Close()
+		_ = c.Close()
 	}
 }
 
@@ -87,7 +87,7 @@ func (md *MockDaemon) handle(w http.ResponseWriter, r *http.Request) {
 	md.mu.Lock()
 	md.conns = append(md.conns, conn)
 	md.mu.Unlock()
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	for {
 		_, msg, err := conn.ReadMessage()
@@ -154,7 +154,7 @@ func (md *MockDaemon) handleMessage(conn *websocket.Conn, m map[string]interface
 // handleRPC responds to protocol-1 request envelopes by method name.
 func (md *MockDaemon) handleRPC(conn *websocket.Conn, id, method string, params map[string]interface{}) {
 	switch method {
-	// --- Loop lifecycle (RFC-503) -----------------------------------------
+	// --- Loop lifecycle ---------------------------------------------------
 	case "loop_new":
 		md.sendResponse(conn, id, map[string]interface{}{
 			"loop_id": md.nextLoopID(),
@@ -204,7 +204,7 @@ func (md *MockDaemon) handleRPC(conn *websocket.Conn, id, method string, params 
 		})
 	case "loop_messages":
 		md.sendResponse(conn, id, map[string]interface{}{
-			"loop_id":  params["loop_id"],
+			"loop_id": params["loop_id"],
 			"messages": []interface{}{
 				map[string]interface{}{"role": "user", "content": "Hello"},
 				map[string]interface{}{"role": "assistant", "content": "Hi there"},
@@ -233,7 +233,7 @@ func (md *MockDaemon) handleRPC(conn *websocket.Conn, id, method string, params 
 			"replayable": true,
 		})
 
-	// --- Autopilot jobs (RFC-228) -----------------------------------------
+	// --- Autopilot jobs ---------------------------------------------------
 	case "job_create":
 		md.sendResponse(conn, id, map[string]interface{}{
 			"job_id":  md.nextJobID(),
@@ -278,7 +278,7 @@ func (md *MockDaemon) handleRPC(conn *websocket.Conn, id, method string, params 
 			"success":  true,
 		})
 
-	// --- Cron (RFC-229) ---------------------------------------------------
+	// --- Cron -------------------------------------------------------------
 	case "cron_add":
 		md.sendResponse(conn, id, map[string]interface{}{
 			"job_id":  md.nextCronID(),
@@ -367,7 +367,7 @@ func (md *MockDaemon) handleRPC(conn *websocket.Conn, id, method string, params 
 			"success":       true,
 		})
 
-	// --- Commands (RFC-404) ----------------------------------------------
+	// --- Commands --------------------------------------------------------
 	case "command_request":
 		md.handleCommand(conn, id, params)
 
@@ -414,7 +414,7 @@ func (md *MockDaemon) handleCommand(conn *websocket.Conn, id string, params map[
 	case "policy":
 		md.sendResponse(conn, id, map[string]interface{}{
 			"policy":    "default",
-			"max_turns":  20,
+			"max_turns": 20,
 		})
 	case "config":
 		md.sendResponse(conn, id, map[string]interface{}{
@@ -483,15 +483,6 @@ func (md *MockDaemon) sendResponse(conn *websocket.Conn, id string, result map[s
 	})
 }
 
-func (md *MockDaemon) sendError(conn *websocket.Conn, id string, code int, message string) {
-	md.write(conn, map[string]interface{}{
-		"proto": "1",
-		"type":  "error",
-		"error": map[string]interface{}{"code": code, "message": message},
-		"id":    id,
-	})
-}
-
 func (md *MockDaemon) sendNext(conn *websocket.Conn, id string, payload map[string]interface{}) {
 	md.write(conn, map[string]interface{}{
 		"proto":   "1",
@@ -515,7 +506,7 @@ func (md *MockDaemon) sendStatus(conn *websocket.Conn, state string, loopID inte
 
 func (md *MockDaemon) write(conn *websocket.Conn, v map[string]interface{}) {
 	b, _ := json.Marshal(v)
-	conn.WriteMessage(websocket.TextMessage, b)
+	_ = conn.WriteMessage(websocket.TextMessage, b)
 }
 
 // --- Deterministic ID generators -------------------------------------------
