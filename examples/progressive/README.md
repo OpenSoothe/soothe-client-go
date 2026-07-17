@@ -1,4 +1,4 @@
-# Progressive examples (IG-662)
+# Progressive examples
 
 Mirror the Python `examples/01`–`06` ladder. These Go tests use the in-process
 mock daemon (offline). For a live daemon, set `SOOTHE_WS_URL` and run the

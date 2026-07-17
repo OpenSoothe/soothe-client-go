@@ -8,7 +8,7 @@
 // frontend expects are supplied by the application via configuration
 // (e.g. DeliverablePhases) and interfaces (e.g. SessionStore).
 //
-// # Layers
+// # Stack
 //
 //   - Core soothe.Client — transport, handshake, multiplexed RPC + event stream.
 //   - This package — DaemonSession, ConnectionPool, QueryGate, TurnRunner,
@@ -16,7 +16,7 @@
 //   - The application — domain types, persistence implementation, product
 //     config, user-facing copy.
 //
-// # API tiers (RFC-629 / IG-662)
+// # API tiers
 //
 //   - One conversation, streamed turns → DaemonSession
 //   - Multi-user HTTP backend → ConnectionPool + TurnRunner

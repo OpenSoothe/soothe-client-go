@@ -7,9 +7,20 @@
 | `client_test.go` | Unit tests with mock WebSocket servers |
 | `helpers_test.go` | Helper RPC tests (daemon status, config, skills) |
 | `heartbeat_test.go` | Heartbeat tracker unit tests |
+| `appkit/daemon_session_test.go` | `DaemonSession` dual-socket turn streaming |
+| `examples/progressive/` | API-tier ladder 01–06 (offline mock) |
 | `integration_test.go` | Core integration tests against a live daemon |
 | `integration_loop_test.go` | Loop management and command RPC integration tests |
 | `integration_image_test.go` | Image attachment integration tests |
+
+## API tiers
+
+| Entry | Typical test |
+|-------|----------------|
+| `appkit.DaemonSession` | `appkit/daemon_session_test.go`, `examples/progressive` (`02`–`04`) |
+| `CommandClient` | `examples/progressive` (`06_jobs`), `examples/job_cron_example_test.go` |
+| `Client` | `client_test.go`, integration suite |
+| `ConnectionPool` + `TurnRunner` | `appkit/*_test.go`, `examples/appkit`, progressive `05` |
 
 ## Loop management
 
@@ -72,4 +83,4 @@ go test -v -run 'TestClient_' ./...
 ## Notes
 
 - Integration tests skip or log when the daemon is unreachable (`testing.Short()` or connection failure).
-- Legacy **thread** WebSocket message types (`thread_*`, `subscribe_thread`, etc.) are not part of the current daemon protocol; this client targets **loop** messages only.
+- Older **thread**-named WebSocket message types are not part of the current daemon protocol; this client targets **loop** messages only.

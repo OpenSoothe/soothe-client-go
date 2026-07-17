@@ -1,4 +1,4 @@
-# SIL-03 — SessionStore context.Context refactor (post-v0.2.4, unreleased)
+# SessionStore context.Context refactor
 
 **Status:** unreleased (HEAD is `v0.2.4-5-g2ffdb6a` at time of writing)
 **Breaking:** yes — `appkit.SessionStore` interface signature change
