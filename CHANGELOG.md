@@ -5,6 +5,15 @@ All notable changes to `soothe-client-go` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-07-17
+
+### Added
+- Full protocol-1 `autopilot_*` WebSocket RPCs on `Client` and `CommandClient` (status, submit, goals, wake/dream/resume, list/get jobs)
+
+### Changed
+- Handshake `ClientVersion` reports `0.3.1`
+- README documents WebSocket-only autopilot control (no HTTP REST)
+
 ## [0.3.0] - 2026-07-17
 
 ### Added

@@ -19,14 +19,15 @@ with a **loop-centric** API. Public entry points:
 3. **Skills / models** — `skills_list`, `models_list`, `invoke_skill`
 4. **Daemon** — `daemon_ready`, `daemon_status`, `daemon_shutdown`, `config_get`
 5. **Input** — `loop_input` / `SendInput` with `WithLoopID`, autonomous options, attachments
-6. **Jobs / cron** — `job_*`, `cron_*` via `CommandClient` or `Client` helpers (single `RequestResponse`, no double-send)
+6. **Jobs / cron / autopilot** — `job_*`, `cron_*`, `autopilot_*` via `CommandClient` or `Client` helpers (single `RequestResponse`, no double-send)
 7. **Structured commands** — `command_request` with `loop_id`
 8. **Health** — optional heartbeat tracking (`HeartbeatTracker`)
 
-## REST-only features
+## Autopilot vs jobs
 
-Some endpoints exist only on **HTTP REST** (not this package), for example richer
-health metrics or autopilot CRUD. Use a separate HTTP client if you need those.
+- **`job_*`** — preferred job lifecycle (create / status / pause / resume / cancel / dag / guidance)
+- **`autopilot_*`** — goal-level control (status, submit, list/get/cancel goals, wake/dream/resume) plus root-job listing
+- **`AutopilotSubscribe`** — long-lived worker event stream (`subscribe` / `autopilot_events`); not for ephemeral `CommandClient`
 
 ## Documentation
 

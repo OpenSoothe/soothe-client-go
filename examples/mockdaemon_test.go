@@ -278,6 +278,66 @@ func (md *MockDaemon) handleRPC(conn *websocket.Conn, id, method string, params 
 			"success":  true,
 		})
 
+	// --- Autopilot goal RPCs ---------------------------------------------
+	case "autopilot_status":
+		md.sendResponse(conn, id, map[string]interface{}{
+			"state":    "active",
+			"running":  true,
+			"dreaming": false,
+			"loop_pool": map[string]interface{}{"active": 1, "idle": 2},
+		})
+	case "autopilot_submit":
+		md.sendResponse(conn, id, map[string]interface{}{
+			"status":  "submitted",
+			"goal_id": md.nextJobID(),
+		})
+	case "autopilot_list_goals":
+		md.sendResponse(conn, id, map[string]interface{}{
+			"goals":  []interface{}{},
+			"source": "autopilot_service",
+		})
+	case "autopilot_get_goal":
+		md.sendResponse(conn, id, map[string]interface{}{
+			"goal":   map[string]interface{}{"id": params["goal_id"], "status": "active"},
+			"source": "autopilot_service",
+		})
+	case "autopilot_cancel_goal":
+		md.sendResponse(conn, id, map[string]interface{}{
+			"status":     "cancelled",
+			"goal_id":    params["goal_id"],
+			"new_status": "cancelled",
+		})
+	case "autopilot_cancel_all":
+		md.sendResponse(conn, id, map[string]interface{}{
+			"status":          "cancelled",
+			"cancelled_count": 0,
+			"goal_ids":        []interface{}{},
+		})
+	case "autopilot_wake":
+		md.sendResponse(conn, id, map[string]interface{}{"status": "wake_sent"})
+	case "autopilot_dream":
+		md.sendResponse(conn, id, map[string]interface{}{"status": "dream_sent"})
+	case "autopilot_resume":
+		md.sendResponse(conn, id, map[string]interface{}{
+			"status":     "reactivated",
+			"goal_id":    params["goal_id"],
+			"new_status": "pending",
+		})
+	case "autopilot_list_jobs":
+		md.sendResponse(conn, id, map[string]interface{}{
+			"jobs":   []interface{}{},
+			"source": "autopilot_service",
+		})
+	case "autopilot_get_job":
+		md.sendResponse(conn, id, map[string]interface{}{
+			"job":            map[string]interface{}{"id": params["job_id"], "status": "active"},
+			"dag":            map[string]interface{}{"nodes": []interface{}{}},
+			"active_goals":   0,
+			"completed_goals": 0,
+			"total_goals":    0,
+			"source":         "autopilot_service",
+		})
+
 	// --- Cron -------------------------------------------------------------
 	case "cron_add":
 		md.sendResponse(conn, id, map[string]interface{}{

@@ -98,10 +98,10 @@ cancellation and deadlines reach the storage backend. See
 
 ## Limitations
 
-**Autopilot HTTP endpoints are not available via WebSocket** — they need the
-daemon's HTTP REST API (`/api/v1/autopilot/...`). This package speaks WebSocket
-only. Prefer `CommandClient` for job/cron one-shots so they do not share a
-streaming socket.
+Autopilot control is WebSocket-only (protocol-1 `autopilot_*` / `job_*`
+request RPCs). Prefer `CommandClient` for job/cron/autopilot one-shots so they
+do not share a streaming socket. Worker event streams use
+`Client.AutopilotSubscribe` on a long-lived connection.
 
 ## Develop
 

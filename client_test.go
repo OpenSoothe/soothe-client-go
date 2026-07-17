@@ -165,6 +165,42 @@ func testRequestResponseHandler(w http.ResponseWriter, r *http.Request) {
 			testSendResponse(conn, id, map[string]interface{}{"echo": map[string]interface{}{"skill": "test", "status": "ok"}})
 		case "error_test":
 			testSendError(conn, id, -32603, "test error message")
+		case "autopilot_status":
+			testSendResponse(conn, id, map[string]interface{}{
+				"state": "active", "running": true, "dreaming": false,
+			})
+		case "autopilot_submit":
+			testSendResponse(conn, id, map[string]interface{}{
+				"status": "submitted", "goal_id": "goal-1",
+			})
+		case "autopilot_list_goals":
+			testSendResponse(conn, id, map[string]interface{}{"goals": []interface{}{}})
+		case "autopilot_get_goal":
+			testSendResponse(conn, id, map[string]interface{}{
+				"goal": map[string]interface{}{"id": params["goal_id"]},
+			})
+		case "autopilot_cancel_goal":
+			testSendResponse(conn, id, map[string]interface{}{
+				"status": "cancelled", "goal_id": params["goal_id"],
+			})
+		case "autopilot_cancel_all":
+			testSendResponse(conn, id, map[string]interface{}{
+				"status": "cancelled", "cancelled_count": 0,
+			})
+		case "autopilot_wake":
+			testSendResponse(conn, id, map[string]interface{}{"status": "wake_sent"})
+		case "autopilot_dream":
+			testSendResponse(conn, id, map[string]interface{}{"status": "dream_sent"})
+		case "autopilot_resume":
+			testSendResponse(conn, id, map[string]interface{}{
+				"status": "reactivated", "goal_id": params["goal_id"],
+			})
+		case "autopilot_list_jobs":
+			testSendResponse(conn, id, map[string]interface{}{"jobs": []interface{}{}})
+		case "autopilot_get_job":
+			testSendResponse(conn, id, map[string]interface{}{
+				"job": map[string]interface{}{"id": params["job_id"]},
+			})
 		default:
 			testSendResponse(conn, id, map[string]interface{}{"echoed": method})
 		}
