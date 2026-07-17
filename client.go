@@ -35,6 +35,7 @@ type Client struct {
 	disconnCh    chan DisconnectCause
 	disconnOnce  sync.Once
 	disconnCause DisconnectCause
+	disconnected atomic.Bool
 	// Pending-request/subscription multiplexer.
 	// Routes inbound frames by (type, id) instead of discarding non-matching events.
 	mux *mux
@@ -43,6 +44,14 @@ type Client struct {
 	// (gorilla/websocket forbids concurrent readers); it waits purely on the
 	// mux channels for its response.
 	readerActive atomic.Bool
+	// pendingEvents holds frames peeled or re-queued ahead of the socket.
+	pendingEvents    []map[string]interface{}
+	inboundMaxSize   int
+	inboundDropped   int
+	onStreamDegraded func(dropped int, reason string)
+	// delivery_ack tracking (monotonic per-loop recv seq).
+	deliveryRecvSeq  map[string]int
+	deliveryAckedSeq map[string]int
 }
 
 // NewClient creates a new Soothe daemon WebSocket client.
@@ -51,10 +60,13 @@ func NewClient(url string, cfg *Config) *Client {
 		cfg = DefaultConfig()
 	}
 	return &Client{
-		url:       url,
-		config:    cfg,
-		disconnCh: make(chan DisconnectCause, 1),
-		mux:       newMux(),
+		url:              url,
+		config:           cfg,
+		disconnCh:        make(chan DisconnectCause, 1),
+		mux:              newMux(),
+		inboundMaxSize:   DefaultInboundMaxSize,
+		deliveryRecvSeq:  make(map[string]int),
+		deliveryAckedSeq: make(map[string]int),
 	}
 }
 
@@ -85,6 +97,7 @@ func (c *Client) signalDisconnect(cause DisconnectCause) {
 		c.disconnCause = cause
 		ch := c.disconnCh
 		c.mu.Unlock()
+		c.disconnected.Store(true)
 		// Send the cause (buffered cap 1) then close so readers both receive
 		// the value and unblock. Closing a channel alone yields the zero value,
 		// which would lose the clean/unclean distinction.
@@ -125,7 +138,9 @@ func (c *Client) Connect(ctx context.Context) error {
 	c.disconnCh = make(chan DisconnectCause, 1)
 	c.disconnOnce = sync.Once{}
 	c.disconnCause = 0
+	c.disconnected.Store(false)
 	c.mux = newMux()
+	c.pendingEvents = nil
 	c.handshakeComplete = false
 	c.mu.Unlock()
 
@@ -371,6 +386,213 @@ func (c *Client) IsConnected() bool {
 	return c.conn != nil && !c.closed
 }
 
+// IsDisconnected reports whether Disconnected() has already fired.
+func (c *Client) IsDisconnected() bool {
+	return c.disconnected.Load()
+}
+
+// IsConnectionAlive is true when connected and not yet marked disconnected.
+func (c *Client) IsConnectionAlive() bool {
+	return c.IsConnected() && !c.IsDisconnected()
+}
+
+// Notify sends a protocol-1 fire-and-forget notification.
+func (c *Client) Notify(ctx context.Context, method string, params map[string]interface{}) error {
+	return c.SendMessage(ctx, NewNotificationEnvelope(method, params))
+}
+
+// ReadEventWithTimeout reads one event with a socket read deadline.
+// Returns nil, nil on timeout or clean close.
+func (c *Client) ReadEventWithTimeout(timeout time.Duration) (map[string]interface{}, error) {
+	c.mu.Lock()
+	if len(c.pendingEvents) > 0 {
+		ev := c.pendingEvents[0]
+		c.pendingEvents = c.pendingEvents[1:]
+		c.mu.Unlock()
+		return ev, nil
+	}
+	conn := c.conn
+	c.mu.Unlock()
+	if conn == nil {
+		return nil, fmt.Errorf("soothe: not connected")
+	}
+	if timeout > 0 {
+		_ = conn.SetReadDeadline(time.Now().Add(timeout))
+		defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
+	}
+	ev, err := c.ReadEvent()
+	if err != nil {
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return ev, nil
+}
+
+// PeelStalePendingControlEvents drops handshake/terminal leftovers from the
+// pending buffer (and a short live drain) before a new turn starts.
+func (c *Client) PeelStalePendingControlEvents() []string {
+	var peeled []string
+	c.mu.Lock()
+	kept := make([]map[string]interface{}, 0, len(c.pendingEvents))
+	for _, ev := range c.pendingEvents {
+		if label := StalePendingFrameLabel(ev); label != "" {
+			peeled = append(peeled, label)
+			continue
+		}
+		kept = append(kept, ev)
+	}
+	c.pendingEvents = kept
+	c.mu.Unlock()
+
+	// Best-effort non-blocking drain of a few live stale frames.
+	for i := 0; i < 8; i++ {
+		ev, err := c.ReadEventWithTimeout(5 * time.Millisecond)
+		if err != nil || ev == nil {
+			break
+		}
+		if label := StalePendingFrameLabel(ev); label != "" {
+			peeled = append(peeled, label)
+			continue
+		}
+		c.mu.Lock()
+		c.enqueuePendingLocked(ev)
+		c.mu.Unlock()
+		break
+	}
+	return peeled
+}
+
+// PushPendingEvent re-queues an event ahead of subsequent ReadEvent calls.
+// Applies priority-aware drop when the pending buffer is full.
+func (c *Client) PushPendingEvent(ev map[string]interface{}) {
+	if ev == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.enqueuePendingLocked(ev)
+}
+
+// SetInboundMaxSize overrides the pending-event cap (tests / tuning).
+func (c *Client) SetInboundMaxSize(n int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if n > 0 {
+		c.inboundMaxSize = n
+	}
+}
+
+// InboundDropped returns how many NORMAL-priority frames were dropped under backpressure.
+func (c *Client) InboundDropped() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.inboundDropped
+}
+
+// SetStreamDegradedCallback registers a hook invoked on the first inbound overflow drop.
+func (c *Client) SetStreamDegradedCallback(fn func(dropped int, reason string)) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.onStreamDegraded = fn
+}
+
+func (c *Client) enqueuePendingLocked(ev map[string]interface{}) {
+	max := c.inboundMaxSize
+	if max <= 0 {
+		max = DefaultInboundMaxSize
+	}
+	if len(c.pendingEvents) < max {
+		c.pendingEvents = append(c.pendingEvents, ev)
+		return
+	}
+	// Priority-aware drop: remove highest-priority (NORMAL) frame if possible.
+	dropIdx := -1
+	dropPri := -1
+	for i, item := range c.pendingEvents {
+		p := InboundFrameDropPriority(item)
+		if p > dropPri {
+			dropPri = p
+			dropIdx = i
+		}
+	}
+	incomingPri := InboundFrameDropPriority(ev)
+	if dropIdx >= 0 && dropPri >= DropPriorityNormal {
+		c.pendingEvents = append(c.pendingEvents[:dropIdx], c.pendingEvents[dropIdx+1:]...)
+		c.pendingEvents = append(c.pendingEvents, ev)
+		c.noteInboundDropLocked()
+		return
+	}
+	if incomingPri >= DropPriorityNormal {
+		// Drop the incoming NORMAL frame rather than a CRITICAL/HIGH resident.
+		c.noteInboundDropLocked()
+		return
+	}
+	// Incoming is CRITICAL/HIGH: force-drop oldest to admit it.
+	if len(c.pendingEvents) > 0 {
+		c.pendingEvents = c.pendingEvents[1:]
+		c.noteInboundDropLocked()
+	}
+	c.pendingEvents = append(c.pendingEvents, ev)
+}
+
+func (c *Client) noteInboundDropLocked() {
+	c.inboundDropped++
+	cb := c.onStreamDegraded
+	n := c.inboundDropped
+	if cb != nil && n == 1 {
+		go cb(1, "inbound_queue_overflow")
+	}
+}
+
+func (c *Client) trackInboundDeliveryAck(event map[string]interface{}) {
+	if event == nil {
+		return
+	}
+	if asString(event["type"]) == "event_batch" {
+		if sub, ok := event["events"].([]interface{}); ok {
+			for _, item := range sub {
+				if m, ok := item.(map[string]interface{}); ok {
+					c.trackInboundDeliveryAck(m)
+				}
+			}
+		}
+		return
+	}
+	if !InboundNeedsDeliveryAck(event) {
+		return
+	}
+	loopID := ExtractLoopIDFromInbound(event)
+	if loopID == "" {
+		return
+	}
+	c.mu.Lock()
+	c.deliveryRecvSeq[loopID]++
+	seq := c.deliveryRecvSeq[loopID]
+	acked := c.deliveryAckedSeq[loopID]
+	c.mu.Unlock()
+	if seq <= acked {
+		return
+	}
+	go c.sendDeliveryAck(loopID, seq)
+}
+
+func (c *Client) sendDeliveryAck(loopID string, seq int) {
+	c.mu.Lock()
+	if seq <= c.deliveryAckedSeq[loopID] {
+		c.mu.Unlock()
+		return
+	}
+	c.deliveryAckedSeq[loopID] = seq
+	c.mu.Unlock()
+	_ = c.Notify(context.Background(), "delivery_ack", map[string]interface{}{
+		"loop_id": loopID,
+		"seq":     seq,
+	})
+}
+
 // EnableHeartbeatTracking enables automatic heartbeat tracking for daemon health monitoring.
 // The tracker will process heartbeat events as they are received.
 func (c *Client) EnableHeartbeatTracking() {
@@ -593,9 +815,19 @@ func (c *Client) ReceiveMessages(ctx context.Context) (<-chan interface{}, error
 // subscription waiter is routed to that waiter (and skipped), so concurrent
 // in-flight RPCs on a shared reader no longer discard each other's responses.
 func (c *Client) ReadEvent() (map[string]interface{}, error) {
+	c.mu.Lock()
+	if len(c.pendingEvents) > 0 {
+		ev := c.pendingEvents[0]
+		c.pendingEvents = c.pendingEvents[1:]
+		c.mu.Unlock()
+		c.trackInboundDeliveryAck(ev)
+		return ev, nil
+	}
 	if c.conn == nil {
+		c.mu.Unlock()
 		return nil, fmt.Errorf("soothe: not connected")
 	}
+	c.mu.Unlock()
 
 	// Recover from potential panic on failed websocket connection
 	var data []byte
@@ -644,6 +876,7 @@ func (c *Client) ReadEvent() (map[string]interface{}, error) {
 			if c.mux != nil && c.mux.route(m) {
 				continue
 			}
+			c.trackInboundDeliveryAck(m)
 			return m, nil
 		}
 	}

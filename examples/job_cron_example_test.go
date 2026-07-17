@@ -83,12 +83,12 @@ func Example_jobLifecycle() {
 		fmt.Println("JobCancel: ok")
 	}
 	// Output:
-	// Created job: job-2
-	// Job status: map[completed:0 goal_status:in_progress job_id:job-2 total:5 workers:3]
+	// Created job: job-1
+	// Job status: map[completed:0 goal_status:in_progress job_id:job-1 total:5 workers:3]
 	// Job DAG: map[dag:root_goal
 	//   ├── subtask_1
 	//   ├── subtask_2
-	//   └── subtask_3 job_id:job-2]
+	//   └── subtask_3 job_id:job-1]
 	// JobPause: ok
 	// JobResume: ok
 	// JobGuidance: ok

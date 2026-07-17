@@ -90,13 +90,17 @@ func (c *Client) JobCreate(ctx context.Context, goal string, workspace string, t
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	if err := c.SendJobCreate(ctx, goal, workspace); err != nil {
-		return nil, err
+	if goal == "" {
+		return nil, fmt.Errorf("goal is required")
 	}
-	return c.RequestResponse(ctx, map[string]interface{}{
+	payload := map[string]interface{}{
 		"type": "job_create",
 		"goal": goal,
-	}, "job_create_response", timeout)
+	}
+	if workspace != "" {
+		payload["workspace"] = workspace
+	}
+	return c.RequestResponse(ctx, payload, "job_create_response", timeout)
 }
 
 // JobStatus queries job state and waits for response.
@@ -104,8 +108,8 @@ func (c *Client) JobStatus(ctx context.Context, jobID string, timeout time.Durat
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	if err := c.SendJobStatus(ctx, jobID); err != nil {
-		return nil, err
+	if jobID == "" {
+		return nil, fmt.Errorf("job_id is required")
 	}
 	return c.RequestResponse(ctx, map[string]interface{}{
 		"type":   "job_status",
@@ -118,8 +122,8 @@ func (c *Client) JobPause(ctx context.Context, jobID string, timeout time.Durati
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	if err := c.SendJobPause(ctx, jobID); err != nil {
-		return nil, err
+	if jobID == "" {
+		return nil, fmt.Errorf("job_id is required")
 	}
 	return c.RequestResponse(ctx, map[string]interface{}{
 		"type":   "job_pause",
@@ -132,8 +136,8 @@ func (c *Client) JobResume(ctx context.Context, jobID string, timeout time.Durat
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	if err := c.SendJobResume(ctx, jobID); err != nil {
-		return nil, err
+	if jobID == "" {
+		return nil, fmt.Errorf("job_id is required")
 	}
 	return c.RequestResponse(ctx, map[string]interface{}{
 		"type":   "job_resume",
@@ -146,8 +150,8 @@ func (c *Client) JobCancel(ctx context.Context, jobID string, timeout time.Durat
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	if err := c.SendJobCancel(ctx, jobID); err != nil {
-		return nil, err
+	if jobID == "" {
+		return nil, fmt.Errorf("job_id is required")
 	}
 	return c.RequestResponse(ctx, map[string]interface{}{
 		"type":   "job_cancel",
@@ -160,8 +164,8 @@ func (c *Client) JobDag(ctx context.Context, jobID string, timeout time.Duration
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	if err := c.SendJobDag(ctx, jobID); err != nil {
-		return nil, err
+	if jobID == "" {
+		return nil, fmt.Errorf("job_id is required")
 	}
 	return c.RequestResponse(ctx, map[string]interface{}{
 		"type":   "job_dag",

@@ -41,55 +41,61 @@ The daemon only exposes these through HTTP REST transport (`http_rest.py`). To u
 
 ## Package Structure
 
-The client uses a flat package structure with all code in the root `soothe` package:
-
 ```
 soothe-client-go/
-├── client.go           - Core Client struct and connection management
-├── send_methods.go     - High-level Send* API methods
-├── request.go          - Request-response pattern methods
-├── verbosity.go        - Verbosity types for event filtering
-├── session.go          - Bootstrap helpers for loop session (daemon_ready, loop_new, loop_subscribe)
-├── helpers.go          - RPC convenience functions
-├── config.go           - Client configuration
-├── protocol.go         - Wire protocol message types
-├── events.go           - Event namespace constants and classification
-├── errors.go           - Custom error types
+├── client.go, protocol.go, session.go, …  — Layer 0 transport
+├── command_client.go, stream_terminal.go  — CommandClient + turn helpers
+└── appkit/                                — DaemonSession, pool, TurnRunner, …
 ```
 
 ## Usage
 
 ```go
-import "github.com/mirasoth/soothe-client-go"
+import (
+    "context"
+    "fmt"
 
-// Create client
-client := soothe.NewClient("ws://localhost:8080", nil)
+    soothe "github.com/mirasoth/soothe-client-go"
+    "github.com/mirasoth/soothe-client-go/appkit"
+)
 
-// Connect. For a daemon that may still be warming up, prefer ConnectWithRetries
-// (mirrors soothe_sdk.client.session.connect_websocket_with_retries). It retries
-// on connect failure with bounded attempts and honours ctx cancellation.
-if err := soothe.ConnectWithRetries(ctx, client, 40, 250*time.Millisecond); err != nil {
-    log.Fatal(err)
+ctx := context.Background()
+session := appkit.NewDaemonSession("ws://127.0.0.1:8765", nil)
+defer session.Close()
+
+if _, err := session.Connect(ctx, ""); err != nil {
+    panic(err)
 }
-// ConnectWithRetries defaults: maxRetries<=0 → 40, retryDelay<=0 → 250ms.
-// For a one-shot connect with no retry, use client.Connect(ctx) directly.
-
-// Wait for daemon ready
-if _, err := client.WaitForDaemonReady(10*time.Second); err != nil {
-    log.Fatal(err)
+if err := session.SendTurn(ctx, "Summarize this repo", nil); err != nil {
+    panic(err)
 }
-
-// Send input
-if err := client.SendInput(ctx, "Hello", soothe.WithLoopID("loop-123")); err != nil {
-    log.Fatal(err)
+chunks, errCh := session.IterTurnChunks(ctx, 0)
+for chunk := range chunks {
+    fmt.Println(chunk.Mode, chunk.Data)
 }
-
-// Receive events
-ch, err := client.ReceiveMessages(ctx)
-for msg := range ch {
-    // Process message
+if err := <-errCh; err != nil {
+    panic(err)
 }
 ```
+
+## What you get
+
+| Need | Use |
+|------|-----|
+| One conversation, stream replies | `appkit.DaemonSession` |
+| Jobs / cron one-shots | `soothe.CommandClient` |
+| Raw WebSocket / custom RPCs | `soothe.Client` |
+| Many users / HTTP backend | `appkit.ConnectionPool` + `TurnRunner` |
+
+### Limitations
+
+**Autopilot HTTP endpoints are NOT available via WebSocket** - they require HTTP REST API:
+
+- `/api/v1/autopilot/status` - Get autopilot state
+- `/api/v1/autopilot/goals` - List/submit/approve/reject goals
+- `/api/v1/autopilot/wake` / `/api/v1/autopilot/dream` - Mode transitions
+
+The daemon only exposes these through HTTP REST transport. To use autopilot features in Go via REST, implement an HTTP client separately (not included in this package). WebSocket job/cron RPCs use `CommandClient` or `Client` job helpers.
 
 ## appkit — SessionStore & ConnectionPool
 
@@ -151,4 +157,4 @@ if soothe.ShouldShow(tier, verbosity) {
 
 ## Compatibility
 
-This client implements the same protocol as the Python `soothe-sdk` and mirrors its API structure.
+This client implements the same protocol-1 contract as `soothe-client-python` and `@mirasoth/soothe-client` (see RFC-629 / IG-662).

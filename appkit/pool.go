@@ -25,6 +25,8 @@ type PoolConfig struct {
 }
 
 // DefaultPoolConfig returns conservative pool defaults suitable for most apps.
+// MaxIdleTime is enforced on Acquire (idle sessions are released and rebuilt).
+// HealthCheckInterval is reserved for future background sweeps; unused today.
 func DefaultPoolConfig() *PoolConfig {
 	return &PoolConfig{
 		PoolSize:            1000,
@@ -170,10 +172,19 @@ func (p *ConnectionPool) Acquire(ctx context.Context, sessionID, workspaceID, us
 	}
 	if existing != nil && existing.isConnected() {
 		existing.mu.Lock()
-		existing.lastUsed = time.Now()
+		idleTooLong := p.cfg.MaxIdleTime > 0 && !existing.lastUsed.IsZero() &&
+			time.Since(existing.lastUsed) > p.cfg.MaxIdleTime
 		existing.mu.Unlock()
-		_ = p.store.UpdateLastUsed(ctx, sessionID)
-		return existing, nil
+		if idleTooLong {
+			log.Printf("[appkit.ConnectionPool] session %s idle beyond %v, releasing", sessionID, p.cfg.MaxIdleTime)
+			p.Release(sessionID)
+		} else {
+			existing.mu.Lock()
+			existing.lastUsed = time.Now()
+			existing.mu.Unlock()
+			_ = p.store.UpdateLastUsed(ctx, sessionID)
+			return existing, nil
+		}
 	}
 
 	// 2. Pull a slot from the pool.

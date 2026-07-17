@@ -1,6 +1,7 @@
 // Package appkit is the application-architecture layer over the core Client:
-// per-session connection pooling, single-flight query gating, turn execution,
-// event→deliverable classification, and SSE-style fan-out.
+// dual-socket DaemonSession, per-session connection pooling, single-flight
+// query gating, turn execution, event→deliverable classification, and
+// SSE-style fan-out.
 //
 // appkit is product-agnostic. Which event phases count as user-facing
 // deliverables, how sessions are persisted, and what event type strings the
@@ -10,14 +11,20 @@
 // # Layers
 //
 //   - Core soothe.Client — transport, handshake, multiplexed RPC + event stream.
-//   - This package — ConnectionPool, QueryGate, TurnRunner, EventClassifier,
-//     SSEBroadcaster, SessionStore.
+//   - This package — DaemonSession, ConnectionPool, QueryGate, TurnRunner,
+//     EventClassifier, SSEBroadcaster, SessionStore.
 //   - The application — domain types, persistence implementation, product
 //     config, user-facing copy.
 //
-// Typical wiring: construct a ConnectionPool with the daemon WebSocket URL and
-// a SessionStore, then build a TurnRunner from the pool, QueryGate,
-// EventClassifier, SessionStore, and SSEBroadcaster, and call Execute per turn.
+// # API tiers (RFC-629 / IG-662)
+//
+//   - One conversation, streamed turns → DaemonSession
+//   - Multi-user HTTP backend → ConnectionPool + TurnRunner
+//   - Jobs / cron one-shots → soothe.CommandClient (core package)
+//
+// Typical wiring for backends: construct a ConnectionPool with the daemon
+// WebSocket URL and a SessionStore, then build a TurnRunner from the pool,
+// QueryGate, EventClassifier, SessionStore, and SSEBroadcaster.
 //
 // # Turn timeouts and stream close
 //
