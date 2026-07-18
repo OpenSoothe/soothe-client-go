@@ -59,7 +59,7 @@ func (md *progressiveMock) handle(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	for {
 		_, data, err := conn.ReadMessage()
 		if err != nil {
@@ -165,7 +165,7 @@ func TestProgressive_01_Hello(t *testing.T) {
 	if err := soothe.ConnectWithRetries(ctx, client, 5, 50*time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	cfg := soothe.DefaultConfig()
 	cfg.LoopStatusTimeout = 5 * time.Second
 	cfg.SubscriptionTimeout = 5 * time.Second
@@ -187,7 +187,7 @@ func TestProgressive_02_StreamTurn(t *testing.T) {
 	session := appkit.NewDaemonSession(md.URL, &appkit.DaemonSessionOptions{
 		Config: cfg, PostIdleDrain: 20 * time.Millisecond,
 	})
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if _, err := session.Connect(ctx, ""); err != nil {
@@ -216,7 +216,7 @@ func TestProgressive_03_TextCompletion(t *testing.T) {
 	cfg := soothe.DefaultConfig()
 	cfg.DaemonReadyTimeout = 5 * time.Second
 	session := appkit.NewDaemonSession(md.URL, &appkit.DaemonSessionOptions{Config: cfg})
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 	ctx := context.Background()
 	if _, err := session.Connect(ctx, ""); err != nil {
 		t.Fatal(err)
@@ -234,7 +234,7 @@ func TestProgressive_04_MultiTurn(t *testing.T) {
 	cfg := soothe.DefaultConfig()
 	cfg.DaemonReadyTimeout = 5 * time.Second
 	session := appkit.NewDaemonSession(md.URL, &appkit.DaemonSessionOptions{Config: cfg})
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 	ctx := context.Background()
 	if _, err := session.Connect(ctx, ""); err != nil {
 		t.Fatal(err)

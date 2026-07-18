@@ -30,11 +30,20 @@ jobs:
       - name: Download modules
         run: go mod download
 
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12.2
+          install-only: true
+
       - name: Format check
         run: make format-check
 
       - name: Vet
         run: make vet
+
+      - name: Lint
+        run: make lint
 
       - name: Unit tests
         run: make test-short

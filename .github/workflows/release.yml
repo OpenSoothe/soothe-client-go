@@ -21,6 +21,12 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12.2
+          install-only: true
+
       - name: Read version from tag
         id: version
         run: |

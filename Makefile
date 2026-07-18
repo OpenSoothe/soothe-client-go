@@ -68,15 +68,15 @@ format-check: ## Fail if go fmt would change files
 	fi
 	@echo "✓ Format check passed"
 
-lint: ## Run golangci-lint (if installed)
+lint: ## Run golangci-lint (required)
 	@echo "Running lint..."
-	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run ./...; \
-	else \
+	@if ! command -v golangci-lint >/dev/null 2>&1; then \
 		echo "golangci-lint not installed. Install from: https://golangci-lint.run/usage/install/"; \
+		exit 1; \
 	fi
+	golangci-lint run ./...
 
-verify: format-check vet test-short build ## CI verification gate
+verify: format-check vet lint test-short build ## CI verification gate
 	@echo "✓ All verification checks passed"
 
 # Dependencies

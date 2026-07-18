@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pool/gate/turn/store APIs use `appKey` naming (was overloaded `sessionID`)
 - `SessionEntry.AppKey` replaces `SessionEntry.SessionID`
 - `BootstrapFunc` takes only daemon scope (`workspaceID`, `userID`); product `AppKey` via context
+- `make verify` / CI require `golangci-lint` (errcheck Close handling in tests)
 
 
 ## [0.4.0] - 2026-07-18

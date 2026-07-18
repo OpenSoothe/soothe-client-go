@@ -48,7 +48,7 @@ func TestDaemonSession_IterTurnChunks_StreamEnd(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		for {
 			_, data, err := conn.ReadMessage()
 			if err != nil {
@@ -134,7 +134,7 @@ func TestDaemonSession_IterTurnChunks_StreamEnd(t *testing.T) {
 	cfg.DaemonReadyTimeout = 5 * time.Second
 
 	session := NewDaemonSession(wsURL, &DaemonSessionOptions{Config: cfg, PostIdleDrain: 50 * time.Millisecond})
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
