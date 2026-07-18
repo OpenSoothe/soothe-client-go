@@ -472,7 +472,7 @@ func TestIntegration_InputWithIntentHintTextCompletion(t *testing.T) {
 		t.Fatalf("ReceiveMessages: %v", err)
 	}
 
-	// Send input with intent_hint=text_completion for a direct model turn
+	// Send input with intent_hint=text_completion for an intent-hint turn
 	if err := client.SendInput(ctx, "Reply with exactly one word: PARIS", WithLoopID(loopID), WithIntentHint(IntentHintTextCompletion)); err != nil {
 		t.Fatalf("SendInput with intent_hint=text_completion: %v", err)
 	}

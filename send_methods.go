@@ -119,10 +119,10 @@ func WithModelParams(params map[string]interface{}) InputOption {
 }
 
 // WithIntentHint sets intent_hint on loop_input (daemon normalizes case).
-// For direct model turns use IntentHintTextCompletion, IntentHintImageToText,
+// For intent-hint turns use IntentHintTextCompletion, IntentHintImageToText,
 // IntentHintOCR, or IntentHintEmbed. Agent-path pass-through hints
 // (e.g. resume_clarification, skill:foo) are also accepted. Legacy values
-// direct_llm and quiz are rejected before send.
+// direct_llm, quiz, and direct_model are rejected before send.
 func WithIntentHint(hint string) InputOption {
 	return func(o *inputOptions) { o.intentHint = hint }
 }

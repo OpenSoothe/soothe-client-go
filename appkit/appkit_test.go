@@ -251,9 +251,9 @@ func TestEventClassifier_DeliverablePhase_DefaultSet(t *testing.T) {
 }
 
 func TestEventClassifier_PhaseNotInConfig_NotDeliverable(t *testing.T) {
-	// An app that only treats direct_model as deliverable should not finish on quiz.
+	// An app that only treats text_completion as deliverable should not finish on quiz.
 	cl := NewEventClassifier(ClassifierConfig{
-		DeliverablePhases: map[string]bool{"direct_model": true},
+		DeliverablePhases: map[string]bool{"text_completion": true},
 	})
 	msg := eventMessageFromJSON(t, deliverableEvent("quiz", "Hello, this is the answer."))
 	r := cl.Classify(msg, "")

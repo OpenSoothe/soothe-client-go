@@ -9,7 +9,7 @@ import (
 )
 
 // directTurnAssistantContent extracts assistant text from a direct intent_hint turn
-// (text_completion, image_to_text, ocr, embed, or legacy direct_model phase).
+// (text_completion, image_to_text, ocr, embed).
 func directTurnAssistantContent(m EventMessage) (string, bool) {
 	if loopMsg, ok := m.LoopAIMessage(); ok {
 		txt := strings.TrimSpace(loopMsg.LoopAIText())

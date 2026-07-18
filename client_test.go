@@ -369,7 +369,7 @@ func TestExpandWireMessages_EventBatch(t *testing.T) {
 			map[string]interface{}{
 				"type":    "event",
 				"mode":    "messages",
-				"data":    []interface{}{map[string]interface{}{"type": "ai", "content": "OK", "phase": "direct_model"}, map[string]interface{}{}},
+				"data":    []interface{}{map[string]interface{}{"type": "ai", "content": "OK", "phase": "text_completion"}, map[string]interface{}{}},
 				"loop_id": "loop-1",
 			},
 			map[string]interface{}{

@@ -106,7 +106,7 @@ func (md *progressiveMock) handle(w http.ResponseWriter, r *http.Request) {
 			md.write(conn, map[string]interface{}{
 				"type": "event", "mode": "messages", "loop_id": lid, "namespace": []interface{}{},
 				"data": []interface{}{
-					map[string]interface{}{"type": "ai", "content": "hi", "phase": "direct_model"},
+					map[string]interface{}{"type": "ai", "content": "hi", "phase": "text_completion"},
 					map[string]interface{}{},
 				},
 			})

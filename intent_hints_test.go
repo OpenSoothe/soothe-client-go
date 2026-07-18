@@ -9,14 +9,19 @@ func TestDefaultDeliverablePhases_ExcludesPlanDirect(t *testing.T) {
 	}
 }
 
-func TestDefaultDeliverablePhases_IncludesDirectHints(t *testing.T) {
+func TestDefaultDeliverablePhases_IncludesIntentHints(t *testing.T) {
 	phases := DefaultDeliverablePhases()
 	for _, want := range []string{
-		"quiz", "goal_completion", "direct_model",
+		"quiz", "goal_completion",
 		"text_completion", "image_to_text", "ocr", "embed", "chitchat",
 	} {
 		if !phases[want] {
 			t.Errorf("DefaultDeliverablePhases missing %q", want)
+		}
+	}
+	for _, removed := range []string{"direct_model", "direct_llm", "trivial"} {
+		if phases[removed] {
+			t.Fatalf("%s must not be a deliverable phase", removed)
 		}
 	}
 }

@@ -15,7 +15,7 @@ const ProtoVersion = "1"
 var DefaultClientCapabilities = []string{"streaming", "batch", "heartbeat", "receipts"}
 
 // ClientVersion reported in the connection_init handshake.
-const ClientVersion = "0.4.1"
+const ClientVersion = "0.4.2"
 
 // ---------------------------------------------------------------------------
 // Protocol-1 wire envelope
@@ -482,7 +482,7 @@ func (e EventMessage) LoopAIMessage() (LoopAIMessage, bool) {
 
 func isLoopAssistantPhase(phase string) bool {
 	switch phase {
-	case "goal_completion", "quiz", "autonomous_goal", "direct_model",
+	case "goal_completion", "quiz", "autonomous_goal",
 		"text_completion", "image_to_text", "ocr", "embed", "plan_direct",
 		"chitchat":
 		return true

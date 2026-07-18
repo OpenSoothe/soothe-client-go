@@ -5,6 +5,16 @@ All notable changes to `soothe-client-go` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-07-19
+
+### Removed
+- Legacy loop phase `direct_model` from `DefaultDeliverablePhases` and `IsLoopAssistantPhase`
+- Unphased `mode=messages` AI text no longer auto-completes a turn (accumulate only; finish via named phases / `status.idle`)
+- Reject legacy `intent_hint` values `direct_llm`, `quiz`, and `direct_model`
+
+### Changed
+- Handshake `ClientVersion` reports `0.4.2`
+
 ## [0.4.1] - 2026-07-19
 
 ### Fixed

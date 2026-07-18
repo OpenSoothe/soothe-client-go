@@ -52,7 +52,7 @@ type ClassifierConfig struct {
 
 	// TreatStatusIdleAsComplete: when true, a StatusResponse with State=="idle"
 	// and non-empty accumulated assistant text is ChatEventDeliverableComplete
-	// (typical for direct-model turns). Default false keeps historical
+	// (typical for intent-hint turns). Default false keeps historical
 	// Continue-on-status behaviour.
 	TreatStatusIdleAsComplete bool
 }
@@ -282,8 +282,10 @@ func (cl *EventClassifier) processChatEvent(msg interface{}, accumulated string)
 					return cl.continueResult(content)
 				}
 			}
-			if content, ok := cl.messagesModeAssistantContent(m); ok && cl.IsSubstantiveAssistantReply(content) {
-				return cl.deliverableResult(content, "soothe.protocol.message.direct_model")
+			// Unphased terminal AI text is streamable narration only. Finish on a
+			// named DeliverablePhases value, status.idle, or stream-end policies.
+			if content, ok := cl.messagesModeAssistantContent(m); ok {
+				return cl.continueResult(content)
 			}
 			if hasPayload && rawContent != "" {
 				if isTerminalMessageType(msgType) || msgType == "" {
