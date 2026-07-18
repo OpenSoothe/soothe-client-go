@@ -138,22 +138,22 @@ type memStore struct {
 	loops map[string]string
 }
 
-func (s *memStore) GetSession(ctx context.Context, sessionID string) (*appkit.SessionEntry, error) {
+func (s *memStore) GetSession(ctx context.Context, appKey appkit.AppKey) (*appkit.SessionEntry, error) {
 	return nil, nil
 }
-func (s *memStore) CreateSession(ctx context.Context, workspaceID, sessionID, loopID, sessionType string) error {
-	s.loops[sessionID] = loopID
+func (s *memStore) CreateSession(ctx context.Context, workspaceID string, appKey appkit.AppKey, loopID, sessionType string) error {
+	s.loops[appKey] = loopID
 	return nil
 }
-func (s *memStore) UpdateLastUsed(ctx context.Context, sessionID string) error { return nil }
-func (s *memStore) IncrementResetCount(ctx context.Context, sessionID string) error {
+func (s *memStore) UpdateLastUsed(ctx context.Context, appKey appkit.AppKey) error { return nil }
+func (s *memStore) IncrementResetCount(ctx context.Context, appKey appkit.AppKey) error {
 	return nil
 }
-func (s *memStore) GetLoopIDForSession(ctx context.Context, sessionID string) (string, bool, error) {
-	id, ok := s.loops[sessionID]
+func (s *memStore) GetLoopIDForSession(ctx context.Context, appKey appkit.AppKey) (string, bool, error) {
+	id, ok := s.loops[appKey]
 	return id, ok, nil
 }
-func (s *memStore) AppendMessage(ctx context.Context, sessionID string, message appkit.SessionMessage) error {
+func (s *memStore) AppendMessage(ctx context.Context, appKey appkit.AppKey, message appkit.SessionMessage) error {
 	return nil
 }
 

@@ -46,7 +46,7 @@ func (s *memStore) CreateSession(ctx context.Context, ws, sid, loop, stype strin
 	if s.failCreate {
 		return errors.New("create failed")
 	}
-	s.sessions[sid] = &SessionEntry{WorkspaceID: ws, SessionID: sid, LoopID: loop, SessionType: stype, IsActive: true}
+	s.sessions[sid] = &SessionEntry{WorkspaceID: ws, AppKey: sid, LoopID: loop, SessionType: stype, IsActive: true}
 	return nil
 }
 func (s *memStore) UpdateLastUsed(ctx context.Context, sid string) error      { return nil }

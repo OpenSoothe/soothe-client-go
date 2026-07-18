@@ -51,5 +51,6 @@ func DefaultDeliverablePhases() map[string]bool {
 		"image_to_text":   true,
 		"ocr":             true,
 		"embed":           true,
+		"chitchat":        true, // SOCIAL fast-path (Triarch IG-015)
 	}
 }

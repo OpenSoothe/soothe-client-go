@@ -13,11 +13,17 @@ func TestDefaultDeliverablePhases_IncludesDirectHints(t *testing.T) {
 	phases := DefaultDeliverablePhases()
 	for _, want := range []string{
 		"quiz", "goal_completion", "direct_model",
-		"text_completion", "image_to_text", "ocr", "embed",
+		"text_completion", "image_to_text", "ocr", "embed", "chitchat",
 	} {
 		if !phases[want] {
 			t.Errorf("DefaultDeliverablePhases missing %q", want)
 		}
+	}
+}
+
+func TestIsLoopAssistantPhase_IncludesChitchat(t *testing.T) {
+	if !IsLoopAssistantPhase("chitchat") {
+		t.Fatal("chitchat must be a loop-assistant phase")
 	}
 }
 

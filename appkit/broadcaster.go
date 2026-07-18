@@ -32,27 +32,27 @@ func NewSSEBroadcaster() *SSEBroadcaster {
 // Subscribe registers a new subscriber channel for a session id. The returned
 // channel is buffered (cap 100) so a transient slow consumer does not drop
 // events immediately.
-func (b *SSEBroadcaster) Subscribe(sessionID string) (<-chan SSEEvent, error) {
+func (b *SSEBroadcaster) Subscribe(appKey string) (<-chan SSEEvent, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	ch := make(chan SSEEvent, 100)
 	subscriberID := uuid.New().String()
 
-	if b.subscribers[sessionID] == nil {
-		b.subscribers[sessionID] = make(map[string]chan SSEEvent)
+	if b.subscribers[appKey] == nil {
+		b.subscribers[appKey] = make(map[string]chan SSEEvent)
 	}
-	b.subscribers[sessionID][subscriberID] = ch
+	b.subscribers[appKey][subscriberID] = ch
 	return ch, nil
 }
 
 // Unsubscribe removes a subscriber channel (matched by identity) and closes it.
 // Safe to call with a nil/unknown channel.
-func (b *SSEBroadcaster) Unsubscribe(sessionID string, ch <-chan SSEEvent) {
+func (b *SSEBroadcaster) Unsubscribe(appKey string, ch <-chan SSEEvent) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	subs := b.subscribers[sessionID]
+	subs := b.subscribers[appKey]
 	if subs == nil {
 		return
 	}
@@ -65,18 +65,18 @@ func (b *SSEBroadcaster) Unsubscribe(sessionID string, ch <-chan SSEEvent) {
 		}
 	}
 	if len(subs) == 0 {
-		delete(b.subscribers, sessionID)
+		delete(b.subscribers, appKey)
 	}
 }
 
 // Broadcast sends an event to all subscribers for a session id. Non-blocking:
 // a full subscriber channel is skipped (drop-on-full) so one slow consumer
 // cannot block the others.
-func (b *SSEBroadcaster) Broadcast(sessionID string, event SSEEvent) {
+func (b *SSEBroadcaster) Broadcast(appKey string, event SSEEvent) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	subs := b.subscribers[sessionID]
+	subs := b.subscribers[appKey]
 	if subs == nil {
 		return
 	}
@@ -89,18 +89,18 @@ func (b *SSEBroadcaster) Broadcast(sessionID string, event SSEEvent) {
 }
 
 // Close closes all subscriber channels for a session id and removes the entry.
-func (b *SSEBroadcaster) Close(sessionID string) {
+func (b *SSEBroadcaster) Close(appKey string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	subs := b.subscribers[sessionID]
+	subs := b.subscribers[appKey]
 	if subs == nil {
 		return
 	}
 	for _, ch := range subs {
 		close(ch)
 	}
-	delete(b.subscribers, sessionID)
+	delete(b.subscribers, appKey)
 }
 
 // CloseAll closes every subscriber channel across all sessions.

@@ -41,7 +41,7 @@ func Example_sseBroadcaster() {
 }
 
 // Example_queryGate demonstrates single-flight query enforcement: only one
-// query per session at a time, with cancel-before-context ordering.
+// query per AppKey at a time, with cancel-before-context ordering.
 func Example_queryGate() {
 	gate := appkit.NewQueryGate()
 
@@ -51,23 +51,23 @@ func Example_queryGate() {
 		return nil
 	}
 
-	// Acquire the gate for session-1.
-	if err := gate.Acquire("session-1", cancel, sendCancel); err != nil {
+	// Acquire the gate for app key chat-1.
+	if err := gate.Acquire("chat-1", cancel, sendCancel); err != nil {
 		fmt.Printf("Acquire error: %v\n", err)
 	}
-	fmt.Printf("Active: %v\n", gate.IsActive("session-1"))
+	fmt.Printf("Active: %v\n", gate.IsActive("chat-1"))
 
-	// A second acquire for the same session fails with ErrQueryBusy.
-	err := gate.Acquire("session-1", cancel, sendCancel)
+	// A second acquire for the same AppKey fails with ErrQueryBusy.
+	err := gate.Acquire("chat-1", cancel, sendCancel)
 	fmt.Printf("Second acquire: %v\n", err)
 
 	// Cancel sends the daemon cancel first, then cancels the local context.
-	_ = gate.Cancel("session-1")
-	fmt.Printf("Active after cancel: %v\n", gate.IsActive("session-1"))
+	_ = gate.Cancel("chat-1")
+	fmt.Printf("Active after cancel: %v\n", gate.IsActive("chat-1"))
 	_ = ctx
 	// Output:
 	// Active: true
-	// Second acquire: appkit: query already in progress for session
+	// Second acquire: appkit: query already in progress for app key
 	// daemon cancel sent
 	// Active after cancel: false
 }
@@ -236,12 +236,12 @@ func Example_turnRunnerConstruction() {
 
 	// Register completion and error hooks.
 	runner = runner.WithOnComplete(
-		func(sessionID, loopID, content, completionEvent string, elapsedMs int64) {
-			fmt.Printf("completed: %s (%dms)\n", sessionID, elapsedMs)
+		func(appKey, loopID, content, completionEvent string, elapsedMs int64) {
+			fmt.Printf("completed: %s (%dms)\n", appKey, elapsedMs)
 		},
 	).WithOnError(
-		func(sessionID, loopID string, err error) {
-			fmt.Printf("error: %s: %v\n", sessionID, err)
+		func(appKey, loopID string, err error) {
+			fmt.Printf("error: %s: %v\n", appKey, err)
 		},
 	)
 
@@ -274,17 +274,17 @@ func Example_chatEventTerminal() {
 // Example_sessionStoreInterface shows the SessionStore interface methods and
 // the SessionEntry/SessionMessage types.
 func Example_sessionStoreInterface() {
-	// SessionEntry is the persisted session↔loop mapping.
+	// SessionEntry is the persisted AppKey↔loop mapping.
 	entry := appkit.SessionEntry{
 		WorkspaceID: "/tmp/project",
-		SessionID:   "sess-123",
+		AppKey:      "chat-123",
 		LoopID:      "loop-abc",
 		SessionType: "primary",
 		IsActive:    true,
 		ResetCount:  0,
 	}
-	fmt.Printf("Session=%s Loop=%s Active=%v\n",
-		entry.SessionID, entry.LoopID, entry.IsActive)
+	fmt.Printf("AppKey=%s Loop=%s Active=%v\n",
+		entry.AppKey, entry.LoopID, entry.IsActive)
 
 	// SessionMessage is a persisted message row.
 	msg := appkit.SessionMessage{
@@ -295,7 +295,7 @@ func Example_sessionStoreInterface() {
 	}
 	fmt.Printf("Msg role=%s content=%s\n", msg.Role, msg.Content)
 	// Output:
-	// Session=sess-123 Loop=loop-abc Active=true
+	// AppKey=chat-123 Loop=loop-abc Active=true
 	// Msg role=assistant content=Here is the answer.
 }
 
@@ -322,23 +322,23 @@ type memorySessionStore struct {
 	sessions map[string]*appkit.SessionEntry
 }
 
-func (s *memorySessionStore) GetSession(_ context.Context, sessionID string) (*appkit.SessionEntry, error) {
+func (s *memorySessionStore) GetSession(_ context.Context, appKey appkit.AppKey) (*appkit.SessionEntry, error) {
 	if s.sessions == nil {
 		s.sessions = make(map[string]*appkit.SessionEntry)
 	}
-	if e, ok := s.sessions[sessionID]; ok {
+	if e, ok := s.sessions[appKey]; ok {
 		return e, nil
 	}
 	return nil, nil
 }
 
-func (s *memorySessionStore) CreateSession(_ context.Context, workspaceID, sessionID, loopID, sessionType string) error {
+func (s *memorySessionStore) CreateSession(_ context.Context, workspaceID string, appKey appkit.AppKey, loopID, sessionType string) error {
 	if s.sessions == nil {
 		s.sessions = make(map[string]*appkit.SessionEntry)
 	}
-	s.sessions[sessionID] = &appkit.SessionEntry{
+	s.sessions[appKey] = &appkit.SessionEntry{
 		WorkspaceID: workspaceID,
-		SessionID:   sessionID,
+		AppKey:      appKey,
 		LoopID:      loopID,
 		SessionType: sessionType,
 		IsActive:    true,
@@ -346,24 +346,24 @@ func (s *memorySessionStore) CreateSession(_ context.Context, workspaceID, sessi
 	return nil
 }
 
-func (s *memorySessionStore) UpdateLastUsed(_ context.Context, _ string) error {
+func (s *memorySessionStore) UpdateLastUsed(_ context.Context, _ appkit.AppKey) error {
 	return nil
 }
 
-func (s *memorySessionStore) IncrementResetCount(_ context.Context, sessionID string) error {
-	if e, ok := s.sessions[sessionID]; ok {
+func (s *memorySessionStore) IncrementResetCount(_ context.Context, appKey appkit.AppKey) error {
+	if e, ok := s.sessions[appKey]; ok {
 		e.ResetCount++
 	}
 	return nil
 }
 
-func (s *memorySessionStore) GetLoopIDForSession(_ context.Context, sessionID string) (string, bool, error) {
-	if e, ok := s.sessions[sessionID]; ok && e.LoopID != "" {
+func (s *memorySessionStore) GetLoopIDForSession(_ context.Context, appKey appkit.AppKey) (string, bool, error) {
+	if e, ok := s.sessions[appKey]; ok && e.LoopID != "" {
 		return e.LoopID, true, nil
 	}
 	return "", false, nil
 }
 
-func (s *memorySessionStore) AppendMessage(_ context.Context, _ string, _ appkit.SessionMessage) error {
+func (s *memorySessionStore) AppendMessage(_ context.Context, _ appkit.AppKey, _ appkit.SessionMessage) error {
 	return nil
 }

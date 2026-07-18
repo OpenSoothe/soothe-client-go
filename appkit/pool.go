@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,7 +44,7 @@ type pooledConn struct {
 	client       ManagedClient
 	eventCh      <-chan interface{}
 	streamCancel context.CancelFunc
-	sessionID    string
+	appKey       string
 	loopID       string
 	workspaceID  string
 	lastUsed     time.Time
@@ -64,10 +65,10 @@ func (c *pooledConn) isConnected() bool {
 	return c.client != nil && c.client.IsConnected() && !c.clientDisconnectNotified()
 }
 
-// ConnectionPool manages a pool of daemon connections, one active per session.
+// ConnectionPool manages a pool of daemon connections, one active per AppKey.
 // It reuses an active connection when still live, otherwise bootstraps a fresh
 // loop (loop_new + subscribe) or reattaches an existing one (loop_reattach +
-// subscribe + ReattachAndProbe). Persistence of session↔loop mappings is
+// subscribe + ReattachAndProbe). Persistence of AppKey↔loop mappings is
 // abstracted behind SessionStore.
 type ConnectionPool struct {
 	url         string
@@ -78,7 +79,7 @@ type ConnectionPool struct {
 	store       SessionStore
 	pool        chan *pooledConn
 	activeSlots map[string]*pooledConn
-	registry    map[int]string // slotID → sessionID
+	registry    map[int]string // slotID → appKey
 	mu          sync.RWMutex
 	nextSlotID  int
 }
@@ -156,18 +157,18 @@ func (p *ConnectionPool) newSlot() *pooledConn {
 	}
 }
 
-// Acquire returns a live connection for sessionID, reusing an active slot or
+// Acquire returns a live connection for appKey, reusing an active slot or
 // bootstrapping/reattaching as needed. The caller must call Release when done
 // with the connection (a turn completes or the session is reset).
-func (p *ConnectionPool) Acquire(ctx context.Context, sessionID, workspaceID, userID string) (*pooledConn, error) {
+func (p *ConnectionPool) Acquire(ctx context.Context, appKey, workspaceID, userID string) (*pooledConn, error) {
 	// 1. Reuse active connection when still live.
 	p.mu.RLock()
-	existing := p.activeSlots[sessionID]
+	existing := p.activeSlots[appKey]
 	p.mu.RUnlock()
 
 	if existing != nil && (existing.clientDisconnectNotified() || !existing.isConnected()) {
-		log.Printf("[appkit.ConnectionPool] previous connection for %s dropped, releasing for fresh bootstrap", sessionID)
-		p.Release(sessionID)
+		log.Printf("[appkit.ConnectionPool] previous connection for %s dropped, releasing for fresh bootstrap", appKey)
+		p.Release(appKey)
 		existing = nil
 	}
 	if existing != nil && existing.isConnected() {
@@ -176,13 +177,13 @@ func (p *ConnectionPool) Acquire(ctx context.Context, sessionID, workspaceID, us
 			time.Since(existing.lastUsed) > p.cfg.MaxIdleTime
 		existing.mu.Unlock()
 		if idleTooLong {
-			log.Printf("[appkit.ConnectionPool] session %s idle beyond %v, releasing", sessionID, p.cfg.MaxIdleTime)
-			p.Release(sessionID)
+			log.Printf("[appkit.ConnectionPool] session %s idle beyond %v, releasing", appKey, p.cfg.MaxIdleTime)
+			p.Release(appKey)
 		} else {
 			existing.mu.Lock()
 			existing.lastUsed = time.Now()
 			existing.mu.Unlock()
-			_ = p.store.UpdateLastUsed(ctx, sessionID)
+			_ = p.store.UpdateLastUsed(ctx, appKey)
 			return existing, nil
 		}
 	}
@@ -191,54 +192,55 @@ func (p *ConnectionPool) Acquire(ctx context.Context, sessionID, workspaceID, us
 	select {
 	case conn := <-p.pool:
 		p.mu.Lock()
-		p.activeSlots[sessionID] = conn
-		p.registry[conn.slotID] = sessionID
+		p.activeSlots[appKey] = conn
+		p.registry[conn.slotID] = appKey
 		p.mu.Unlock()
 
-		loopID, hasLoop := p.loopIDFor(ctx, sessionID)
+		loopID, hasLoop := p.loopIDFor(ctx, appKey)
+		sessionType := p.sessionTypeFor(ctx, appKey)
 		var err error
 		if !hasLoop || loopID == "" {
 			// Fresh bootstrap.
 			if err = conn.client.Connect(ctx); err != nil {
-				p.Release(sessionID)
+				p.Release(appKey)
 				return nil, fmt.Errorf("connect: %w", err)
 			}
-			loopID, err = p.bootstrapNew(ctx, conn, workspaceID, userID)
+			loopID, err = p.bootstrapNew(ctx, conn, appKey, workspaceID, userID)
 			if err != nil {
-				p.Release(sessionID)
+				p.Release(appKey)
 				return nil, fmt.Errorf("bootstrap new loop: %w", err)
 			}
-			if cerr := p.store.CreateSession(ctx, workspaceID, sessionID, loopID, ""); cerr != nil {
-				log.Printf("[appkit.ConnectionPool] WARN: create session failed for %s: %v", sessionID, cerr)
+			if cerr := p.store.CreateSession(ctx, workspaceID, appKey, loopID, sessionType); cerr != nil {
+				log.Printf("[appkit.ConnectionPool] WARN: create session failed for %s: %v", appKey, cerr)
 			}
 		} else {
 			// Reattach.
 			if err = p.resumeAndReattach(ctx, conn, loopID); err != nil {
-				log.Printf("[appkit.ConnectionPool] reattach failed for %s, bootstrapping fresh: %v", sessionID, err)
+				log.Printf("[appkit.ConnectionPool] reattach failed for %s, bootstrapping fresh: %v", appKey, err)
 				if err = conn.client.Connect(ctx); err != nil {
-					p.Release(sessionID)
+					p.Release(appKey)
 					return nil, fmt.Errorf("connect after reattach fail: %w", err)
 				}
-				loopID, err = p.bootstrapNew(ctx, conn, workspaceID, userID)
+				loopID, err = p.bootstrapNew(ctx, conn, appKey, workspaceID, userID)
 				if err != nil {
-					p.Release(sessionID)
+					p.Release(appKey)
 					return nil, fmt.Errorf("bootstrap after reattach fail: %w", err)
 				}
-				if cerr := p.store.CreateSession(ctx, workspaceID, sessionID, loopID, ""); cerr != nil {
-					log.Printf("[appkit.ConnectionPool] WARN: create session after bootstrap failed for %s: %v", sessionID, cerr)
+				if cerr := p.store.CreateSession(ctx, workspaceID, appKey, loopID, sessionType); cerr != nil {
+					log.Printf("[appkit.ConnectionPool] WARN: create session after bootstrap failed for %s: %v", appKey, cerr)
 				}
 			}
 		}
 
 		conn.mu.Lock()
-		conn.sessionID = sessionID
+		conn.appKey = appKey
 		conn.loopID = loopID
 		conn.workspaceID = workspaceID
 		conn.lastUsed = time.Now()
 		conn.mu.Unlock()
 
-		_ = p.store.UpdateLastUsed(ctx, sessionID)
-		log.Printf("[appkit.ConnectionPool] acquired slot %d for %s (loop %s)", conn.slotID, sessionID, loopID)
+		_ = p.store.UpdateLastUsed(ctx, appKey)
+		log.Printf("[appkit.ConnectionPool] acquired slot %d for %s (loop %s)", conn.slotID, appKey, loopID)
 		return conn, nil
 
 	case <-ctx.Done():
@@ -248,13 +250,13 @@ func (p *ConnectionPool) Acquire(ctx context.Context, sessionID, workspaceID, us
 	}
 }
 
-// Release tears down the connection for sessionID and returns a fresh slot to
+// Release tears down the connection for appKey and returns a fresh slot to
 // the pool.
-func (p *ConnectionPool) Release(sessionID string) {
+func (p *ConnectionPool) Release(appKey string) {
 	p.mu.Lock()
-	conn := p.activeSlots[sessionID]
+	conn := p.activeSlots[appKey]
 	if conn != nil {
-		delete(p.activeSlots, sessionID)
+		delete(p.activeSlots, appKey)
 		delete(p.registry, conn.slotID)
 	}
 	p.mu.Unlock()
@@ -268,20 +270,20 @@ func (p *ConnectionPool) Release(sessionID string) {
 	if conn.client != nil {
 		_ = conn.client.Close()
 	}
-	log.Printf("[appkit.ConnectionPool] released slot %d for %s", conn.slotID, sessionID)
+	log.Printf("[appkit.ConnectionPool] released slot %d for %s", conn.slotID, appKey)
 	select {
 	case p.pool <- p.newSlot():
 	default:
-		log.Printf("[appkit.ConnectionPool] WARN: pool full when returning slot for %s", sessionID)
+		log.Printf("[appkit.ConnectionPool] WARN: pool full when returning slot for %s", appKey)
 	}
 }
 
-// ResetSession tears down the connection for sessionID (cancelling any query
+// ResetSession tears down the connection for appKey (cancelling any query
 // externally first) so the next Acquire bootstraps fresh. The store should
 // archive the loop id so GetLoopIDForSession returns false next time.
-func (p *ConnectionPool) ResetSession(sessionID string) {
-	p.Release(sessionID)
-	log.Printf("[appkit.ConnectionPool] reset session %s — next message will create new loop", sessionID)
+func (p *ConnectionPool) ResetSession(appKey string) {
+	p.Release(appKey)
+	log.Printf("[appkit.ConnectionPool] reset session %s — next message will create new loop", appKey)
 }
 
 // Stop gracefully shuts down all active connections.
@@ -316,8 +318,10 @@ func (p *ConnectionPool) Stop() {
 
 // bootstrapNew assumes the client is already connected; it runs the bootstrap
 // function (loop_new + subscribe) and starts the event reader.
-func (p *ConnectionPool) bootstrapNew(ctx context.Context, conn *pooledConn, workspaceID, userID string) (string, error) {
-	loopID, err := p.bootstrap(ctx, conn.client, workspaceID, userID, p.scfg)
+// AppKey is attached to ctx for product-specific BootstrapFunc overrides.
+func (p *ConnectionPool) bootstrapNew(ctx context.Context, conn *pooledConn, appKey, workspaceID, userID string) (string, error) {
+	bootCtx := ContextWithAppKey(ctx, appKey)
+	loopID, err := p.bootstrap(bootCtx, conn.client, workspaceID, userID, p.scfg)
 	if err != nil {
 		return "", err
 	}
@@ -343,7 +347,7 @@ func (p *ConnectionPool) startReader(ctx context.Context, conn *pooledConn) {
 	ch, err := conn.client.ReceiveMessages(rctx)
 	if err != nil {
 		cancel()
-		log.Printf("[appkit.ConnectionPool] ReceiveMessages failed for %s: %v", conn.sessionID, err)
+		log.Printf("[appkit.ConnectionPool] ReceiveMessages failed for %s: %v", conn.appKey, err)
 		return
 	}
 	conn.mu.Lock()
@@ -352,12 +356,28 @@ func (p *ConnectionPool) startReader(ctx context.Context, conn *pooledConn) {
 	conn.mu.Unlock()
 }
 
-func (p *ConnectionPool) loopIDFor(ctx context.Context, sessionID string) (string, bool) {
-	loopID, ok, err := p.store.GetLoopIDForSession(ctx, sessionID)
+func (p *ConnectionPool) loopIDFor(ctx context.Context, appKey string) (string, bool) {
+	loopID, ok, err := p.store.GetLoopIDForSession(ctx, appKey)
 	if err != nil || !ok {
 		return "", false
 	}
+	loopID = strings.TrimSpace(loopID)
+	// Placeholder rows (e.g. Triarch pending-<chat_id>) must bootstrap fresh.
+	if loopID == "" || strings.HasPrefix(loopID, "pending-") {
+		return "", false
+	}
 	return loopID, true
+}
+
+func (p *ConnectionPool) sessionTypeFor(ctx context.Context, appKey string) string {
+	if p.store == nil {
+		return ""
+	}
+	entry, err := p.store.GetSession(ctx, appKey)
+	if err != nil || entry == nil {
+		return ""
+	}
+	return strings.TrimSpace(entry.SessionType)
 }
 
 // getLoopID returns the stored loop id for the connection.

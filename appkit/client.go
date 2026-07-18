@@ -47,9 +47,12 @@ func DefaultClientFactory() ClientFactory {
 }
 
 // BootstrapFunc creates a new loop (loop_new + subscribe) on a connected
-// client and returns the new loop id. The default implementation calls
-// soothe.BootstrapLoopSession; apps may override it (e.g. to inject custom
-// LoopSessionOptions).
+// client and returns the new loop id.
+//
+// Parameters match daemon loop_new scope (workspace + user), not an
+// application conversation key. When a product needs its AppKey during
+// bootstrap (e.g. Triarch ephemeral chat_type lookup), read it from ctx via
+// AppKeyFromContext — ConnectionPool always attaches it before calling.
 type BootstrapFunc func(ctx context.Context, client ManagedClient, workspaceID, userID string, cfg *soothe.Config) (string, error)
 
 // DefaultBootstrapFunc calls soothe.BootstrapLoopSession on the underlying
@@ -57,6 +60,7 @@ type BootstrapFunc func(ctx context.Context, client ManagedClient, workspaceID, 
 // the app must supply its own BootstrapFunc.
 func DefaultBootstrapFunc() BootstrapFunc {
 	return func(ctx context.Context, client ManagedClient, workspaceID, userID string, cfg *soothe.Config) (string, error) {
+		_ = ctx
 		sc, ok := client.(*soothe.Client)
 		if !ok {
 			return "", fmt.Errorf("appkit: DefaultBootstrapFunc requires *soothe.Client, got %T", client)

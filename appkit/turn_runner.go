@@ -133,8 +133,11 @@ type TurnRunner struct {
 
 	// onComplete / onError hooks let an app react to turn outcomes without
 	// reimplementing the loop. They run inline; keep them cheap.
-	onComplete func(sessionID, loopID, content, completionEvent string, elapsedMs int64)
-	onError    func(sessionID, loopID string, err error)
+	onComplete func(appKey, loopID, content, completionEvent string, elapsedMs int64)
+	onError    func(appKey, loopID string, err error)
+
+	// errorData formats the SSE query_error Data field. Default: err.Error().
+	errorData func(error) interface{}
 }
 
 // NewTurnRunner constructs a TurnRunner. pool, gate, classifier, and store are
@@ -164,14 +167,22 @@ func (r *TurnRunner) WithInputBuilder(f func(text, loopID string, attachments []
 }
 
 // WithOnComplete sets a completion hook (runs inline on success).
-func (r *TurnRunner) WithOnComplete(f func(sessionID, loopID, content, completionEvent string, elapsedMs int64)) *TurnRunner {
+func (r *TurnRunner) WithOnComplete(f func(appKey, loopID, content, completionEvent string, elapsedMs int64)) *TurnRunner {
 	r.onComplete = f
 	return r
 }
 
 // WithOnError sets an error hook (runs inline on failure).
-func (r *TurnRunner) WithOnError(f func(sessionID, loopID string, err error)) *TurnRunner {
+func (r *TurnRunner) WithOnError(f func(appKey, loopID string, err error)) *TurnRunner {
 	r.onError = f
+	return r
+}
+
+// WithErrorData sets a formatter for SSE query_error payloads (e.g. structured JSON).
+func (r *TurnRunner) WithErrorData(f func(error) interface{}) *TurnRunner {
+	if f != nil {
+		r.errorData = f
+	}
 	return r
 }
 
@@ -190,20 +201,16 @@ func idleTimeoutForTurn(cfg TurnConfig, hasAttachments bool) time.Duration {
 // broadcaster and persisted via the SessionStore; it is not returned to the
 // caller (SSE subscribers receive it). Returns nil on success, an error on
 // failure (ErrQueryTimeout, ErrIdleTimeout, context.Canceled, or a daemon/processing error).
-func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, workspaceID string, attachments []map[string]interface{}, opts *InputOpts) error {
-	if opts != nil {
-		if h := strings.TrimSpace(opts.IntentHint); h != "" {
-			if err := soothe.ValidateLoopInputIntentHint(h); err != nil {
-				return fmt.Errorf("appkit: %w", err)
-			}
-		}
+func (r *TurnRunner) Execute(ctx context.Context, appKey, message, userID, workspaceID string, attachments []map[string]interface{}, opts *InputOpts) error {
+	if err := r.validateOpts(opts); err != nil {
+		return err
 	}
-	conn, err := r.pool.Acquire(ctx, sessionID, workspaceID, userID)
+	conn, err := r.pool.Acquire(ctx, appKey, workspaceID, userID)
 	if err != nil {
-		r.persistFailed(ctx, sessionID, "", err)
-		r.broadcastError(sessionID, err)
+		r.persistFailed(ctx, appKey, "", err)
+		r.broadcastError(appKey, err)
 		if r.onError != nil {
-			r.onError(sessionID, "", err)
+			r.onError(appKey, "", err)
 		}
 		return err
 	}
@@ -213,44 +220,99 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 	timeoutCtx, cancel := context.WithTimeout(ctx, r.cfg.QueryTimeout)
 	defer cancel()
 
-	// Build the daemon-cancel sender for this loop; register with the gate.
 	sendCancel := func(c context.Context) error {
 		return r.sendLoopCancel(c, conn, loopID)
 	}
-	if err := r.gate.Acquire(sessionID, cancel, sendCancel); err != nil {
-		r.pool.Release(sessionID)
-		r.persistFailed(ctx, sessionID, loopID, err)
-		r.broadcastError(sessionID, err)
+	if err := r.gate.Acquire(appKey, cancel, sendCancel); err != nil {
+		r.pool.Release(appKey)
+		r.persistFailed(ctx, appKey, loopID, err)
+		r.broadcastError(appKey, err)
 		if r.onError != nil {
-			r.onError(sessionID, loopID, err)
+			r.onError(appKey, loopID, err)
 		}
 		return err
 	}
-	defer r.gate.Release(sessionID)
+	defer r.gate.Release(appKey)
 
+	return r.runTurn(ctx, timeoutCtx, conn, appKey, loopID, message, attachments, opts)
+}
+
+// ExecuteReserved runs a turn when the caller already reserved the gate via
+// QueryGate.Acquire (e.g. HTTP handler returns 409 before spawning a goroutine).
+// It replaces the cancel with a timeout-derived cancel, registers sendCancel,
+// and Releases the gate on exit.
+func (r *TurnRunner) ExecuteReserved(ctx context.Context, appKey, message, userID, workspaceID string, attachments []map[string]interface{}, opts *InputOpts) error {
+	if err := r.validateOpts(opts); err != nil {
+		return err
+	}
+	if r.gate == nil || !r.gate.IsActive(appKey) {
+		return fmt.Errorf("appkit: ExecuteReserved requires an active QueryGate reservation for %s", appKey)
+	}
+	conn, err := r.pool.Acquire(ctx, appKey, workspaceID, userID)
+	if err != nil {
+		r.persistFailed(ctx, appKey, "", err)
+		r.broadcastError(appKey, err)
+		if r.onError != nil {
+			r.onError(appKey, "", err)
+		}
+		r.gate.Release(appKey)
+		return err
+	}
+	loopID := conn.getLoopID()
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, r.cfg.QueryTimeout)
+	defer cancel()
+	r.gate.ReplaceCancel(appKey, cancel)
+	r.gate.SetSendCancel(appKey, func(c context.Context) error {
+		return r.sendLoopCancel(c, conn, loopID)
+	})
+	defer r.gate.Release(appKey)
+
+	return r.runTurn(ctx, timeoutCtx, conn, appKey, loopID, message, attachments, opts)
+}
+
+func (r *TurnRunner) validateOpts(opts *InputOpts) error {
+	if opts == nil {
+		return nil
+	}
+	if h := strings.TrimSpace(opts.IntentHint); h != "" {
+		if err := soothe.ValidateLoopInputIntentHint(h); err != nil {
+			return fmt.Errorf("appkit: %w", err)
+		}
+	}
+	return nil
+}
+
+func (r *TurnRunner) runTurn(
+	ctx context.Context,
+	timeoutCtx context.Context,
+	conn *pooledConn,
+	appKey, loopID, message string,
+	attachments []map[string]interface{},
+	opts *InputOpts,
+) error {
 	atts := attachments
 	if r.cfg.CompactAttachmentsBeforeSend && len(atts) > 0 {
 		atts = CompactAttachments(atts, r.cfg.CompactImageOpts)
 	}
 
-	// Send loop_input.
 	inputMsg := r.buildInput(message, loopID, atts, opts)
 	if err := conn.client.SendMessage(timeoutCtx, inputMsg); err != nil {
-		r.persistFailed(ctx, sessionID, loopID, err)
-		r.broadcastError(sessionID, err)
+		r.persistFailed(ctx, appKey, loopID, err)
+		r.broadcastError(appKey, err)
 		if r.onError != nil {
-			r.onError(sessionID, loopID, err)
+			r.onError(appKey, loopID, err)
 		}
 		return fmt.Errorf("send message: %w", err)
 	}
 
 	eventCh := conn.eventCh
 	if eventCh == nil {
-		err := fmt.Errorf("missing event stream for session %s (loop %s)", sessionID, loopID)
-		r.persistFailed(ctx, sessionID, loopID, err)
-		r.broadcastError(sessionID, err)
+		err := fmt.Errorf("missing event stream for app key %s (loop %s)", appKey, loopID)
+		r.persistFailed(ctx, appKey, loopID, err)
+		r.broadcastError(appKey, err)
 		if r.onError != nil {
-			r.onError(sessionID, loopID, err)
+			r.onError(appKey, loopID, err)
 		}
 		return err
 	}
@@ -284,36 +346,36 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 		select {
 		case <-timeoutCtx.Done():
 			if timeoutCtx.Err() == context.Canceled {
-				log.Printf("[appkit.TurnRunner] query cancelled for %s (loop %s)", sessionID, loopID)
+				log.Printf("[appkit.TurnRunner] query cancelled for %s (loop %s)", appKey, loopID)
 				err := context.Canceled
-				r.persistFailed(ctx, sessionID, loopID, err)
-				r.broadcastError(sessionID, err)
+				r.persistFailed(ctx, appKey, loopID, err)
+				r.broadcastError(appKey, err)
 				if r.onError != nil {
-					r.onError(sessionID, loopID, err)
+					r.onError(appKey, loopID, err)
 				}
 				return err
 			}
 			if cerr := r.sendLoopCancel(context.Background(), conn, loopID); cerr != nil {
-				log.Printf("[appkit.TurnRunner] WARN: daemon cancel on timeout failed for %s loop %s: %v", sessionID, loopID, cerr)
+				log.Printf("[appkit.TurnRunner] WARN: daemon cancel on timeout failed for %s loop %s: %v", appKey, loopID, cerr)
 			}
-			return r.finishTimeout(ctx, sessionID, loopID, assistantContent, startedAt, ErrQueryTimeout, "query_timeout", r.cfg.OnQueryTimeout)
+			return r.finishTimeout(ctx, appKey, loopID, assistantContent, startedAt, ErrQueryTimeout, "query_timeout", r.cfg.OnQueryTimeout)
 
 		case <-idleCh:
 			if cerr := r.sendLoopCancel(context.Background(), conn, loopID); cerr != nil {
-				log.Printf("[appkit.TurnRunner] WARN: daemon cancel on idle timeout failed for %s loop %s: %v", sessionID, loopID, cerr)
+				log.Printf("[appkit.TurnRunner] WARN: daemon cancel on idle timeout failed for %s loop %s: %v", appKey, loopID, cerr)
 			}
-			return r.finishTimeout(ctx, sessionID, loopID, assistantContent, startedAt, ErrIdleTimeout, "idle_timeout", r.cfg.OnIdleTimeout)
+			return r.finishTimeout(ctx, appKey, loopID, assistantContent, startedAt, ErrIdleTimeout, "idle_timeout", r.cfg.OnIdleTimeout)
 
 		case msg, ok := <-eventCh:
 			if !ok {
 				if r.cfg.OnStreamClose == StreamCloseSoftComplete && strings.TrimSpace(assistantContent) != "" {
-					return r.completeTurn(ctx, sessionID, loopID, assistantContent, startedAt, "stream_closed")
+					return r.completeTurn(ctx, appKey, loopID, assistantContent, startedAt, "stream_closed")
 				}
 				err := fmt.Errorf("event stream closed")
-				r.persistFailed(ctx, sessionID, loopID, err)
-				r.broadcastError(sessionID, err)
+				r.persistFailed(ctx, appKey, loopID, err)
+				r.broadcastError(appKey, err)
 				if r.onError != nil {
-					r.onError(sessionID, loopID, err)
+					r.onError(appKey, loopID, err)
 				}
 				return err
 			}
@@ -321,16 +383,16 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 
 			eventResult := r.classifier.Classify(msg, assistantContent)
 			if eventResult.Err != nil && eventResult.Terminal == ChatEventFailedComplete {
-				r.persistFailed(ctx, sessionID, loopID, eventResult.Err)
-				r.broadcastError(sessionID, eventResult.Err)
+				r.persistFailed(ctx, appKey, loopID, eventResult.Err)
+				r.broadcastError(appKey, eventResult.Err)
 				if r.onError != nil {
-					r.onError(sessionID, loopID, eventResult.Err)
+					r.onError(appKey, loopID, eventResult.Err)
 				}
 				return fmt.Errorf("process event: %w", eventResult.Err)
 			}
 
 			if step := strings.TrimSpace(eventResult.ThinkingStep); step != "" {
-				r.broadcastThinkingStep(sessionID, step)
+				r.broadcastThinkingStep(appKey, step)
 			}
 
 			if eventResult.Content != "" {
@@ -343,35 +405,35 @@ func (r *TurnRunner) Execute(ctx context.Context, sessionID, message, userID, wo
 					assistantContent += eventResult.Content
 				}
 				if delta != "" {
-					r.broadcastDelta(sessionID, delta)
+					r.broadcastDelta(appKey, delta)
 				}
 			}
 
 			if final, deliverable := r.classifier.ResolveDeliverableFinalContent(eventResult, assistantContent); deliverable {
-				return r.completeTurn(ctx, sessionID, loopID, final, startedAt, eventResult.CompletionEvent)
+				return r.completeTurn(ctx, appKey, loopID, final, startedAt, eventResult.CompletionEvent)
 			}
 		}
 	}
 }
 
-func (r *TurnRunner) finishTimeout(ctx context.Context, sessionID, loopID, content string, startedAt time.Time, failErr error, completionEvent string, policy TimeoutPolicy) error {
+func (r *TurnRunner) finishTimeout(ctx context.Context, appKey, loopID, content string, startedAt time.Time, failErr error, completionEvent string, policy TimeoutPolicy) error {
 	if policy == TimeoutPolicySoftComplete && strings.TrimSpace(content) != "" {
-		return r.completeTurn(ctx, sessionID, loopID, content, startedAt, completionEvent)
+		return r.completeTurn(ctx, appKey, loopID, content, startedAt, completionEvent)
 	}
-	r.persistFailed(ctx, sessionID, loopID, failErr)
-	r.broadcastError(sessionID, failErr)
+	r.persistFailed(ctx, appKey, loopID, failErr)
+	r.broadcastError(appKey, failErr)
 	if r.onError != nil {
-		r.onError(sessionID, loopID, failErr)
+		r.onError(appKey, loopID, failErr)
 	}
 	return failErr
 }
 
-func (r *TurnRunner) completeTurn(ctx context.Context, sessionID, loopID, final string, startedAt time.Time, completionEvent string) error {
+func (r *TurnRunner) completeTurn(ctx context.Context, appKey, loopID, final string, startedAt time.Time, completionEvent string) error {
 	elapsedMs := time.Since(startedAt).Milliseconds()
-	r.persistResponse(ctx, sessionID, loopID, final, startedAt, completionEvent)
-	r.broadcastComplete(sessionID, final)
+	r.persistResponse(ctx, appKey, loopID, final, startedAt, completionEvent)
+	r.broadcastComplete(appKey, final)
 	if r.onComplete != nil {
-		r.onComplete(sessionID, loopID, final, completionEvent, elapsedMs)
+		r.onComplete(appKey, loopID, final, completionEvent, elapsedMs)
 	}
 	return nil
 }
@@ -396,7 +458,7 @@ func (r *TurnRunner) sendLoopCancel(ctx context.Context, conn *pooledConn, loopI
 	return nil
 }
 
-func (r *TurnRunner) persistResponse(ctx context.Context, sessionID, loopID, content string, startedAt time.Time, completionEvent string) {
+func (r *TurnRunner) persistResponse(ctx context.Context, appKey, loopID, content string, startedAt time.Time, completionEvent string) {
 	if r.store == nil {
 		return
 	}
@@ -412,12 +474,12 @@ func (r *TurnRunner) persistResponse(ctx context.Context, sessionID, loopID, con
 			"deliverable":      true,
 		},
 	}
-	if err := r.store.AppendMessage(ctx, sessionID, msg); err != nil {
-		log.Printf("[appkit.TurnRunner] persist response failed for %s: %v", sessionID, err)
+	if err := r.store.AppendMessage(ctx, appKey, msg); err != nil {
+		log.Printf("[appkit.TurnRunner] persist response failed for %s: %v", appKey, err)
 	}
 }
 
-func (r *TurnRunner) persistFailed(ctx context.Context, sessionID, loopID string, err error) {
+func (r *TurnRunner) persistFailed(ctx context.Context, appKey, loopID string, err error) {
 	if r.store == nil {
 		return
 	}
@@ -429,46 +491,51 @@ func (r *TurnRunner) persistFailed(ctx context.Context, sessionID, loopID string
 			"error_message": err.Error(),
 		},
 	}
-	if err := r.store.AppendMessage(ctx, sessionID, msg); err != nil {
-		log.Printf("[appkit.TurnRunner] persist failed-query failed for %s: %v", sessionID, err)
+	if err := r.store.AppendMessage(ctx, appKey, msg); err != nil {
+		log.Printf("[appkit.TurnRunner] persist failed-query failed for %s: %v", appKey, err)
 	}
 }
 
-func (r *TurnRunner) broadcastThinkingStep(sessionID, step string) {
+func (r *TurnRunner) broadcastThinkingStep(appKey, step string) {
 	if r.broadcaster == nil || strings.TrimSpace(step) == "" {
 		return
 	}
-	r.broadcaster.Broadcast(sessionID, SSEEvent{
+	r.broadcaster.Broadcast(appKey, SSEEvent{
 		Type: "thinking_step",
 		Data: strings.TrimSpace(step) + "\n",
 	})
 }
 
 // broadcastDelta streams a newly-arrived fragment of assistant content.
-func (r *TurnRunner) broadcastDelta(sessionID, delta string) {
+func (r *TurnRunner) broadcastDelta(appKey, delta string) {
 	if r.broadcaster == nil || delta == "" {
 		return
 	}
-	r.broadcaster.Broadcast(sessionID, SSEEvent{
+	r.broadcaster.Broadcast(appKey, SSEEvent{
 		Type: "delta",
 		Data: delta,
 	})
 }
 
-func (r *TurnRunner) broadcastComplete(sessionID, content string) {
+func (r *TurnRunner) broadcastComplete(appKey, content string) {
 	if r.broadcaster != nil {
-		r.broadcaster.Broadcast(sessionID, SSEEvent{
+		r.broadcaster.Broadcast(appKey, SSEEvent{
 			Type: "complete",
 			Data: content,
 		})
 	}
 }
 
-func (r *TurnRunner) broadcastError(sessionID string, err error) {
-	if r.broadcaster != nil {
-		r.broadcaster.Broadcast(sessionID, SSEEvent{
-			Type: "query_error",
-			Data: err.Error(),
-		})
+func (r *TurnRunner) broadcastError(appKey string, err error) {
+	if r.broadcaster == nil {
+		return
 	}
+	var data interface{} = err.Error()
+	if r.errorData != nil {
+		data = r.errorData(err)
+	}
+	r.broadcaster.Broadcast(appKey, SSEEvent{
+		Type: "query_error",
+		Data: data,
+	})
 }

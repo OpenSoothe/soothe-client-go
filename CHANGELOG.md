@@ -5,6 +5,25 @@ All notable changes to `soothe-client-go` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-07-19
+
+### Fixed
+- `ReceiveMessages` now sends `delivery_ack` on terminal frames (parity with `ReadEvent`), preventing daemon 30s ack-drain stalls (Triarch IG-015)
+
+### Added
+- `chitchat` in `DefaultDeliverablePhases` and `IsLoopAssistantPhase` (SOCIAL fast-path)
+- `AppKey` type + `ContextWithAppKey` / `AppKeyFromContext` — product conversation key, not a daemon id
+- `ConnectionPool` ignores `pending-*` loop ids and preserves `SessionType` on create
+- `QueryGate.SetSendCancel` / `ReplaceCancel` for HTTP pre-reserve + turn wiring
+- `TurnRunner.ExecuteReserved` and `WithErrorData` for product SSE error payloads
+
+### Changed
+- Handshake `ClientVersion` reports `0.4.1`
+- Pool/gate/turn/store APIs use `appKey` naming (was overloaded `sessionID`)
+- `SessionEntry.AppKey` replaces `SessionEntry.SessionID`
+- `BootstrapFunc` takes only daemon scope (`workspaceID`, `userID`); product `AppKey` via context
+
+
 ## [0.4.0] - 2026-07-18
 
 ### Changed

@@ -5,14 +5,14 @@ import (
 	"time"
 )
 
-// SessionEntry is the persisted mapping between an application session id and
+// SessionEntry is the persisted mapping between an application AppKey and
 // the daemon loop id, plus bookkeeping for resume and reset.
 type SessionEntry struct {
 	WorkspaceID string
-	SessionID   string
+	AppKey      string // application conversation key (not a daemon id)
 	LoopID      string
 	SessionType string // app-defined taxonomy (e.g. "primary" | "ephemeral")
-	Purpose     string // optional app key for ephemeral internal features
+	Purpose     string // optional product purpose for ephemeral features
 	IsActive    bool
 	ResetCount  int
 	LastUsedAt  time.Time
@@ -32,30 +32,25 @@ type SessionMessage struct {
 // storage backend (in-memory, Postgres, Redis, etc.). Implementations must be
 // safe for concurrent use.
 //
-// appkit's ConnectionPool consults the store to decide whether to bootstrap a
-// fresh loop (no loop id on file) or reattach to an existing one, and records
-// the loop id once bootstrapped. TurnRunner persists the final assistant reply
-// and error rows via AppendMessage.
+// Keys are AppKey values (product conversation ids). appkit maps AppKey →
+// daemon loop_id; the daemon never sees AppKey on the wire.
 type SessionStore interface {
-	// GetSession returns the persisted entry for sessionID, or
-	// (nil, nil) if no record exists.
-	GetSession(ctx context.Context, sessionID string) (*SessionEntry, error)
+	// GetSession returns the persisted entry for appKey, or (nil, nil) if none.
+	GetSession(ctx context.Context, appKey AppKey) (*SessionEntry, error)
 
-	// CreateSession persists a new session↔loop mapping.
-	CreateSession(ctx context.Context, workspaceID, sessionID, loopID, sessionType string) error
+	// CreateSession persists a new AppKey↔loop mapping.
+	CreateSession(ctx context.Context, workspaceID string, appKey AppKey, loopID, sessionType string) error
 
-	// UpdateLastUsed stamps the session's last-used timestamp.
-	UpdateLastUsed(ctx context.Context, sessionID string) error
+	// UpdateLastUsed stamps the entry's last-used timestamp.
+	UpdateLastUsed(ctx context.Context, appKey AppKey) error
 
-	// IncrementResetCount bumps the reset counter (used to decide fresh
-	// bootstrap vs reattach after an explicit reset).
-	IncrementResetCount(ctx context.Context, sessionID string) error
+	// IncrementResetCount bumps the reset counter (fresh bootstrap vs reattach).
+	IncrementResetCount(ctx context.Context, appKey AppKey) error
 
-	// GetLoopIDForSession returns the daemon loop id for sessionID and whether
-	// one is on file. ok==false triggers a fresh loop_new bootstrap.
-	GetLoopIDForSession(ctx context.Context, sessionID string) (loopID string, ok bool, err error)
+	// GetLoopIDForSession returns the daemon loop id for appKey.
+	// ok==false triggers a fresh loop_new bootstrap.
+	GetLoopIDForSession(ctx context.Context, appKey AppKey) (loopID string, ok bool, err error)
 
-	// AppendMessage writes a message row (assistant reply, error, etc.) for
-	// the session. metadata carries optional query analytics.
-	AppendMessage(ctx context.Context, sessionID string, message SessionMessage) error
+	// AppendMessage writes a message row for the AppKey's conversation.
+	AppendMessage(ctx context.Context, appKey AppKey, message SessionMessage) error
 }

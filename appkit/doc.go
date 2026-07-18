@@ -1,12 +1,11 @@
 // Package appkit is the application-architecture layer over the core Client:
-// dual-socket DaemonSession, per-session connection pooling, single-flight
+// dual-socket DaemonSession, per-AppKey connection pooling, single-flight
 // query gating, turn execution, event→deliverable classification, and
 // SSE-style fan-out.
 //
-// appkit is product-agnostic. Which event phases count as user-facing
-// deliverables, how sessions are persisted, and what event type strings the
-// frontend expects are supplied by the application via configuration
-// (e.g. DeliverablePhases) and interfaces (e.g. SessionStore).
+// AppKey is a product conversation key (not a daemon loop_id or client_id).
+// appkit is product-agnostic: deliverable phases, persistence, and SSE event
+// vocabulary are supplied via configuration and SessionStore.
 //
 // # Stack
 //
@@ -35,7 +34,7 @@
 //
 // # Session teardown
 //
-// Recommended cancel ordering: QueryGate.Cancel(sessionID) → wait for
+// Recommended cancel ordering: QueryGate.Cancel(appKey) → wait for
 // in-flight Execute (caller-owned WaitGroup) → ConnectionPool.Release / Stop →
 // Client.Close. Do not Close the WebSocket under an active reader without
 // cancelling the turn first.

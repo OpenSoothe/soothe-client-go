@@ -791,6 +791,9 @@ func (c *Client) ReceiveMessages(ctx context.Context) (<-chan interface{}, error
 					if c.mux != nil && c.mux.route(m) {
 						continue
 					}
+					// Mirror ReadEvent: ack terminal frames so daemon drain gating
+					// (IG-556 / Triarch IG-015) does not wait the full 30s timeout.
+					c.trackInboundDeliveryAck(m)
 					// Automatically process heartbeat events if tracking is enabled
 					if tracker != nil {
 						tracker.ProcessHeartbeatEvent(m)
