@@ -185,7 +185,7 @@ func Example_sendInputStructuredOutput() {
 }
 
 // Example_sendInputWithSubagent routes the input to a preferred subagent
-// (e.g. "explore" for codebase exploration, "tacitus" for research).
+// (e.g. "explorer" for codebase exploration, "deep_research" for research).
 func Example_sendInputWithSubagent() {
 	md := NewMockDaemon(nil)
 	defer md.Close()
@@ -203,7 +203,7 @@ func Example_sendInputWithSubagent() {
 
 	err := client.SendInput(ctx, "Explore the database migration patterns in this codebase",
 		soothe.WithLoopID(loopID),
-		soothe.WithSubagent("explore"),
+		soothe.WithSubagent("explorer"),
 	)
 	if err != nil {
 		fmt.Printf("SendInput error: %v\n", err)

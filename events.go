@@ -22,19 +22,22 @@ const (
 	EventGoalDirectivesApplied = "soothe.cognition.goal.directives.applied"
 )
 
-// Explore subagent events (built-in wire types)
+// Explorer subagent events (built-in wire types)
 const (
-	EventExploreStarted       = "soothe.subagent.explore.started"
-	EventExploreMilestone     = "soothe.subagent.explore.milestone"
-	EventExploreStepCompleted = "soothe.subagent.explore.step.completed"
-	EventExploreCompleted     = "soothe.subagent.explore.completed"
+	EventExplorerStarted       = "soothe.subagent.explorer.started"
+	EventExplorerMilestone     = "soothe.subagent.explorer.milestone"
+	EventExplorerStepCompleted = "soothe.subagent.explorer.step.completed"
+	EventExplorerCompleted     = "soothe.subagent.explorer.completed"
 )
 
-// Tacitus subagent events (built-in wire types)
+// Deep research subagent events (built-in wire types)
 const (
-	EventTacitusStarted       = "soothe.subagent.tacitus.started"
-	EventTacitusGatherSummary = "soothe.subagent.tacitus.gather.summary"
-	EventTacitusCompleted     = "soothe.subagent.tacitus.completed"
+	EventDeepResearchStarted       = "soothe.subagent.deep_research.started"
+	EventDeepResearchProgress      = "soothe.subagent.deep_research.progress"
+	EventDeepResearchStepCompleted = "soothe.subagent.deep_research.step.completed"
+	EventDeepResearchGatherSummary = "soothe.subagent.deep_research.gather.summary"
+	EventDeepResearchCrawlSummary  = "soothe.subagent.deep_research.crawl.summary"
+	EventDeepResearchCompleted     = "soothe.subagent.deep_research.completed"
 )
 
 // Control-plane wire envelopes (not soothe.* catalog events)

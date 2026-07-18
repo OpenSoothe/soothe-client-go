@@ -281,9 +281,9 @@ func (md *MockDaemon) handleRPC(conn *websocket.Conn, id, method string, params 
 	// --- Autopilot goal RPCs ---------------------------------------------
 	case "autopilot_status":
 		md.sendResponse(conn, id, map[string]interface{}{
-			"state":    "active",
-			"running":  true,
-			"dreaming": false,
+			"state":     "active",
+			"running":   true,
+			"dreaming":  false,
 			"loop_pool": map[string]interface{}{"active": 1, "idle": 2},
 		})
 	case "autopilot_submit":
@@ -330,12 +330,12 @@ func (md *MockDaemon) handleRPC(conn *websocket.Conn, id, method string, params 
 		})
 	case "autopilot_get_job":
 		md.sendResponse(conn, id, map[string]interface{}{
-			"job":            map[string]interface{}{"id": params["job_id"], "status": "active"},
-			"dag":            map[string]interface{}{"nodes": []interface{}{}},
-			"active_goals":   0,
+			"job":             map[string]interface{}{"id": params["job_id"], "status": "active"},
+			"dag":             map[string]interface{}{"nodes": []interface{}{}},
+			"active_goals":    0,
 			"completed_goals": 0,
-			"total_goals":    0,
-			"source":         "autopilot_service",
+			"total_goals":     0,
+			"source":          "autopilot_service",
 		})
 
 	// --- Cron -------------------------------------------------------------
