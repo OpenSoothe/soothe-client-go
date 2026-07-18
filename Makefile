@@ -1,4 +1,4 @@
-.PHONY: help build test test-short test-integration test-stress vet format lint clean install run deps
+.PHONY: help build test test-short test-integration test-stress vet format format-check lint clean install run deps verify
 
 # Project variables
 PACKAGE := github.com/mirasoth/soothe-client-go
@@ -58,6 +58,16 @@ format: ## Format code with go fmt
 	@echo "Formatting code..."
 	$(GO) fmt ./...
 
+format-check: ## Fail if go fmt would change files
+	@echo "Checking go fmt..."
+	@bad=$$(gofmt -l $$(find . -name '*.go' -not -path './.git/*' -not -path './.backups/*' -not -path '*/.backups/*')); \
+	if [ -n "$$bad" ]; then \
+		echo "The following files need gofmt:"; \
+		echo "$$bad"; \
+		exit 1; \
+	fi
+	@echo "✓ Format check passed"
+
 lint: ## Run golangci-lint (if installed)
 	@echo "Running lint..."
 	@if command -v golangci-lint >/dev/null 2>&1; then \
@@ -65,6 +75,9 @@ lint: ## Run golangci-lint (if installed)
 	else \
 		echo "golangci-lint not installed. Install from: https://golangci-lint.run/usage/install/"; \
 	fi
+
+verify: format-check vet test-short build ## CI verification gate
+	@echo "✓ All verification checks passed"
 
 # Dependencies
 deps: ## Download dependencies
