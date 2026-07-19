@@ -50,25 +50,22 @@ type ClassifierConfig struct {
 	// allowlist is used.
 	ThinkingStepEvents map[string]bool
 
-	// TreatStatusIdleAsComplete: when true, a StatusResponse with State=="idle"
-	// and non-empty accumulated assistant text is ChatEventDeliverableComplete
-	// (typical for intent-hint turns). Default false keeps historical
-	// Continue-on-status behaviour.
+	// TreatStatusIdleAsComplete: when true, Classify/ClassifyTurn may treat
+	// status=idle + substantive accumulated text as deliverable.
+	// Prefer TurnRunner + TurnBoundary for turn end (DaemonSession contract);
+	// these flags remain for standalone Classify callers and tests.
 	//
-	// When GateTurnEndSignals is also true, idle completion additionally requires
-	// TurnLifecycleGate.AllowIdleComplete (DaemonSession: running + payload).
+	// When GateTurnEndSignals is also true, idle completion requires
+	// TurnLifecycleGate.AllowIdleComplete (running + payload).
 	TreatStatusIdleAsComplete bool
 
-	// TreatStreamEndAsComplete: when true, a turn-scoped soothe.stream.end custom
-	// event soft-completes with accumulated assistant text (DaemonSession parity).
-	// Always gated: requires a non-nil TurnLifecycleGate that AllowStreamEnd.
-	// Default false.
+	// TreatStreamEndAsComplete: standalone ClassifyTurn soft-complete on
+	// turn-scoped soothe.stream.end. TurnRunner ignores this and uses
+	// TurnBoundary instead (always on).
 	TreatStreamEndAsComplete bool
 
-	// GateTurnEndSignals: when true, TreatStatusIdleAsComplete requires
-	// TurnLifecycleGate.AllowIdleComplete. TurnRunner always passes a per-turn
-	// gate when either this flag or TreatStreamEndAsComplete is set.
-	// Default false preserves ungated idle opt-in for older callers.
+	// GateTurnEndSignals: gate idle for ClassifyTurn. TurnRunner uses
+	// TurnBoundary and does not rely on this flag.
 	GateTurnEndSignals bool
 }
 
@@ -118,7 +115,7 @@ func (cl *EventClassifier) IsDeliverableCompletionEvent(eventType string) bool {
 		return false
 	}
 	switch eventType {
-	case "status.idle", soothe.STREAM_END, "idle_timeout", "query_timeout", "stream_closed":
+	case "status.idle", "status.stopped", soothe.STREAM_END, "idle_timeout", "query_timeout", "stream_closed":
 		return true
 	}
 	if eventType == soothe.EventFinalReport {

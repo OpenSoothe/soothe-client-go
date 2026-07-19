@@ -1,7 +1,19 @@
 # Appkit turn lifecycle features
 
-Notes for `appkit` idle timeout, status-idle completion, attachment compaction,
-subscription-metadata filtering, and soft stream-close policies.
+Notes for `appkit` idle timeout, DaemonSession turn boundaries, attachment
+compaction, subscription-metadata filtering, and soft stream-close policies.
+
+## Ownership
+
+| Concern | Owner |
+|---------|--------|
+| **When the turn is over** | `TurnBoundary` (same rules as `DaemonSession.IterTurnChunks`) |
+| **What text to stream / persist** | `EventClassifier` (phases, deltas, thinking steps) |
+| **Early UX complete** | Optional phase deliverable from classifier (`goal_completion`, `chitchat`, …) before boundary |
+
+`TurnRunner` always feeds `TurnBoundary`. Classifier flags
+`TreatStreamEndAsComplete` / `TreatStatusIdleAsComplete` are for standalone
+`ClassifyTurn` only — not required for `TurnRunner`.
 
 ## Behaviour summary
 
@@ -9,16 +21,13 @@ subscription-metadata filtering, and soft stream-close policies.
 |------|---------|--------|
 | `IdleTimeout` | off (`0`) | Silence watchdog between events |
 | `MinIdleTimeoutWithAttachments` | off | Raises idle when attachments are present |
-| `TreatStatusIdleAsComplete` | `false` | Opt-in: `status=idle` + content ends the turn |
-| `TreatStreamEndAsComplete` | `false` | Opt-in: turn-scoped `soothe.stream.end` + content ends the turn (always gated) |
-| `GateTurnEndSignals` | `false` | With idle opt-in: require `TurnLifecycleGate` running + payload (DaemonSession) |
+| `TurnBoundary` (TurnRunner) | always on | Gated `stream.end` / `idle` / `stopped` |
+| `TreatStatusIdleAsComplete` | `false` | Standalone ClassifyTurn only |
+| `TreatStreamEndAsComplete` | `false` | Standalone ClassifyTurn only |
+| `GateTurnEndSignals` | `false` | Standalone ClassifyTurn only |
 | `CompactAttachmentsBeforeSend` | `false` | Opt-in image downscale before `loop_input` |
 | `OnIdleTimeout` / `OnQueryTimeout` / `OnStreamClose` | fail | Soft-complete optional via `TimeoutPolicySoftComplete` |
 | `plan_direct` in `DefaultDeliverablePhases` | excluded | Streamable narration only; not a turn terminal |
-
-`TurnRunner` creates a per-turn `TurnLifecycleGate` when `TreatStreamEndAsComplete` or
-`GateTurnEndSignals` is set, and classifies via `ClassifyTurn` so concurrent chats
-sharing one classifier do not race on gate state.
 
 ## Tests
 

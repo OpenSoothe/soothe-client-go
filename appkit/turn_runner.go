@@ -118,7 +118,12 @@ func InputMessageForLoop(text, loopID string, attachments []map[string]interface
 
 // TurnRunner executes one query turn end-to-end: acquire a pooled connection,
 // enforce single-flight, send loop_input, consume the event stream, classify
-// events, resolve the deliverable, persist the reply, and broadcast completion.
+// content, persist/broadcast.
+//
+// Turn end is owned by TurnBoundary (DaemonSession.IterTurnChunks contract:
+// stream.end / gated idle / stopped). EventClassifier selects user-visible
+// text and may early-complete on deliverable phases for UX; it is not the
+// sole turn terminator.
 type TurnRunner struct {
 	pool        *ConnectionPool
 	gate        *QueryGate
@@ -319,11 +324,8 @@ func (r *TurnRunner) runTurn(
 
 	var assistantContent string
 	startedAt := time.Now()
-	// Per-turn gate for stream.end / gated idle (shared classifier stays race-free).
-	var turnGate *TurnLifecycleGate
-	if r.classifier != nil && (r.classifier.cfg.TreatStreamEndAsComplete || r.classifier.cfg.GateTurnEndSignals) {
-		turnGate = &TurnLifecycleGate{}
-	}
+	// DaemonSession turn-end contract (always on; not classifier opt-in).
+	boundary := &TurnBoundary{}
 
 	idleForTurn := idleTimeoutForTurn(r.cfg, len(attachments) > 0)
 	var idleTimer *time.Timer
@@ -386,7 +388,9 @@ func (r *TurnRunner) runTurn(
 			}
 			resetIdle()
 
-			eventResult := r.classifier.ClassifyTurn(msg, assistantContent, turnGate)
+			ended, endReason := boundary.Feed(msg)
+			// Classify for content / phase early-complete only. Turn end is boundary.
+			eventResult := r.classifier.Classify(msg, assistantContent)
 			if eventResult.Err != nil && eventResult.Terminal == ChatEventFailedComplete {
 				r.persistFailed(ctx, appKey, loopID, eventResult.Err)
 				r.broadcastError(appKey, eventResult.Err)
@@ -415,7 +419,26 @@ func (r *TurnRunner) runTurn(
 			}
 
 			if final, deliverable := r.classifier.ResolveDeliverableFinalContent(eventResult, assistantContent); deliverable {
-				return r.completeTurn(ctx, appKey, loopID, final, startedAt, eventResult.CompletionEvent)
+				// Phase early-complete (chitchat / goal_completion / intent-hint).
+				// Ignore classifier terminals that duplicate TurnBoundary signals.
+				if !IsDaemonTurnEndEvent(eventResult.CompletionEvent) {
+					return r.completeTurn(ctx, appKey, loopID, final, startedAt, eventResult.CompletionEvent)
+				}
+			}
+
+			if ended {
+				if r.classifier.IsSubstantiveAssistantReply(assistantContent) {
+					return r.completeTurn(ctx, appKey, loopID, strings.TrimSpace(assistantContent), startedAt, endReason)
+				}
+				// Daemon turn closed with no usable reply — fail rather than hang
+				// until QueryTimeout (大荔-class stuck thinking).
+				err := fmt.Errorf("turn ended (%s) with no assistant content", endReason)
+				r.persistFailed(ctx, appKey, loopID, err)
+				r.broadcastError(appKey, err)
+				if r.onError != nil {
+					r.onError(appKey, loopID, err)
+				}
+				return err
 			}
 		}
 	}

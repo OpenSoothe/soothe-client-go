@@ -154,17 +154,14 @@ func TestClassifier_StatusIdle_GatedIgnoresPreRunning(t *testing.T) {
 }
 
 func TestTurnRunner_StreamEndSoftComplete(t *testing.T) {
+	// TurnBoundary ends the turn even when the classifier has no stream.end flags.
 	store := newMemStore()
 	running := soothe.StatusResponse{State: "running", LoopID: "loop-1"}
 	chunk := eventMessageFromJSON(t, streamingChunkEvent("enough accumulated reply text"))
 	end := eventMessageFromJSON(t, streamEndTurnEvent())
 	fake := newFakeClient(running, chunk, end)
 	pool := newTestPool(t, store, fake)
-	cl := NewEventClassifier(ClassifierConfig{
-		DeliverablePhases:        soothe.DefaultDeliverablePhases(),
-		TreatStreamEndAsComplete: true,
-	})
-	tr := NewTurnRunner(pool, NewQueryGate(), cl, store, NewSSEBroadcaster(), TurnConfig{
+	tr := NewTurnRunner(pool, NewQueryGate(), defaultClassifier(), store, NewSSEBroadcaster(), TurnConfig{
 		QueryTimeout: 5 * time.Second,
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -178,6 +175,45 @@ func TestTurnRunner_StreamEndSoftComplete(t *testing.T) {
 	}
 	if ce, _ := msgs[0].Metadata["completion_event"].(string); ce != soothe.STREAM_END {
 		t.Errorf("completion_event=%q", ce)
+	}
+}
+
+func TestTurnRunner_GatedIdleSoftComplete(t *testing.T) {
+	store := newMemStore()
+	running := soothe.StatusResponse{State: "running", LoopID: "loop-1"}
+	chunk := eventMessageFromJSON(t, streamingChunkEvent("enough accumulated reply text"))
+	idle := soothe.StatusResponse{State: "idle", LoopID: "loop-1"}
+	fake := newFakeClient(running, chunk, idle)
+	pool := newTestPool(t, store, fake)
+	tr := NewTurnRunner(pool, NewQueryGate(), defaultClassifier(), store, NewSSEBroadcaster(), TurnConfig{
+		QueryTimeout: 5 * time.Second,
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := tr.Execute(ctx, "s1", "hi", "u", "ws", nil, nil); err != nil {
+		t.Fatalf("gated idle soft-complete: %v", err)
+	}
+	msgs := store.messages("s1")
+	if len(msgs) == 0 || msgs[0].Role != "assistant" {
+		t.Fatalf("expected assistant persist, got %+v", msgs)
+	}
+	if ce, _ := msgs[0].Metadata["completion_event"].(string); ce != TurnEndIdle {
+		t.Errorf("completion_event=%q want %s", ce, TurnEndIdle)
+	}
+}
+
+func TestTurnBoundary_IgnoresPreRunningIdle(t *testing.T) {
+	b := &TurnBoundary{}
+	ended, _ := b.Feed(soothe.StatusResponse{State: "idle"})
+	if ended {
+		t.Fatal("pre-running idle must not end the turn")
+	}
+	b.Feed(soothe.StatusResponse{State: "running"})
+	chunk := eventMessageFromJSON(t, streamingChunkEvent("progress"))
+	b.Feed(chunk)
+	ended, reason := b.Feed(soothe.StatusResponse{State: "idle"})
+	if !ended || reason != TurnEndIdle {
+		t.Fatalf("got ended=%v reason=%q", ended, reason)
 	}
 }
 

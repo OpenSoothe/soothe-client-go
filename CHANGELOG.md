@@ -5,6 +5,15 @@ All notable changes to `soothe-client-go` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] - 2026-07-19
+
+### Changed
+- `TurnRunner` always ends turns via `TurnBoundary` (DaemonSession contract: gated `soothe.stream.end` / `status.idle` / `status.stopped`). `EventClassifier` is content + optional phase early-complete only — not the sole turn terminator
+- Handshake `ClientVersion` reports `0.4.4`
+
+### Added
+- `TurnBoundary` + `IsDaemonTurnEndEvent` for pool-path turn end parity with `DaemonSession.IterTurnChunks`
+
 ## [0.4.3] - 2026-07-19
 
 ### Added
