@@ -89,6 +89,98 @@ func TestClassifier_GoalCompletion_Deliverable(t *testing.T) {
 	}
 }
 
+func TestClassifier_StreamEnd_OptInGated(t *testing.T) {
+	cl := NewEventClassifier(ClassifierConfig{
+		DeliverablePhases:        soothe.DefaultDeliverablePhases(),
+		TreatStreamEndAsComplete: true,
+	})
+	gate := &TurnLifecycleGate{}
+	accumulated := "Dali weather is sunny, twenty-eight degrees Celsius today."
+
+	// Premature stream.end before running/progress must not complete.
+	end := eventMessageFromJSON(t, streamEndTurnEvent())
+	r := cl.ClassifyTurn(end, accumulated, gate)
+	if r.Terminal != ChatEventContinue {
+		t.Fatalf("premature stream.end must continue, got %v", r.Terminal)
+	}
+
+	gate.Observe(soothe.StatusResponse{State: "running", LoopID: "L1"})
+	chunk := eventMessageFromJSON(t, streamingChunkEvent("Dali weather"))
+	_ = cl.ClassifyTurn(chunk, "", gate)
+	if !gate.SawTurnProgress {
+		t.Fatal("messages chunk should mark turn progress")
+	}
+
+	r = cl.ClassifyTurn(end, accumulated, gate)
+	if r.Terminal != ChatEventDeliverableComplete {
+		t.Fatalf("gated stream.end should deliver, got %v", r.Terminal)
+	}
+	if r.CompletionEvent != soothe.STREAM_END {
+		t.Errorf("completion event: %q", r.CompletionEvent)
+	}
+	if !cl.IsDeliverableCompletionEvent(r.CompletionEvent) {
+		t.Error("soothe.stream.end must be a deliverable completion event")
+	}
+}
+
+func TestClassifier_StreamEnd_DefaultOff(t *testing.T) {
+	cl := defaultClassifier()
+	gate := &TurnLifecycleGate{SawRunning: true, SawTurnProgress: true, SawStreamPayload: true}
+	r := cl.ClassifyTurn(eventMessageFromJSON(t, streamEndTurnEvent()), "enough accumulated reply text here", gate)
+	if r.Terminal != ChatEventContinue {
+		t.Fatalf("default must ignore stream.end, got %v", r.Terminal)
+	}
+}
+
+func TestClassifier_StatusIdle_GatedIgnoresPreRunning(t *testing.T) {
+	cl := NewEventClassifier(ClassifierConfig{
+		DeliverablePhases:         soothe.DefaultDeliverablePhases(),
+		TreatStatusIdleAsComplete: true,
+		GateTurnEndSignals:        true,
+	})
+	gate := &TurnLifecycleGate{}
+	// Continue-thread stub idle before running (渭南).
+	r := cl.ClassifyTurn(soothe.StatusResponse{State: "idle"}, "I'll respond to your request using prior context.", gate)
+	if r.Terminal != ChatEventContinue {
+		t.Fatalf("pre-running idle must continue when gated, got %v", r.Terminal)
+	}
+
+	gate.Observe(soothe.StatusResponse{State: "running"})
+	_ = cl.ClassifyTurn(eventMessageFromJSON(t, streamingChunkEvent("full weather reply text")), "", gate)
+	r = cl.ClassifyTurn(soothe.StatusResponse{State: "idle"}, "full weather reply text for Dali county", gate)
+	if r.Terminal != ChatEventDeliverableComplete {
+		t.Fatalf("post-running idle should deliver when gated, got %v", r.Terminal)
+	}
+}
+
+func TestTurnRunner_StreamEndSoftComplete(t *testing.T) {
+	store := newMemStore()
+	running := soothe.StatusResponse{State: "running", LoopID: "loop-1"}
+	chunk := eventMessageFromJSON(t, streamingChunkEvent("enough accumulated reply text"))
+	end := eventMessageFromJSON(t, streamEndTurnEvent())
+	fake := newFakeClient(running, chunk, end)
+	pool := newTestPool(t, store, fake)
+	cl := NewEventClassifier(ClassifierConfig{
+		DeliverablePhases:        soothe.DefaultDeliverablePhases(),
+		TreatStreamEndAsComplete: true,
+	})
+	tr := NewTurnRunner(pool, NewQueryGate(), cl, store, NewSSEBroadcaster(), TurnConfig{
+		QueryTimeout: 5 * time.Second,
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := tr.Execute(ctx, "s1", "hi", "u", "ws", nil, nil); err != nil {
+		t.Fatalf("stream.end soft-complete: %v", err)
+	}
+	msgs := store.messages("s1")
+	if len(msgs) == 0 || msgs[0].Role != "assistant" {
+		t.Fatalf("expected assistant persist, got %+v", msgs)
+	}
+	if ce, _ := msgs[0].Metadata["completion_event"].(string); ce != soothe.STREAM_END {
+		t.Errorf("completion_event=%q", ce)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Idle timeout
 // ---------------------------------------------------------------------------

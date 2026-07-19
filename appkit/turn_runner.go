@@ -319,6 +319,11 @@ func (r *TurnRunner) runTurn(
 
 	var assistantContent string
 	startedAt := time.Now()
+	// Per-turn gate for stream.end / gated idle (shared classifier stays race-free).
+	var turnGate *TurnLifecycleGate
+	if r.classifier != nil && (r.classifier.cfg.TreatStreamEndAsComplete || r.classifier.cfg.GateTurnEndSignals) {
+		turnGate = &TurnLifecycleGate{}
+	}
 
 	idleForTurn := idleTimeoutForTurn(r.cfg, len(attachments) > 0)
 	var idleTimer *time.Timer
@@ -381,7 +386,7 @@ func (r *TurnRunner) runTurn(
 			}
 			resetIdle()
 
-			eventResult := r.classifier.Classify(msg, assistantContent)
+			eventResult := r.classifier.ClassifyTurn(msg, assistantContent, turnGate)
 			if eventResult.Err != nil && eventResult.Terminal == ChatEventFailedComplete {
 				r.persistFailed(ctx, appKey, loopID, eventResult.Err)
 				r.broadcastError(appKey, eventResult.Err)

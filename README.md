@@ -90,6 +90,8 @@ Product backends that map chat sessions to daemon loops use `ConnectionPool` +
 | `OnIdleTimeout` / `OnQueryTimeout` / `OnStreamClose` | fail | Or soft-complete |
 | `CompactAttachmentsBeforeSend` | false | Optional image downscale |
 | `TreatStatusIdleAsComplete` (classifier) | false | Opt-in idle deliverable |
+| `TreatStreamEndAsComplete` (classifier) | false | Opt-in `soothe.stream.end` soft-complete (gated) |
+| `GateTurnEndSignals` (classifier) | false | Idle only after running + stream payload |
 
 `SessionStore` methods take `context.Context` as the first parameter so
 cancellation and deadlines reach the storage backend. See

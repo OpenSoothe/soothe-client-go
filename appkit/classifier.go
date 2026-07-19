@@ -54,7 +54,22 @@ type ClassifierConfig struct {
 	// and non-empty accumulated assistant text is ChatEventDeliverableComplete
 	// (typical for intent-hint turns). Default false keeps historical
 	// Continue-on-status behaviour.
+	//
+	// When GateTurnEndSignals is also true, idle completion additionally requires
+	// TurnLifecycleGate.AllowIdleComplete (DaemonSession: running + payload).
 	TreatStatusIdleAsComplete bool
+
+	// TreatStreamEndAsComplete: when true, a turn-scoped soothe.stream.end custom
+	// event soft-completes with accumulated assistant text (DaemonSession parity).
+	// Always gated: requires a non-nil TurnLifecycleGate that AllowStreamEnd.
+	// Default false.
+	TreatStreamEndAsComplete bool
+
+	// GateTurnEndSignals: when true, TreatStatusIdleAsComplete requires
+	// TurnLifecycleGate.AllowIdleComplete. TurnRunner always passes a per-turn
+	// gate when either this flag or TreatStreamEndAsComplete is set.
+	// Default false preserves ungated idle opt-in for older callers.
+	GateTurnEndSignals bool
 }
 
 // EventClassifier maps a stream of decoded daemon events into
@@ -78,21 +93,32 @@ func NewEventClassifier(cfg ClassifierConfig) *EventClassifier {
 
 // Classify inspects one decoded event and returns its outcome. accumulated is
 // the running assistant text so far, used to pick the final reply when a
-// deliverable event arrives.
+// deliverable event arrives. Prefer ClassifyTurn when using stream-end / gated
+// idle completion so the per-turn TurnLifecycleGate is observed.
 func (cl *EventClassifier) Classify(msg interface{}, accumulated string) ChatEventResult {
-	return cl.processChatEvent(msg, accumulated)
+	return cl.ClassifyTurn(msg, accumulated, nil)
+}
+
+// ClassifyTurn is Classify plus optional DaemonSession-style turn-end gating.
+// When gate is non-nil it is Observed before classification.
+func (cl *EventClassifier) ClassifyTurn(msg interface{}, accumulated string, gate *TurnLifecycleGate) ChatEventResult {
+	if gate != nil {
+		gate.Observe(msg)
+	}
+	return cl.processChatEvent(msg, accumulated, gate)
 }
 
 // IsDeliverableCompletionEvent reports whether a persisted completion_event is
 // user-facing. Uses the configured deliverable phase set; recognizes protocol
 // output namespaces and final_report. Also accepts TurnRunner-generated
-// completion markers: status.idle, idle_timeout, query_timeout, stream_closed.
+// completion markers: status.idle, soothe.stream.end, idle_timeout,
+// query_timeout, stream_closed.
 func (cl *EventClassifier) IsDeliverableCompletionEvent(eventType string) bool {
 	if eventType == "" {
 		return false
 	}
 	switch eventType {
-	case "status.idle", "idle_timeout", "query_timeout", "stream_closed":
+	case "status.idle", soothe.STREAM_END, "idle_timeout", "query_timeout", "stream_closed":
 		return true
 	}
 	if eventType == soothe.EventFinalReport {
@@ -244,7 +270,7 @@ func extractContentFromMessage(msgMap map[string]interface{}) string {
 }
 
 // processChatEvent is the event→outcome mapper keyed on namespace, mode, and phase.
-func (cl *EventClassifier) processChatEvent(msg interface{}, accumulated string) ChatEventResult {
+func (cl *EventClassifier) processChatEvent(msg interface{}, accumulated string, gate *TurnLifecycleGate) ChatEventResult {
 	switch m := msg.(type) {
 	case soothe.EventMessage:
 		eventType := m.EventType()
@@ -261,6 +287,16 @@ func (cl *EventClassifier) processChatEvent(msg interface{}, accumulated string)
 			if step, ok := cl.extractThinkingStep(dataType, data); ok {
 				return thinkingStepResult(step)
 			}
+		}
+
+		// Turn-scoped stream.end: soft-complete accumulated text (CLI parity).
+		if m.Mode == "custom" && soothe.IsTurnEndCustomData(m.Data) {
+			if cl.cfg.TreatStreamEndAsComplete &&
+				cl.IsSubstantiveAssistantReply(accumulated) &&
+				gate.AllowStreamEnd() {
+				return cl.deliverableResult(strings.TrimSpace(accumulated), soothe.STREAM_END)
+			}
+			return ChatEventResult{Terminal: ChatEventContinue}
 		}
 
 		if m.Mode == "messages" {
@@ -391,6 +427,9 @@ func (cl *EventClassifier) processChatEvent(msg interface{}, accumulated string)
 		if cl.cfg.TreatStatusIdleAsComplete &&
 			strings.EqualFold(strings.TrimSpace(m.State), "idle") &&
 			cl.IsSubstantiveAssistantReply(accumulated) {
+			if cl.cfg.GateTurnEndSignals && !gate.AllowIdleComplete() {
+				return ChatEventResult{Terminal: ChatEventContinue}
+			}
 			return cl.deliverableResult(strings.TrimSpace(accumulated), "status.idle")
 		}
 		return ChatEventResult{Terminal: ChatEventContinue}

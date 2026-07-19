@@ -486,6 +486,11 @@ func TestTurnRunner_DeliverableTurn(t *testing.T) {
 	}
 }
 
+// streamEndTurnEvent builds a turn-scoped soothe.stream.end custom event.
+func streamEndTurnEvent() string {
+	return `{"proto":"1","type":"event","namespace":["soothe","stream"],"mode":"custom","data":{"type":"soothe.stream.end","scope":"turn"},"loop_id":"loop-1"}`
+}
+
 // streamingChunkEvent builds a mode=messages AIMessageChunk carrying one piece
 // of streaming assistant text (classifier maps these to ChatEventContinue).
 func streamingChunkEvent(content string) string {

@@ -5,6 +5,17 @@ All notable changes to `soothe-client-go` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-07-19
+
+### Added
+- `TreatStreamEndAsComplete` — soft-complete on turn-scoped `soothe.stream.end` with accumulated text (DaemonSession / soothe-cli parity)
+- `GateTurnEndSignals` — when set with `TreatStatusIdleAsComplete`, ignore pre-running `status=idle` (continue-thread stub race)
+- `TurnLifecycleGate` + `ClassifyTurn` — per-turn running/progress gates; `TurnRunner` allocates a gate when stream-end or gated idle is enabled
+- `soothe.stream.end` recognized by `IsDeliverableCompletionEvent`
+
+### Changed
+- Handshake `ClientVersion` reports `0.4.3`
+
 ## [0.4.2] - 2026-07-19
 
 ### Removed
