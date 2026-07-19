@@ -13,7 +13,7 @@ go test ./examples/appkit/ -count=1
 | Path | What it shows |
 |------|----------------|
 | [`progressive/`](progressive/) | Ladder 01–06: hello → `DaemonSession` stream → multi-turn → pool → `CommandClient` jobs |
-| [`appkit/`](appkit/) | Pool, `TurnRunner`, classifier, query gate, SSE |
+| [`appkit/`](appkit/) | Pool, `TurnRunner` + `TurnBoundary`, classifier, query gate, SSE |
 | `connection_example_test.go` | Raw `Client` connect / bootstrap / retries |
 | `job_cron_example_test.go` | Jobs and cron RPCs |
 | `loop_management_example_test.go` | Loop list / get / tree / prune / delete |

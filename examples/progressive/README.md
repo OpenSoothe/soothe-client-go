@@ -10,7 +10,7 @@ integration suite instead.
 | `02_stream_turn` | `DaemonSession` send + iterate chunks |
 | `03_text_completion` | `intent_hint=text_completion` |
 | `04_multi_turn` | Follow-ups on the same loop |
-| `05_pool_service` | `ConnectionPool` stats |
+| `05_pool_service` | `ConnectionPool` stats (`TurnRunner` uses `TurnBoundary` for turn end) |
 | `06_jobs` | `CommandClient` job create/status/cancel |
 
 ```bash

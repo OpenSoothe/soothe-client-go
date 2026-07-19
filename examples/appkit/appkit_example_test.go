@@ -72,6 +72,40 @@ func Example_queryGate() {
 	// Active after cancel: false
 }
 
+// Example_turnBoundary shows DaemonSession turn-end rules on the pool path.
+// TurnRunner always feeds TurnBoundary; EventClassifier may early-complete on
+// phases for UX but is not the sole terminator.
+func Example_turnBoundary() {
+	b := &appkit.TurnBoundary{}
+
+	// Pre-running idle (continue-thread stub) must not end the turn.
+	ended, _ := b.Feed(soothe.StatusResponse{State: "idle"})
+	fmt.Printf("pre-running idle: ended=%v\n", ended)
+
+	b.Feed(soothe.StatusResponse{State: "running", LoopID: "L1"})
+
+	// Messages chunk unlocks stream.end / idle.
+	chunk := soothe.EventMessage{}
+	chunk.BaseMessage = soothe.BaseMessage{Type: "event"}
+	chunk.Mode = "messages"
+	chunk.Data = []interface{}{
+		map[string]interface{}{"type": "AIMessageChunk", "content": "enough reply text here"},
+	}
+	b.Feed(chunk)
+
+	end := soothe.EventMessage{}
+	end.BaseMessage = soothe.BaseMessage{Type: "event"}
+	end.Mode = "custom"
+	end.Data = map[string]interface{}{"type": soothe.STREAM_END, "scope": "turn"}
+	ended, reason := b.Feed(end)
+	fmt.Printf("stream.end: ended=%v reason=%s\n", ended, reason)
+	fmt.Printf("isDaemonTurnEnd: %v\n", appkit.IsDaemonTurnEndEvent(reason))
+	// Output:
+	// pre-running idle: ended=false
+	// stream.end: ended=true reason=soothe.stream.end
+	// isDaemonTurnEnd: true
+}
+
 // Example_eventClassifier demonstrates classifying daemon stream events into
 // deliverable/streaming/terminal outcomes using a configurable phase set.
 func Example_eventClassifier() {
@@ -212,8 +246,9 @@ func Example_connectionPoolConstruction() {
 }
 
 // Example_turnRunnerConstruction shows how to wire up a TurnRunner with all
-// its dependencies. Execute requires a live daemon; this example shows the
-// builder pattern for hooks.
+// its dependencies. Turn end uses TurnBoundary (DaemonSession contract);
+// DeliverablePhases are for UX early-complete only. Execute needs a live daemon;
+// this example shows the builder pattern for hooks.
 func Example_turnRunnerConstruction() {
 	store := &memorySessionStore{}
 	pool := appkit.NewConnectionPool(
@@ -224,6 +259,7 @@ func Example_turnRunnerConstruction() {
 	defer pool.Stop()
 
 	gate := appkit.NewQueryGate()
+	// Phases optional early-complete; stream.end / gated idle always end via TurnBoundary.
 	cl := appkit.NewEventClassifier(appkit.ClassifierConfig{
 		DeliverablePhases: soothe.DefaultDeliverablePhases(),
 	})

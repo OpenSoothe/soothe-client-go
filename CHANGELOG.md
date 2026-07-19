@@ -5,6 +5,14 @@ All notable changes to `soothe-client-go` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] - 2026-07-19
+
+### Added
+- `Example_turnBoundary` and expanded `turn_boundary_test.go` (premature stream.end, stopped, empty content, phase early-complete)
+
+### Changed
+- Handshake `ClientVersion` reports `0.4.5`
+
 ## [0.4.4] - 2026-07-19
 
 ### Changed

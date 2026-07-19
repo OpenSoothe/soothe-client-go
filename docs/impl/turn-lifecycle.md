@@ -31,4 +31,5 @@ compaction, subscription-metadata filtering, and soft stream-close policies.
 
 ## Tests
 
-See `appkit/turn_lifecycle_test.go` and `intent_hints_test.go`.
+See `appkit/turn_boundary_test.go`, `appkit/turn_lifecycle_test.go`, and
+`examples/appkit` (`Example_turnBoundary`).
