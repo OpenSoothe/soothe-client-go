@@ -22,14 +22,6 @@ const (
 	EventGoalDirectivesApplied = "soothe.cognition.goal.directives.applied"
 )
 
-// Explorer subagent events (built-in wire types)
-const (
-	EventExplorerStarted       = "soothe.subagent.explorer.started"
-	EventExplorerMilestone     = "soothe.subagent.explorer.milestone"
-	EventExplorerStepCompleted = "soothe.subagent.explorer.step.completed"
-	EventExplorerCompleted     = "soothe.subagent.explorer.completed"
-)
-
 // Deep research subagent events (built-in wire types)
 const (
 	EventDeepResearchStarted       = "soothe.subagent.deep_research.started"

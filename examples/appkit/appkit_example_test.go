@@ -167,7 +167,7 @@ func Example_inputMessageForLoop() {
 		},
 		&appkit.InputOpts{
 			IntentHint:        soothe.IntentHintImageToText,
-			PreferredSubagent: "explorer",
+			PreferredSubagent: "deep_research",
 		})
 	fmt.Printf("intent_hint=%s subagent=%s attachments=%v\n",
 		msg2["intent_hint"], msg2["preferred_subagent"], msg2["attachments"] != nil)
@@ -185,7 +185,7 @@ func Example_inputMessageForLoop() {
 		msg3["response_schema_name"], msg3["response_schema_strict"])
 	// Output:
 	// type=loop_input content=What is 2+2? loop_id=loop-123
-	// intent_hint=image_to_text subagent=explorer attachments=true
+	// intent_hint=image_to_text subagent=deep_research attachments=true
 	// schema_name=my_schema strict=true
 }
 
