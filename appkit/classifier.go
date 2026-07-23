@@ -156,7 +156,9 @@ func (cl *EventClassifier) IsSubstantiveAssistantReply(content string) bool {
 
 // ResolveDeliverableFinalContent picks the user-visible reply for a completed
 // query. Only a deliverable terminal result with a recognized completion event
-// yields a final reply.
+// yields a final reply. When the deliverable event itself has empty content
+// (common after StrangeLoop streamed the answer on non-deliverable phases),
+// fall back to accumulated streamed text.
 func (cl *EventClassifier) ResolveDeliverableFinalContent(eventResult ChatEventResult, accumulated string) (final string, ok bool) {
 	if eventResult.Terminal != ChatEventDeliverableComplete {
 		return "", false
@@ -165,6 +167,9 @@ func (cl *EventClassifier) ResolveDeliverableFinalContent(eventResult ChatEventR
 		return "", false
 	}
 	if final = strings.TrimSpace(eventResult.Content); final != "" {
+		return final, true
+	}
+	if final = strings.TrimSpace(accumulated); final != "" && cl.IsSubstantiveAssistantReply(final) {
 		return final, true
 	}
 	return "", false

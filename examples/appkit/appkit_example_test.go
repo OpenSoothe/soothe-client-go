@@ -152,13 +152,14 @@ func Example_eventClassifier() {
 	// Substantive: true
 }
 
-// Example_inputMessageForLoop builds a loop_input payload map with optional
-// attachments and daemon hints, without needing a live connection.
+// Example_inputMessageForLoop builds a protocol-1 loop_input notification
+// envelope with optional attachments and daemon hints.
 func Example_inputMessageForLoop() {
 	// Simple text input.
 	msg := appkit.InputMessageForLoop("What is 2+2?", "loop-123", nil, nil)
-	fmt.Printf("type=%s content=%s loop_id=%s\n",
-		msg["type"], msg["content"], msg["loop_id"])
+	params, _ := msg["params"].(map[string]interface{})
+	fmt.Printf("type=%s method=%s content=%s loop_id=%s\n",
+		msg["type"], msg["method"], params["content"], params["loop_id"])
 
 	// With intent hint and preferred subagent.
 	msg2 := appkit.InputMessageForLoop("Analyze this image", "loop-456",
@@ -169,8 +170,9 @@ func Example_inputMessageForLoop() {
 			IntentHint:        soothe.IntentHintImageToText,
 			PreferredSubagent: "deep_research",
 		})
+	p2, _ := msg2["params"].(map[string]interface{})
 	fmt.Printf("intent_hint=%s subagent=%s attachments=%v\n",
-		msg2["intent_hint"], msg2["preferred_subagent"], msg2["attachments"] != nil)
+		p2["intent_hint"], p2["preferred_subagent"], p2["attachments"] != nil)
 
 	// With response schema for structured output.
 	strict := true
@@ -181,10 +183,11 @@ func Example_inputMessageForLoop() {
 			ResponseSchemaName:   "my_schema",
 			ResponseSchemaStrict: &strict,
 		})
+	p3, _ := msg3["params"].(map[string]interface{})
 	fmt.Printf("schema_name=%s strict=%v\n",
-		msg3["response_schema_name"], msg3["response_schema_strict"])
+		p3["response_schema_name"], p3["response_schema_strict"])
 	// Output:
-	// type=loop_input content=What is 2+2? loop_id=loop-123
+	// type=notification method=loop_input content=What is 2+2? loop_id=loop-123
 	// intent_hint=image_to_text subagent=deep_research attachments=true
 	// schema_name=my_schema strict=true
 }

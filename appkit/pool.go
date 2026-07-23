@@ -7,6 +7,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	soothe "github.com/mirasoth/soothe-client-go"
@@ -44,6 +45,7 @@ type pooledConn struct {
 	client       ManagedClient
 	eventCh      <-chan interface{}
 	streamCancel context.CancelFunc
+	readerLive   atomic.Bool
 	appKey       string
 	loopID       string
 	workspaceID  string
@@ -63,6 +65,14 @@ func (c *pooledConn) clientDisconnectNotified() bool {
 
 func (c *pooledConn) isConnected() bool {
 	return c.client != nil && c.client.IsConnected() && !c.clientDisconnectNotified()
+}
+
+// eventStreamLive reports whether ReceiveMessages is still feeding eventCh.
+func (c *pooledConn) eventStreamLive() bool {
+	c.mu.RLock()
+	ch := c.eventCh
+	c.mu.RUnlock()
+	return ch != nil && c.readerLive.Load()
 }
 
 // ConnectionPool manages a pool of daemon connections, one active per AppKey.
@@ -166,12 +176,12 @@ func (p *ConnectionPool) Acquire(ctx context.Context, appKey, workspaceID, userI
 	existing := p.activeSlots[appKey]
 	p.mu.RUnlock()
 
-	if existing != nil && (existing.clientDisconnectNotified() || !existing.isConnected()) {
-		log.Printf("[appkit.ConnectionPool] previous connection for %s dropped, releasing for fresh bootstrap", appKey)
+	if existing != nil && (existing.clientDisconnectNotified() || !existing.isConnected() || !existing.eventStreamLive()) {
+		log.Printf("[appkit.ConnectionPool] previous connection for %s dropped (or event stream dead), releasing for fresh bootstrap", appKey)
 		p.Release(appKey)
 		existing = nil
 	}
-	if existing != nil && existing.isConnected() {
+	if existing != nil && existing.isConnected() && existing.eventStreamLive() {
 		existing.mu.Lock()
 		idleTooLong := p.cfg.MaxIdleTime > 0 && !existing.lastUsed.IsZero() &&
 			time.Since(existing.lastUsed) > p.cfg.MaxIdleTime
@@ -342,18 +352,42 @@ func (p *ConnectionPool) resumeAndReattach(ctx context.Context, conn *pooledConn
 }
 
 // startReader launches a ReceiveMessages goroutine and stores the event channel.
+// The reader must outlive a single Acquire/Execute request: TurnRunner cancels
+// its per-turn context when the turn ends, but the pooled connection is reused
+// for later turns on the same appKey. Detach cancellation (keep values) so
+// Release/Stop remain the only ways to tear the stream down.
 func (p *ConnectionPool) startReader(ctx context.Context, conn *pooledConn) {
-	rctx, cancel := context.WithCancel(ctx)
-	ch, err := conn.client.ReceiveMessages(rctx)
+	if conn.streamCancel != nil {
+		conn.streamCancel()
+		conn.streamCancel = nil
+	}
+	rctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	raw, err := conn.client.ReceiveMessages(rctx)
 	if err != nil {
 		cancel()
+		conn.readerLive.Store(false)
 		log.Printf("[appkit.ConnectionPool] ReceiveMessages failed for %s: %v", conn.appKey, err)
 		return
 	}
+	out := make(chan interface{})
 	conn.mu.Lock()
-	conn.eventCh = ch
+	conn.eventCh = out
 	conn.streamCancel = cancel
+	conn.readerLive.Store(true)
 	conn.mu.Unlock()
+	go func() {
+		defer func() {
+			conn.readerLive.Store(false)
+			close(out)
+		}()
+		for msg := range raw {
+			select {
+			case out <- msg:
+			case <-rctx.Done():
+				return
+			}
+		}
+	}()
 }
 
 func (p *ConnectionPool) loopIDFor(ctx context.Context, appKey string) (string, bool) {

@@ -132,6 +132,22 @@ func TestClassifier_StreamEnd_DefaultOff(t *testing.T) {
 	}
 }
 
+func TestResolveDeliverableFinalContent_FallsBackToAccumulated(t *testing.T) {
+	cl := NewEventClassifier(ClassifierConfig{
+		DeliverablePhases:   soothe.DefaultDeliverablePhases(),
+		MinDeliverableRunes: 1,
+	})
+	emptyDeliverable := ChatEventResult{
+		Terminal:        ChatEventDeliverableComplete,
+		CompletionEvent: "soothe.protocol.message.goal_completion",
+		Content:         "",
+	}
+	final, ok := cl.ResolveDeliverableFinalContent(emptyDeliverable, "1, 2, 3, 4, 5")
+	if !ok || final != "1, 2, 3, 4, 5" {
+		t.Fatalf("expected accumulated fallback, got ok=%v final=%q", ok, final)
+	}
+}
+
 func TestClassifier_StatusIdle_GatedIgnoresPreRunning(t *testing.T) {
 	cl := NewEventClassifier(ClassifierConfig{
 		DeliverablePhases:         soothe.DefaultDeliverablePhases(),

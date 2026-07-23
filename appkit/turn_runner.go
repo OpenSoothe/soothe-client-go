@@ -2,6 +2,7 @@ package appkit
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -83,34 +84,54 @@ type InputOpts struct {
 	ResponseSchemaStrict *bool
 }
 
-// InputMessageForLoop builds a loop_input payload. Each attachment map should
-// use mime_type plus base64 data under the key "data".
+// InputMessageForLoop builds a protocol-1 loop_input notification envelope.
+// Each attachment map should use mime_type plus base64 data under the key "data".
+// The returned map is suitable for Client.SendMessage (same shape as SendInput).
 func InputMessageForLoop(text, loopID string, attachments []map[string]interface{}, opts *InputOpts) map[string]interface{} {
-	msg := map[string]interface{}{
-		"type":    "loop_input",
-		"content": text,
+	params := map[string]interface{}{
+		"content":    text,
+		"autonomous": false,
 	}
 	if loopID != "" {
-		msg["loop_id"] = loopID
+		params["loop_id"] = loopID
 	}
 	if len(attachments) > 0 {
-		msg["attachments"] = attachments
+		params["attachments"] = attachments
 	}
 	if opts != nil {
 		if h := strings.TrimSpace(opts.IntentHint); h != "" {
-			msg["intent_hint"] = h
+			params["intent_hint"] = h
 		}
 		if s := strings.TrimSpace(opts.PreferredSubagent); s != "" {
-			msg["preferred_subagent"] = s
+			params["preferred_subagent"] = s
 		}
 		if len(opts.ResponseSchema) > 0 {
-			msg["response_schema"] = opts.ResponseSchema
+			params["response_schema"] = opts.ResponseSchema
 		}
 		if n := strings.TrimSpace(opts.ResponseSchemaName); n != "" {
-			msg["response_schema_name"] = n
+			params["response_schema_name"] = n
 		}
 		if opts.ResponseSchemaStrict != nil {
-			msg["response_schema_strict"] = *opts.ResponseSchemaStrict
+			params["response_schema_strict"] = *opts.ResponseSchemaStrict
+		}
+	}
+	env := soothe.NewNotificationEnvelope("loop_input", params)
+	raw, err := json.Marshal(env)
+	if err != nil {
+		return map[string]interface{}{
+			"proto":  soothe.ProtoVersion,
+			"type":   "notification",
+			"method": "loop_input",
+			"params": params,
+		}
+	}
+	var msg map[string]interface{}
+	if err := json.Unmarshal(raw, &msg); err != nil {
+		return map[string]interface{}{
+			"proto":  soothe.ProtoVersion,
+			"type":   "notification",
+			"method": "loop_input",
+			"params": params,
 		}
 	}
 	return msg

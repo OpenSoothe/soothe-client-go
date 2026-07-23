@@ -479,10 +479,14 @@ func TestTurnRunner_DeliverableTurn(t *testing.T) {
 	if len(msgs) == 0 || msgs[0].Role != "assistant" {
 		t.Errorf("expected persisted assistant message, got %+v", msgs)
 	}
-	// And loop_input was sent with the intent hint.
+	// And loop_input was sent as a protocol-1 notification with the intent hint.
 	sent := fake.sentMessages()
-	if len(sent) == 0 || sent[0]["type"] != "loop_input" || sent[0]["intent_hint"] != soothe.IntentHintTextCompletion {
-		t.Errorf("unexpected send: %+v", sent)
+	if len(sent) == 0 || sent[0]["type"] != "notification" || sent[0]["method"] != "loop_input" {
+		t.Errorf("unexpected send envelope: %+v", sent)
+	}
+	params, _ := sent[0]["params"].(map[string]interface{})
+	if params == nil || params["intent_hint"] != soothe.IntentHintTextCompletion {
+		t.Errorf("unexpected loop_input params: %+v", params)
 	}
 }
 

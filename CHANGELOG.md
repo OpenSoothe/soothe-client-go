@@ -5,6 +5,17 @@ All notable changes to `soothe-client-go` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.6] - 2026-07-23
+
+### Fixed
+- `ConnectionPool.startReader` detaches from the Acquire/request context via `context.WithoutCancel`, so multi-turn reuse no longer inherits a cancelled `ReceiveMessages` stream
+- `Acquire` rebuilds the slot when the event stream is dead even if the WebSocket still looks connected
+- `InputMessageForLoop` emits a protocol-1 `loop_input` notification envelope (parity with `SendInput`); legacy top-level `{"type":"loop_input"}` was rejected by soothed ≥0.9
+- `ResolveDeliverableFinalContent` falls back to accumulated streamed text when the deliverable event has empty content (StrangeLoop early-complete)
+
+### Changed
+- Handshake `ClientVersion` reports `0.4.6`
+
 ## [0.4.5] - 2026-07-19
 
 ### Added
