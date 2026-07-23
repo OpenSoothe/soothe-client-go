@@ -347,6 +347,9 @@ func (r *TurnRunner) runTurn(
 	startedAt := time.Now()
 	// DaemonSession turn-end contract (always on; not classifier opt-in).
 	boundary := &TurnBoundary{}
+	// Ignore leftover turn-end signals buffered on the reused pool stream until
+	// this turn observes running or assistant content after SendMessage.
+	armed := false
 
 	idleForTurn := idleTimeoutForTurn(r.cfg, len(attachments) > 0)
 	var idleTimer *time.Timer
@@ -409,6 +412,14 @@ func (r *TurnRunner) runTurn(
 			}
 			resetIdle()
 
+			if !armed {
+				if isTurnArmingEvent(msg) {
+					armed = true
+				} else if isStaleTurnEndEvent(msg) {
+					continue
+				}
+			}
+
 			ended, endReason := boundary.Feed(msg)
 			// Classify for content / phase early-complete only. Turn end is boundary.
 			eventResult := r.classifier.Classify(msg, assistantContent)
@@ -462,6 +473,39 @@ func (r *TurnRunner) runTurn(
 				return err
 			}
 		}
+	}
+}
+
+// isTurnArmingEvent reports signals that belong to the current turn after send
+// (status=running or assistant-bearing stream chunks).
+func isTurnArmingEvent(msg interface{}) bool {
+	switch m := msg.(type) {
+	case soothe.StatusResponse:
+		return strings.EqualFold(strings.TrimSpace(m.State), "running")
+	case soothe.EventMessage:
+		if m.Mode == "messages" {
+			return true
+		}
+		if data, ok := normalizeEventData(m.Data); ok {
+			if _, has := extractContentFromData(data); has {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isStaleTurnEndEvent reports buffered end markers from a previous turn that
+// must not terminate the current turn before it has armed.
+func isStaleTurnEndEvent(msg interface{}) bool {
+	switch m := msg.(type) {
+	case soothe.StatusResponse:
+		state := strings.TrimSpace(m.State)
+		return strings.EqualFold(state, "idle") || strings.EqualFold(state, "stopped")
+	case soothe.EventMessage:
+		return m.Mode == "custom" && soothe.IsTurnEndCustomData(m.Data)
+	default:
+		return false
 	}
 }
 
