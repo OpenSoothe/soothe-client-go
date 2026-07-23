@@ -322,16 +322,6 @@ func (r *TurnRunner) runTurn(
 		atts = CompactAttachments(atts, r.cfg.CompactImageOpts)
 	}
 
-	inputMsg := r.buildInput(message, loopID, atts, opts)
-	if err := conn.client.SendMessage(timeoutCtx, inputMsg); err != nil {
-		r.persistFailed(ctx, appKey, loopID, err)
-		r.broadcastError(appKey, err)
-		if r.onError != nil {
-			r.onError(appKey, loopID, err)
-		}
-		return fmt.Errorf("send message: %w", err)
-	}
-
 	eventCh := conn.eventCh
 	if eventCh == nil {
 		err := fmt.Errorf("missing event stream for app key %s (loop %s)", appKey, loopID)
@@ -342,13 +332,30 @@ func (r *TurnRunner) runTurn(
 		}
 		return err
 	}
+	// Drop leftovers from a prior turn (or early-complete) before send. A stale
+	// status=running would otherwise arm this turn, then a buffered idle would
+	// end it with "no assistant content". Settle briefly so the pool forwarder
+	// can push in-flight frames into eventCh. Tests release scripted events
+	// from SendMessage so this drain does not wipe the fixture stream.
+	drainEventCh(eventCh, 5*time.Millisecond)
+	defer drainEventCh(eventCh, 0)
+
+	inputMsg := r.buildInput(message, loopID, atts, opts)
+	if err := conn.client.SendMessage(timeoutCtx, inputMsg); err != nil {
+		r.persistFailed(ctx, appKey, loopID, err)
+		r.broadcastError(appKey, err)
+		if r.onError != nil {
+			r.onError(appKey, loopID, err)
+		}
+		return fmt.Errorf("send message: %w", err)
+	}
 
 	var assistantContent string
 	startedAt := time.Now()
 	// DaemonSession turn-end contract (always on; not classifier opt-in).
 	boundary := &TurnBoundary{}
-	// Ignore leftover turn-end signals buffered on the reused pool stream until
-	// this turn observes running or assistant content after SendMessage.
+	// Ignore leftover turn-end signals that race in after the pre-send drain
+	// until this turn observes running or assistant content after SendMessage.
 	armed := false
 
 	idleForTurn := idleTimeoutForTurn(r.cfg, len(attachments) > 0)
@@ -413,14 +420,26 @@ func (r *TurnRunner) runTurn(
 			resetIdle()
 
 			if !armed {
-				if isTurnArmingEvent(msg) {
-					armed = true
-				} else if isStaleTurnEndEvent(msg) {
+				if isStaleTurnEndEvent(msg) {
+					// Discard buffered end markers from a prior turn.
 					continue
 				}
+				if isStatusRunningEvent(msg) {
+					// Track running for TurnBoundary gating but do not arm yet —
+					// a leftover running+idle pair must not terminate this turn.
+					boundary.Feed(msg)
+					continue
+				}
+				// First non-end, non-running frame after send (content or progress).
+				armed = true
 			}
 
 			ended, endReason := boundary.Feed(msg)
+			if ended && !armed {
+				boundary = &TurnBoundary{}
+				continue
+			}
+
 			// Classify for content / phase early-complete only. Turn end is boundary.
 			eventResult := r.classifier.Classify(msg, assistantContent)
 			if eventResult.Err != nil && eventResult.Terminal == ChatEventFailedComplete {
@@ -476,12 +495,71 @@ func (r *TurnRunner) runTurn(
 	}
 }
 
+// drainEventCh drains a pooled event channel. When settle > 0, keeps reading
+// until the channel has been quiet for settle (covers the pool forwarder race
+// where leftovers are still in-flight on Acquire).
+func drainEventCh(ch <-chan interface{}, settle time.Duration) {
+	if ch == nil {
+		return
+	}
+	if settle <= 0 {
+		for {
+			select {
+			case _, ok := <-ch:
+				if !ok {
+					return
+				}
+			default:
+				return
+			}
+		}
+	}
+	deadline := time.Now().Add(settle)
+	for {
+		timeout := time.Until(deadline)
+		if timeout < 0 {
+			timeout = 0
+		}
+		select {
+		case _, ok := <-ch:
+			if !ok {
+				return
+			}
+			// Activity extends the quiet window so a burst of leftovers is fully
+			// consumed before SendMessage.
+			deadline = time.Now().Add(settle)
+		case <-time.After(timeout):
+			for {
+				select {
+				case _, ok := <-ch:
+					if !ok {
+						return
+					}
+				default:
+					return
+				}
+			}
+		}
+	}
+}
+
+// isStatusRunningEvent reports a daemon status=running frame.
+func isStatusRunningEvent(msg interface{}) bool {
+	m, ok := msg.(soothe.StatusResponse)
+	if !ok {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(m.State), "running")
+}
+
 // isTurnArmingEvent reports signals that belong to the current turn after send
-// (status=running or assistant-bearing stream chunks).
+// (assistant-bearing stream chunks). status=running alone is handled separately
+// so leftover running+idle from a prior turn cannot arm-and-end the next turn.
 func isTurnArmingEvent(msg interface{}) bool {
+	if isStatusRunningEvent(msg) {
+		return false
+	}
 	switch m := msg.(type) {
-	case soothe.StatusResponse:
-		return strings.EqualFold(strings.TrimSpace(m.State), "running")
 	case soothe.EventMessage:
 		if m.Mode == "messages" {
 			return true

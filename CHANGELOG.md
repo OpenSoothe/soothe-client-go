@@ -5,6 +5,15 @@ All notable changes to `soothe-client-go` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.8] - 2026-07-23
+
+### Fixed
+- `TurnRunner` settle-drains the pooled event channel before `SendMessage` (and again on turn exit)
+- `TurnRunner` no longer arms a turn on leftover `status=running` alone; end markers before the first post-send content/progress frame are ignored, so early-complete leftovers cannot end the next turn with "no assistant content"
+
+### Changed
+- Handshake `ClientVersion` reports `0.4.8`
+
 ## [0.4.7] - 2026-07-23
 
 ### Fixed

@@ -114,3 +114,35 @@ func TestTurnRunner_PhaseEarlyCompleteStillWorks(t *testing.T) {
 		t.Errorf("completion_event=%q", ce)
 	}
 }
+
+// TestTurnRunner_DrainsStaleRunningIdleBeforeSend covers the pooled-reuse race
+// where an early-completed prior turn leaves status=running + stream payload +
+// status=idle buffered: without a pre-send drain those leftovers arm-and-end
+// the next turn with "no assistant content".
+func TestTurnRunner_DrainsStaleRunningIdleBeforeSend(t *testing.T) {
+	store := newMemStore()
+	staleRunning := soothe.StatusResponse{State: "running", LoopID: "loop-1"}
+	staleProgress := eventMessageFromJSON(t, `{
+		"proto":"1","type":"event","mode":"custom",
+		"data":{"type":"soothe.cognition.strange_loop.step.started","step_id":"stale"},
+		"loop_id":"loop-1"
+	}`)
+	staleIdle := soothe.StatusResponse{State: "idle", LoopID: "loop-1"}
+	running := soothe.StatusResponse{State: "running", LoopID: "loop-1"}
+	final := eventMessageFromJSON(t, deliverableEvent("text_completion", "fresh turn answer is ready now"))
+	fake := newFakeClient(running, final)
+	fake.preSend = []interface{}{staleRunning, staleProgress, staleIdle}
+	pool := newTestPool(t, store, fake)
+	tr := NewTurnRunner(pool, NewQueryGate(), defaultClassifier(), store, NewSSEBroadcaster(), TurnConfig{
+		QueryTimeout: 5 * time.Second,
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := tr.Execute(ctx, "s1", "hi", "u", "ws", nil, nil); err != nil {
+		t.Fatalf("expected stale pre-send drain + fresh turn success, got %v", err)
+	}
+	msgs := store.messages("s1")
+	if len(msgs) == 0 || msgs[0].Content != "fresh turn answer is ready now" {
+		t.Fatalf("expected fresh assistant content, got %+v", msgs)
+	}
+}

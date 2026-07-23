@@ -75,22 +75,31 @@ func (s *memStore) messages(sid string) []SessionMessage {
 
 // fakeClient is a ManagedClient fake that handshakes on Connect and replays
 // a scripted event stream on ReceiveMessages.
+//
+// Scripted events are released only after the first SendMessage so TurnRunner's
+// pre-send drain (stale pooled leftovers) does not wipe the fixture stream.
+// Optional preSend events are emitted immediately (before send) to exercise
+// that drain path.
 type fakeClient struct {
 	mu               sync.Mutex
 	connected        bool
 	closed           bool
 	disconnCh        chan soothe.DisconnectCause
-	scripted         []interface{} // events to emit on the reader channel
+	preSend          []interface{} // emitted immediately on ReceiveMessages
+	scripted         []interface{} // events to emit after first SendMessage
 	closeAfterScript bool          // if true, close ch after script (stream-close tests)
 	sendCapture      []map[string]interface{}
+	releaseEvents    chan struct{}
+	releaseOnce      sync.Once
 	reattachErr      error
 	connectErr       error
 }
 
 func newFakeClient(events ...interface{}) *fakeClient {
 	return &fakeClient{
-		disconnCh: make(chan soothe.DisconnectCause, 1),
-		scripted:  events,
+		disconnCh:     make(chan soothe.DisconnectCause, 1),
+		scripted:      events,
+		releaseEvents: make(chan struct{}),
 	}
 }
 
@@ -115,16 +124,29 @@ func (f *fakeClient) Reconnect(ctx context.Context) error {
 func (f *fakeClient) ReattachAndProbe(ctx context.Context, id string) error { return f.reattachErr }
 func (f *fakeClient) SendMessage(ctx context.Context, msg interface{}) error {
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	if m, ok := msg.(map[string]interface{}); ok {
 		f.sendCapture = append(f.sendCapture, m)
 	}
+	f.mu.Unlock()
+	f.releaseOnce.Do(func() { close(f.releaseEvents) })
 	return nil
 }
 func (f *fakeClient) ReceiveMessages(ctx context.Context) (<-chan interface{}, error) {
 	ch := make(chan interface{}, 32)
 	go func() {
 		defer close(ch)
+		for _, ev := range f.preSend {
+			select {
+			case ch <- ev:
+			case <-ctx.Done():
+				return
+			}
+		}
+		select {
+		case <-f.releaseEvents:
+		case <-ctx.Done():
+			return
+		}
 		for _, ev := range f.scripted {
 			select {
 			case ch <- ev:
