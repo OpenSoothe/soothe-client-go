@@ -38,11 +38,13 @@ const (
 	EventLoopReattachedWire = "loop_reattached"
 )
 
-// Card ledger replay frames (card_binder design)
+// Display card ledger frames (UI source of truth)
 const (
-	EventCardReplayBegin = "card.replay_begin"
-	EventCardCreated     = "card.created"
-	EventCardReplayEnd   = "card.replay_end"
+	EventCardCreated     = "soothe.card.created"
+	EventCardUpdated     = "soothe.card.updated"
+	EventCardFinalized   = "soothe.card.finalized"
+	EventCardReplayBegin = "soothe.card.replay.begin"
+	EventCardReplayEnd   = "soothe.card.replay.end"
 )
 
 // Tool events

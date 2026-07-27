@@ -17,6 +17,9 @@ var turnProgressCustomTypes = map[string]struct{}{
 	EventStrangeLoopStepStarted:   {},
 	EventStrangeLoopStepQueued:    {},
 	EventStrangeLoopStepCompleted: {},
+	EventCardCreated:              {},
+	EventCardUpdated:              {},
+	EventCardFinalized:            {},
 }
 
 // staleTurnPendingTypes are handshake / card-replay leftovers safe to drop at turn start.
