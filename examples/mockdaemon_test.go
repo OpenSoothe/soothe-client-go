@@ -221,11 +221,6 @@ func (md *MockDaemon) handleRPC(conn *websocket.Conn, id, method string, params 
 			"loop_id": params["loop_id"],
 			"updated": true,
 		})
-	case "loop_cards_fetch":
-		md.sendResponse(conn, id, map[string]interface{}{
-			"loop_id": params["loop_id"],
-			"cards":   []interface{}{},
-		})
 	case "loop_history_fetch":
 		md.sendResponse(conn, id, map[string]interface{}{
 			"loop_id":    params["loop_id"],

@@ -282,16 +282,6 @@ func (s *DaemonSession) ensureRPCConnectedLocked(ctx context.Context) error {
 	return nil
 }
 
-// FetchLoopCards loads cards for a loop via the RPC sidecar.
-func (s *DaemonSession) FetchLoopCards(ctx context.Context, loopID string) (map[string]interface{}, error) {
-	s.rpcMu.Lock()
-	defer s.rpcMu.Unlock()
-	if err := s.ensureRPCConnectedLocked(ctx); err != nil {
-		return nil, err
-	}
-	return s.rpcClient.LoopCardsFetch(ctx, loopID, 30*time.Second)
-}
-
 // FetchLoopHistory loads replayable history via the RPC sidecar.
 func (s *DaemonSession) FetchLoopHistory(ctx context.Context, loopID string) (map[string]interface{}, error) {
 	s.rpcMu.Lock()

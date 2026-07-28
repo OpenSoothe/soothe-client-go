@@ -710,17 +710,6 @@ func (c *Client) LoopStateUpdate(ctx context.Context, loopID string, values map[
 	return c.RequestResponse(ctx, payload, "loop_state_update_response", timeout)
 }
 
-// LoopCardsFetch requests display card ledger snapshot.
-func (c *Client) LoopCardsFetch(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
-	if timeout <= 0 {
-		timeout = 15 * time.Second
-	}
-	return c.RequestResponse(ctx, map[string]interface{}{
-		"type":    "loop_cards_fetch",
-		"loop_id": loopID,
-	}, "loop_cards_fetch_response", timeout)
-}
-
 // MCPStatus requests MCP server connection status.
 func (c *Client) MCPStatus(ctx context.Context, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {

@@ -369,12 +369,6 @@ func (c *Client) SendLoopStateUpdate(ctx context.Context, loopID string, values 
 	return c.SendMessage(ctx, NewRequestEnvelopeWithID("loop_state_update", params, rid))
 }
 
-// SendLoopCardsFetch requests display card ledger (request envelope).
-func (c *Client) SendLoopCardsFetch(ctx context.Context, loopID string, requestID ...string) error {
-	rid := optRequestID(requestID)
-	return c.SendMessage(ctx, NewRequestEnvelopeWithID("loop_cards_fetch", map[string]interface{}{"loop_id": loopID}, rid))
-}
-
 // SendMCPStatus requests MCP server status (request envelope).
 func (c *Client) SendMCPStatus(ctx context.Context, requestID ...string) error {
 	rid := optRequestID(requestID)

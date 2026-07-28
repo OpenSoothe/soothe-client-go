@@ -196,14 +196,6 @@ func Example_loopTreeAndCards() {
 		fmt.Printf("Tree: %v\n", tree)
 	}
 
-	// Fetch the display card ledger snapshot.
-	cards, err := client.LoopCardsFetch(ctx, loopID, 15*time.Second)
-	if err != nil {
-		fmt.Printf("LoopCardsFetch error: %v\n", err)
-	} else {
-		fmt.Printf("Cards: %v\n", cards)
-	}
-
 	// Fetch replayable history.
 	history, err := soothe.FetchLoopHistory(ctx, client, loopID, 15*time.Second)
 	if err != nil {
@@ -215,7 +207,6 @@ func Example_loopTreeAndCards() {
 	// Tree: map[format:text loop_id:existing-loop-id tree:root
 	//   ├── checkpoint-1
 	//   └── checkpoint-2]
-	// Cards: map[cards:[] loop_id:existing-loop-id]
 	// History: map[history:[] loop_id:existing-loop-id replayable:true]
 }
 

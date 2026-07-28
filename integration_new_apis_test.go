@@ -397,45 +397,6 @@ func TestIntegration_LoopStateGet(t *testing.T) {
 	t.Logf("LoopStateGet response: %v", response)
 }
 
-func TestIntegration_LoopCardsFetch(t *testing.T) {
-	skipIfNoDaemon(t)
-
-	// Use test-level timeout - reduced from 45s to 25s
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
-	defer cancel()
-
-	client := NewClient("ws://localhost:8765", integrationTestConfig())
-
-	if err := client.Connect(ctx); err != nil {
-		t.Fatalf("Failed to connect: %v", err)
-	}
-	defer func() { _ = client.Close() }()
-
-	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
-		t.Fatalf("Daemon not ready: %v", err)
-	}
-
-	// Create a loop with reduced timeout - 8s instead of 15s
-	newResp, err := client.LoopNew(ctx, 8*time.Second)
-	if err != nil {
-		t.Fatalf("Failed to create loop: %v", err)
-	}
-	loopID, ok := newResp["loop_id"].(string)
-	if !ok || loopID == "" {
-		t.Skip("No loop_id in LoopNew response")
-	}
-	t.Logf("Created test loop: %s", loopID)
-
-	// Request display cards with reduced timeout - 8s instead of 15s
-	response, err := client.LoopCardsFetch(ctx, loopID, 8*time.Second)
-	if err != nil {
-		t.Logf("LoopCardsFetch error: %v", err)
-		return
-	}
-
-	t.Logf("LoopCardsFetch response: %v", response)
-}
-
 func TestIntegration_MCPStatus(t *testing.T) {
 	skipIfNoDaemon(t)
 
@@ -547,44 +508,6 @@ func TestIntegration_SendLoopStateGet(t *testing.T) {
 	}
 
 	t.Logf("Sent loop_state_get request: %s", requestID)
-}
-
-func TestIntegration_SendLoopCardsFetch(t *testing.T) {
-	skipIfNoDaemon(t)
-
-	// Use test-level timeout to prevent hanging
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-	defer cancel()
-
-	client := NewClient("ws://localhost:8765", integrationTestConfig())
-
-	if err := client.Connect(ctx); err != nil {
-		t.Fatalf("Failed to connect: %v", err)
-	}
-	defer func() { _ = client.Close() }()
-
-	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
-		t.Fatalf("Daemon not ready: %v", err)
-	}
-
-	// Create a loop
-	newResp, err := client.LoopNew(ctx, 15*time.Second)
-	if err != nil {
-		t.Fatalf("Failed to create loop: %v", err)
-	}
-	loopID, ok := newResp["loop_id"].(string)
-	if !ok || loopID == "" {
-		t.Skip("No loop_id in LoopNew response")
-	}
-	t.Logf("Created test loop: %s", loopID)
-
-	// Send loop_cards_fetch request (fire-and-forget)
-	requestID := NewRequestID()
-	if err := client.SendLoopCardsFetch(ctx, loopID, requestID); err != nil {
-		t.Logf("SendLoopCardsFetch error: %v", err)
-	}
-
-	t.Logf("Sent loop_cards_fetch request: %s", requestID)
 }
 
 func TestIntegration_SendMCPStatus(t *testing.T) {
