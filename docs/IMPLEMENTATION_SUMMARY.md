@@ -35,12 +35,12 @@ with a **loop-centric** API. Public entry points:
 - `examples/README.md` — example index
 - `docs/API_TEST_COVERAGE.md` — which tests cover which APIs
 - `docs/heartbeat.md` — heartbeat tracker and `DaemonHealth.LoopID`
-- `docs/impl/sessionstore-context.md` — `SessionStore` context.Context refactor
+- `docs/impl/sessionstore-context.md` — `LoopSessionStore` context.Context refactor
 - `docs/impl/turn-lifecycle.md` — idle timeout, status-idle, compaction, soft stream-close
 
-## Context propagation (`SessionStore`)
+## Context propagation (`LoopSessionStore`)
 
-`appkit.SessionStore` methods take `context.Context` as the first parameter so
+`appkit.LoopSessionStore` methods take `context.Context` as the first parameter so
 request cancellation, deadlines, and trace spans reach the storage backend.
 `ConnectionPool.Acquire` and `TurnRunner` persist helpers thread the caller's
 `ctx` through every store call. See

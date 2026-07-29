@@ -138,7 +138,7 @@ type memStore struct {
 	loops map[string]string
 }
 
-func (s *memStore) GetSession(ctx context.Context, appKey appkit.AppKey) (*appkit.SessionEntry, error) {
+func (s *memStore) GetSession(ctx context.Context, appKey appkit.AppKey) (*appkit.LoopSessionEntry, error) {
 	return nil, nil
 }
 func (s *memStore) CreateSession(ctx context.Context, workspaceID string, appKey appkit.AppKey, loopID, sessionType string) error {

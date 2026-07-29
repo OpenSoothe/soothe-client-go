@@ -1,12 +1,12 @@
-# SessionStore context.Context refactor
+# LoopSessionStore context.Context refactor
 
 **Status:** unreleased (HEAD is `v0.2.4-5-g2ffdb6a` at time of writing)
-**Breaking:** yes — `appkit.SessionStore` interface signature change
+**Breaking:** yes — `appkit.LoopSessionStore` interface signature change
 **Target tag:** `v0.2.5` (or `v0.3.0` if consumers prefer a major-minor bump for the break)
 
 ## Summary
 
-All six methods of the `appkit.SessionStore` interface now take a
+All six methods of the `appkit.LoopSessionStore` interface now take a
 `context.Context` as their first parameter, so that cancellation, deadlines,
 and trace spans can flow from the caller's request context down into the
 persistence layer. Previously every method took only plain scalar args and had
@@ -14,13 +14,13 @@ no way to observe a cancelled turn or an expiring request budget.
 
 The refactor was made in commit `2ffdb6a` (5 commits ahead of `v0.2.4`).
 
-## Affected interface — `appkit.SessionStore`
+## Affected interface — `appkit.LoopSessionStore`
 
-File: `appkit/session_store.go`
+File: `appkit/loop_session_store.go`
 
 | Method | Old signature | New signature |
 |--------|---------------|---------------|
-| `GetSession` | `(sessionID string) (*SessionEntry, error)` | `(ctx context.Context, sessionID string) (*SessionEntry, error)` |
+| `GetSession` | `(sessionID string) (*LoopSessionEntry, error)` | `(ctx context.Context, sessionID string) (*LoopSessionEntry, error)` |
 | `CreateSession` | `(workspaceID, sessionID, loopID, sessionType string) error` | `(ctx context.Context, workspaceID, sessionID, loopID, sessionType string) error` |
 | `UpdateLastUsed` | `(sessionID string) error` | `(ctx context.Context, sessionID string) error` |
 | `IncrementResetCount` | `(sessionID string) error` | `(ctx context.Context, sessionID string) error` |
@@ -29,14 +29,14 @@ File: `appkit/session_store.go`
 
 ## Migration for implementers
 
-Any type that implements `appkit.SessionStore` must add a `ctx context.Context`
+Any type that implements `appkit.LoopSessionStore` must add a `ctx context.Context`
 first parameter to all six methods. The context should be honoured in the
 storage backend (e.g. `pgx` `QueryRow(ctx, ...)`, Redis `Do(ctx, ...)`,
 in-memory stores that do blocking I/O should `select` on `ctx.Done()`).
 
 ### Consumers already migrated
 
-Application `SessionStore` implementations must update all six method
+Application `LoopSessionStore` implementations must update all six method
 signatures to take `context.Context` first. In-memory stores may ignore `ctx`
 aside from signature compliance; database-backed stores should forward `ctx`
 into their driver calls.

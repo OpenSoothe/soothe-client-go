@@ -210,7 +210,7 @@ func Example_poolConfig() {
 }
 
 // Example_connectionPoolConstruction shows how to construct a ConnectionPool
-// with a custom SessionStore and configuration. A running daemon is required
+// with a custom LoopSessionStore and configuration. A running daemon is required
 // for Acquire; this example shows only the construction and Stats.
 func Example_connectionPoolConstruction() {
 	// In-memory session store for demonstration.
@@ -310,11 +310,11 @@ func Example_chatEventTerminal() {
 	// 2
 }
 
-// Example_sessionStoreInterface shows the SessionStore interface methods and
-// the SessionEntry/SessionMessage types.
+// Example_sessionStoreInterface shows the LoopSessionStore interface methods and
+// the LoopSessionEntry/SessionMessage types.
 func Example_sessionStoreInterface() {
-	// SessionEntry is the persisted AppKey↔loop mapping.
-	entry := appkit.SessionEntry{
+	// LoopSessionEntry is the persisted AppKey↔loop mapping.
+	entry := appkit.LoopSessionEntry{
 		WorkspaceID: "/tmp/project",
 		AppKey:      "chat-123",
 		LoopID:      "loop-abc",
@@ -355,15 +355,15 @@ func Example_managedClientInterface() {
 	// factory and bootstrap ready
 }
 
-// --- in-memory SessionStore for demonstration ---
+// --- in-memory LoopSessionStore for demonstration ---
 
 type memorySessionStore struct {
-	sessions map[string]*appkit.SessionEntry
+	sessions map[string]*appkit.LoopSessionEntry
 }
 
-func (s *memorySessionStore) GetSession(_ context.Context, appKey appkit.AppKey) (*appkit.SessionEntry, error) {
+func (s *memorySessionStore) GetSession(_ context.Context, appKey appkit.AppKey) (*appkit.LoopSessionEntry, error) {
 	if s.sessions == nil {
-		s.sessions = make(map[string]*appkit.SessionEntry)
+		s.sessions = make(map[string]*appkit.LoopSessionEntry)
 	}
 	if e, ok := s.sessions[appKey]; ok {
 		return e, nil
@@ -373,9 +373,9 @@ func (s *memorySessionStore) GetSession(_ context.Context, appKey appkit.AppKey)
 
 func (s *memorySessionStore) CreateSession(_ context.Context, workspaceID string, appKey appkit.AppKey, loopID, sessionType string) error {
 	if s.sessions == nil {
-		s.sessions = make(map[string]*appkit.SessionEntry)
+		s.sessions = make(map[string]*appkit.LoopSessionEntry)
 	}
-	s.sessions[appKey] = &appkit.SessionEntry{
+	s.sessions[appKey] = &appkit.LoopSessionEntry{
 		WorkspaceID: workspaceID,
 		AppKey:      appKey,
 		LoopID:      loopID,

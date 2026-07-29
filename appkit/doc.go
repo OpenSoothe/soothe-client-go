@@ -5,13 +5,13 @@
 //
 // AppKey is a product conversation key (not a daemon loop_id or client_id).
 // appkit is product-agnostic: deliverable phases, persistence, and SSE event
-// vocabulary are supplied via configuration and SessionStore.
+// vocabulary are supplied via configuration and LoopSessionStore.
 //
 // # Stack
 //
 //   - Core soothe.Client — transport, handshake, multiplexed RPC + event stream.
 //   - This package — DaemonSession, ConnectionPool, QueryGate, TurnRunner,
-//     EventClassifier, SSEBroadcaster, SessionStore.
+//     EventClassifier, SSEBroadcaster, LoopSessionStore.
 //   - The application — domain types, persistence implementation, product
 //     config, user-facing copy.
 //
@@ -22,8 +22,8 @@
 //   - Jobs / cron one-shots → soothe.CommandClient (core package)
 //
 // Typical wiring for backends: construct a ConnectionPool with the daemon
-// WebSocket URL and a SessionStore, then build a TurnRunner from the pool,
-// QueryGate, EventClassifier, SessionStore, and SSEBroadcaster.
+// WebSocket URL and a LoopSessionStore, then build a TurnRunner from the pool,
+// QueryGate, EventClassifier, LoopSessionStore, and SSEBroadcaster.
 //
 // # Turn timeouts and stream close
 //

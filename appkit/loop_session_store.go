@@ -5,9 +5,9 @@ import (
 	"time"
 )
 
-// SessionEntry is the persisted mapping between an application AppKey and
+// LoopSessionEntry is the persisted mapping between an application AppKey and
 // the daemon loop id, plus bookkeeping for resume and reset.
-type SessionEntry struct {
+type LoopSessionEntry struct {
 	WorkspaceID string
 	AppKey      string // application conversation key (not a daemon id)
 	LoopID      string
@@ -28,15 +28,15 @@ type SessionMessage struct {
 	Metadata map[string]interface{}
 }
 
-// SessionStore is the persistence seam between appkit and the application's
+// LoopSessionStore is the persistence seam between appkit and the application's
 // storage backend (in-memory, Postgres, Redis, etc.). Implementations must be
 // safe for concurrent use.
 //
 // Keys are AppKey values (product conversation ids). appkit maps AppKey →
 // daemon loop_id; the daemon never sees AppKey on the wire.
-type SessionStore interface {
+type LoopSessionStore interface {
 	// GetSession returns the persisted entry for appKey, or (nil, nil) if none.
-	GetSession(ctx context.Context, appKey AppKey) (*SessionEntry, error)
+	GetSession(ctx context.Context, appKey AppKey) (*LoopSessionEntry, error)
 
 	// CreateSession persists a new AppKey↔loop mapping.
 	CreateSession(ctx context.Context, workspaceID string, appKey AppKey, loopID, sessionType string) error

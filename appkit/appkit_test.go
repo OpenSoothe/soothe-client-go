@@ -16,22 +16,22 @@ import (
 // Test fakes
 // ---------------------------------------------------------------------------
 
-// memStore is an in-memory SessionStore for tests.
+// memStore is an in-memory LoopSessionStore for tests.
 type memStore struct {
 	mu         sync.Mutex
-	sessions   map[string]*SessionEntry
+	sessions   map[string]*LoopSessionEntry
 	msgs       map[string][]SessionMessage
 	failCreate bool
 }
 
 func newMemStore() *memStore {
 	return &memStore{
-		sessions: make(map[string]*SessionEntry),
+		sessions: make(map[string]*LoopSessionEntry),
 		msgs:     make(map[string][]SessionMessage),
 	}
 }
 
-func (s *memStore) GetSession(ctx context.Context, id string) (*SessionEntry, error) {
+func (s *memStore) GetSession(ctx context.Context, id string) (*LoopSessionEntry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if e, ok := s.sessions[id]; ok {
@@ -46,7 +46,7 @@ func (s *memStore) CreateSession(ctx context.Context, ws, sid, loop, stype strin
 	if s.failCreate {
 		return errors.New("create failed")
 	}
-	s.sessions[sid] = &SessionEntry{WorkspaceID: ws, AppKey: sid, LoopID: loop, SessionType: stype, IsActive: true}
+	s.sessions[sid] = &LoopSessionEntry{WorkspaceID: ws, AppKey: sid, LoopID: loop, SessionType: stype, IsActive: true}
 	return nil
 }
 func (s *memStore) UpdateLastUsed(ctx context.Context, sid string) error      { return nil }

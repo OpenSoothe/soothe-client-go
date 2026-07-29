@@ -149,7 +149,7 @@ type TurnRunner struct {
 	pool        *ConnectionPool
 	gate        *QueryGate
 	classifier  *EventClassifier
-	store       SessionStore
+	store       LoopSessionStore
 	broadcaster *SSEBroadcaster
 	cfg         TurnConfig
 
@@ -168,7 +168,7 @@ type TurnRunner struct {
 
 // NewTurnRunner constructs a TurnRunner. pool, gate, classifier, and store are
 // required; broadcaster may be nil.
-func NewTurnRunner(pool *ConnectionPool, gate *QueryGate, cl *EventClassifier, store SessionStore, b *SSEBroadcaster, cfg TurnConfig) *TurnRunner {
+func NewTurnRunner(pool *ConnectionPool, gate *QueryGate, cl *EventClassifier, store LoopSessionStore, b *SSEBroadcaster, cfg TurnConfig) *TurnRunner {
 	tr := &TurnRunner{
 		pool:        pool,
 		gate:        gate,
@@ -224,7 +224,7 @@ func idleTimeoutForTurn(cfg TurnConfig, hasAttachments bool) time.Duration {
 }
 
 // Execute runs one query turn. The response is broadcast via the SSE
-// broadcaster and persisted via the SessionStore; it is not returned to the
+// broadcaster and persisted via the LoopSessionStore; it is not returned to the
 // caller (SSE subscribers receive it). Returns nil on success, an error on
 // failure (ErrQueryTimeout, ErrIdleTimeout, context.Canceled, or a daemon/processing error).
 func (r *TurnRunner) Execute(ctx context.Context, appKey, message, userID, workspaceID string, attachments []map[string]interface{}, opts *InputOpts) error {

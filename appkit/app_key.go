@@ -3,11 +3,11 @@ package appkit
 import "context"
 
 // AppKey is the application conversation key used by ConnectionPool, QueryGate,
-// TurnRunner, and SessionStore (e.g. Triarch chat_id).
+// TurnRunner, and LoopSessionStore (e.g. Triarch chat_id).
 //
 // It is NOT a daemon protocol identity. The daemon's first-class ids are
 // loop_id (conversation continuity) and client_id (WebSocket connection).
-// AppKit maps AppKey → loop_id via SessionStore; that mapping never leaves
+// AppKit maps AppKey → loop_id via LoopSessionStore; that mapping never leaves
 // the product process as a wire "session_id".
 type AppKey = string
 

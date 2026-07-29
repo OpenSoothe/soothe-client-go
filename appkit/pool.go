@@ -79,14 +79,14 @@ func (c *pooledConn) eventStreamLive() bool {
 // It reuses an active connection when still live, otherwise bootstraps a fresh
 // loop (loop_new + subscribe) or reattaches an existing one (loop_reattach +
 // subscribe + ReattachAndProbe). Persistence of AppKey↔loop mappings is
-// abstracted behind SessionStore.
+// abstracted behind LoopSessionStore.
 type ConnectionPool struct {
 	url         string
 	cfg         PoolConfig
 	scfg        *soothe.Config
 	factory     ClientFactory
 	bootstrap   BootstrapFunc
-	store       SessionStore
+	store       LoopSessionStore
 	pool        chan *pooledConn
 	activeSlots map[string]*pooledConn
 	registry    map[int]string // slotID → appKey
@@ -98,7 +98,7 @@ type ConnectionPool struct {
 // DefaultPoolConfig is used; if scfg is nil, soothe.DefaultConfig is used; nil
 // factory falls back to DefaultClientFactory. The pool is pre-seeded with
 // cfg.PoolSize idle slots, each built via factory(daemonURL, scfg).
-func NewConnectionPool(daemonURL string, store SessionStore, cfg *PoolConfig, scfg *soothe.Config, factory ClientFactory) *ConnectionPool {
+func NewConnectionPool(daemonURL string, store LoopSessionStore, cfg *PoolConfig, scfg *soothe.Config, factory ClientFactory) *ConnectionPool {
 	if cfg == nil {
 		cfg = DefaultPoolConfig()
 	}

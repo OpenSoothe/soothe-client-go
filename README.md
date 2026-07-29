@@ -81,7 +81,7 @@ soothe-client-go/
 ## appkit — pool & TurnRunner
 
 Product backends that map chat sessions to daemon loops use `ConnectionPool` +
-`QueryGate` + `TurnRunner` + `EventClassifier` + `SessionStore`.
+`QueryGate` + `TurnRunner` + `EventClassifier` + `LoopSessionStore`.
 
 | Knob | Default | Notes |
 |------|---------|--------|
@@ -93,7 +93,7 @@ Product backends that map chat sessions to daemon loops use `ConnectionPool` +
 | Classifier phase deliverables | product set | Early UX complete; not sole terminator |
 | `TreatStatusIdleAsComplete` etc. | false | Standalone `ClassifyTurn` only |
 
-`SessionStore` methods take `context.Context` as the first parameter so
+`LoopSessionStore` methods take `context.Context` as the first parameter so
 cancellation and deadlines reach the storage backend. See
 [`docs/impl/sessionstore-context.md`](docs/impl/sessionstore-context.md) and
 [`docs/impl/turn-lifecycle.md`](docs/impl/turn-lifecycle.md).
