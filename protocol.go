@@ -15,7 +15,7 @@ const ProtoVersion = "1"
 var DefaultClientCapabilities = []string{"streaming", "batch", "heartbeat", "receipts"}
 
 // ClientVersion reported in the connection_init handshake.
-const ClientVersion = "0.4.10"
+const ClientVersion = "0.4.11"
 
 // ---------------------------------------------------------------------------
 // Protocol-1 wire envelope

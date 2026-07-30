@@ -552,27 +552,6 @@ func isStatusRunningEvent(msg interface{}) bool {
 	return strings.EqualFold(strings.TrimSpace(m.State), "running")
 }
 
-// isTurnArmingEvent reports signals that belong to the current turn after send
-// (assistant-bearing stream chunks). status=running alone is handled separately
-// so leftover running+idle from a prior turn cannot arm-and-end the next turn.
-func isTurnArmingEvent(msg interface{}) bool {
-	if isStatusRunningEvent(msg) {
-		return false
-	}
-	switch m := msg.(type) {
-	case soothe.EventMessage:
-		if m.Mode == "messages" {
-			return true
-		}
-		if data, ok := normalizeEventData(m.Data); ok {
-			if _, has := extractContentFromData(data); has {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // isStaleTurnEndEvent reports buffered end markers from a previous turn that
 // must not terminate the current turn before it has armed.
 func isStaleTurnEndEvent(msg interface{}) bool {
