@@ -317,7 +317,7 @@ func (s *DaemonSession) iterTurnChunksLocked(ctx context.Context, maxWait time.D
 
 	queryStarted := false
 	expectedLoopID := s.LoopID()
-	streamPayloadSeen := false
+	expectedTurnID := ""
 	turnProgressSeen := false
 	var absoluteDeadline time.Time
 	if maxWait > 0 {
@@ -364,6 +364,23 @@ func (s *DaemonSession) iterTurnChunksLocked(ctx context.Context, maxWait time.D
 			continue
 		}
 
+		evTurnID := soothe.FrameTurnID(frame)
+		statusState := ""
+		if eventType == "status" {
+			statusState = asString(frame["state"])
+		}
+		isRunningStatus := statusState == "running"
+		isTerminalStatus := statusState == "idle" || statusState == "stopped"
+		if expectedTurnID != "" && (eventType == "event" || eventType == "status") && !isRunningStatus {
+			if isTerminalStatus {
+				if evTurnID != "" && !soothe.TurnIDsMatch(expectedTurnID, evTurnID) {
+					continue
+				}
+			} else if !soothe.TurnIDsMatch(expectedTurnID, evTurnID) {
+				continue
+			}
+		}
+
 		if eventType == "error" {
 			msg := asString(frame["message"])
 			if errObj, ok := frame["error"].(map[string]interface{}); ok {
@@ -386,19 +403,35 @@ func (s *DaemonSession) iterTurnChunksLocked(ctx context.Context, maxWait time.D
 				s.mu.Unlock()
 				expectedLoopID = lid
 			}
-			state := asString(frame["state"])
 			switch {
-			case state == "running":
+			case statusState == "running":
 				queryStarted = true
-			case queryStarted && state == "stopped":
-				s.LastTurnEndState = state
-				s.drainAfterIdle(ctx, expectedLoopID, out)
-				return nil
-			case queryStarted && state == "idle":
-				if !streamPayloadSeen && !s.LastTurnCancelSeen {
+				if statusTurn := soothe.FrameTurnID(frame); statusTurn != "" {
+					newGen := soothe.ParseTurnGeneration(statusTurn)
+					oldGen := soothe.ParseTurnGeneration(expectedTurnID)
+					if expectedTurnID == "" || (newGen > 0 && (oldGen < 0 || newGen >= oldGen)) {
+						if expectedTurnID != "" && statusTurn != expectedTurnID {
+							turnProgressSeen = false
+						}
+						expectedTurnID = statusTurn
+					}
+				}
+			case queryStarted && statusState == "stopped":
+				stopTurn := soothe.FrameTurnID(frame)
+				if expectedTurnID != "" && !soothe.TurnIDsMatch(expectedTurnID, stopTurn) {
 					continue
 				}
-				s.LastTurnEndState = state
+				s.LastTurnEndState = statusState
+				s.drainAfterIdle(ctx, expectedLoopID, out)
+				return nil
+			case queryStarted && statusState == "idle":
+				idleTurn := soothe.FrameTurnID(frame)
+				if !soothe.IsIdleTerminalAllowed(
+					expectedTurnID, idleTurn, queryStarted, turnProgressSeen, s.LastTurnCancelSeen,
+				) {
+					continue
+				}
+				s.LastTurnEndState = statusState
 				s.drainAfterIdle(ctx, expectedLoopID, out)
 				return nil
 			}
@@ -426,12 +459,17 @@ func (s *DaemonSession) iterTurnChunksLocked(ctx context.Context, maxWait time.D
 		}
 
 		if mode == "custom" && soothe.IsTurnEndCustomData(data) {
-			if !queryStarted || !turnProgressSeen {
+			dataTurn := evTurnID
+			if m, ok := data.(map[string]interface{}); ok {
+				if tid := soothe.FrameTurnID(m); tid != "" {
+					dataTurn = tid
+				}
+			}
+			if !soothe.IsTurnTerminalAllowed(expectedTurnID, dataTurn, queryStarted, turnProgressSeen) {
 				continue
 			}
 		}
 
-		streamPayloadSeen = true
 		if soothe.IsTurnProgressChunk(mode, data) {
 			turnProgressSeen = true
 		}

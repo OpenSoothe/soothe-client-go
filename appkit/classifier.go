@@ -293,9 +293,15 @@ func (cl *EventClassifier) processChatEvent(msg interface{}, accumulated string,
 
 		// Turn-scoped stream.end: soft-complete accumulated text (CLI parity).
 		if m.Mode == "custom" && soothe.IsTurnEndCustomData(m.Data) {
+			frameTurn := strings.TrimSpace(m.TurnID)
+			if data, ok := m.Data.(map[string]interface{}); ok {
+				if tid := soothe.FrameTurnID(data); tid != "" {
+					frameTurn = tid
+				}
+			}
 			if cl.cfg.TreatStreamEndAsComplete &&
 				cl.IsSubstantiveAssistantReply(accumulated) &&
-				gate.AllowStreamEnd() {
+				gate.AllowStreamEnd(frameTurn) {
 				return cl.deliverableResult(strings.TrimSpace(accumulated), soothe.STREAM_END)
 			}
 			return ChatEventResult{Terminal: ChatEventContinue}
@@ -429,7 +435,7 @@ func (cl *EventClassifier) processChatEvent(msg interface{}, accumulated string,
 		if cl.cfg.TreatStatusIdleAsComplete &&
 			strings.EqualFold(strings.TrimSpace(m.State), "idle") &&
 			cl.IsSubstantiveAssistantReply(accumulated) {
-			if cl.cfg.GateTurnEndSignals && !gate.AllowIdleComplete() {
+			if cl.cfg.GateTurnEndSignals && !gate.AllowIdleComplete(strings.TrimSpace(m.TurnID)) {
 				return ChatEventResult{Terminal: ChatEventContinue}
 			}
 			return cl.deliverableResult(strings.TrimSpace(accumulated), "status.idle")

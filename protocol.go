@@ -15,7 +15,7 @@ const ProtoVersion = "1"
 var DefaultClientCapabilities = []string{"streaming", "batch", "heartbeat", "receipts"}
 
 // ClientVersion reported in the connection_init handshake.
-const ClientVersion = "0.4.11"
+const ClientVersion = "0.4.12"
 
 // ---------------------------------------------------------------------------
 // Protocol-1 wire envelope
@@ -116,6 +116,8 @@ type BaseMessage struct {
 type EventMessage struct {
 	BaseMessage
 	LoopID    string      `json:"loop_id,omitempty"`
+	TurnID    string      `json:"turn_id,omitempty"`
+	Seq       int         `json:"seq,omitempty"`
 	Namespace interface{} `json:"namespace,omitempty"`
 	Mode      string      `json:"mode,omitempty"`
 	Data      interface{} `json:"data"`
@@ -135,6 +137,8 @@ type StatusResponse struct {
 	BaseMessage
 	State               string        `json:"state"`
 	LoopID              string        `json:"loop_id,omitempty"`
+	TurnID              string        `json:"turn_id,omitempty"`
+	Seq                 int           `json:"seq,omitempty"`
 	Workspace           string        `json:"workspace"`
 	InputHistory        []string      `json:"input_history,omitempty"`
 	ConversationHistory []interface{} `json:"conversation_history,omitempty"`

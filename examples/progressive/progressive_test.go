@@ -102,17 +102,24 @@ func (md *progressiveMock) handle(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			lid := params["loop_id"]
-			md.write(conn, map[string]interface{}{"type": "status", "state": "running", "loop_id": lid})
+			turnID := fmt.Sprintf("%v:1", lid)
 			md.write(conn, map[string]interface{}{
-				"type": "event", "mode": "messages", "loop_id": lid, "namespace": []interface{}{},
+				"type": "status", "state": "running", "loop_id": lid, "turn_id": turnID,
+			})
+			md.write(conn, map[string]interface{}{
+				"type": "event", "mode": "messages", "loop_id": lid, "turn_id": turnID,
+				"namespace": []interface{}{},
 				"data": []interface{}{
 					map[string]interface{}{"type": "ai", "content": "hi", "phase": "text_completion"},
 					map[string]interface{}{},
 				},
 			})
 			md.write(conn, map[string]interface{}{
-				"type": "event", "mode": "custom", "loop_id": lid, "namespace": []interface{}{},
-				"data": map[string]interface{}{"type": "soothe.stream.end", "scope": "turn"},
+				"type": "event", "mode": "custom", "loop_id": lid, "turn_id": turnID,
+				"namespace": []interface{}{},
+				"data": map[string]interface{}{
+					"type": "soothe.stream.end", "scope": "turn", "turn_id": turnID,
+				},
 			})
 		case typ == "request" && strings.HasPrefix(method, "job_"):
 			result := map[string]interface{}{"ok": true}

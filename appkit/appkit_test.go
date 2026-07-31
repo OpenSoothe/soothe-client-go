@@ -514,13 +514,13 @@ func TestTurnRunner_DeliverableTurn(t *testing.T) {
 
 // streamEndTurnEvent builds a turn-scoped soothe.stream.end custom event.
 func streamEndTurnEvent() string {
-	return `{"proto":"1","type":"event","namespace":["soothe","stream"],"mode":"custom","data":{"type":"soothe.stream.end","scope":"turn"},"loop_id":"loop-1"}`
+	return `{"proto":"1","type":"event","namespace":["soothe","stream"],"mode":"custom","turn_id":"loop-1:1","data":{"type":"soothe.stream.end","scope":"turn","turn_id":"loop-1:1"},"loop_id":"loop-1"}`
 }
 
 // streamingChunkEvent builds a mode=messages AIMessageChunk carrying one piece
 // of streaming assistant text (classifier maps these to ChatEventContinue).
 func streamingChunkEvent(content string) string {
-	return fmt.Sprintf(`{"proto":"1","type":"event","namespace":["soothe","protocol","message"],"mode":"messages","data":[{"type":"AIMessageChunk","content":%q}],"loop_id":"loop-1"}`, content)
+	return fmt.Sprintf(`{"proto":"1","type":"event","namespace":["soothe","protocol","message"],"mode":"messages","turn_id":"loop-1:1","data":[{"type":"AIMessageChunk","content":%q}],"loop_id":"loop-1"}`, content)
 }
 
 // drainUntil collects SSEEvents from sub until one of wantTypes arrives, then

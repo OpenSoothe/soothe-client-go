@@ -82,12 +82,13 @@ func Example_turnBoundary() {
 	ended, _ := b.Feed(soothe.StatusResponse{State: "idle"})
 	fmt.Printf("pre-running idle: ended=%v\n", ended)
 
-	b.Feed(soothe.StatusResponse{State: "running", LoopID: "L1"})
+	b.Feed(soothe.StatusResponse{State: "running", LoopID: "L1", TurnID: "L1:1"})
 
 	// Messages chunk unlocks stream.end / idle.
 	chunk := soothe.EventMessage{}
 	chunk.BaseMessage = soothe.BaseMessage{Type: "event"}
 	chunk.Mode = "messages"
+	chunk.TurnID = "L1:1"
 	chunk.Data = []interface{}{
 		map[string]interface{}{"type": "AIMessageChunk", "content": "enough reply text here"},
 	}
@@ -96,7 +97,8 @@ func Example_turnBoundary() {
 	end := soothe.EventMessage{}
 	end.BaseMessage = soothe.BaseMessage{Type: "event"}
 	end.Mode = "custom"
-	end.Data = map[string]interface{}{"type": soothe.STREAM_END, "scope": "turn"}
+	end.TurnID = "L1:1"
+	end.Data = map[string]interface{}{"type": soothe.STREAM_END, "scope": "turn", "turn_id": "L1:1"}
 	ended, reason := b.Feed(end)
 	fmt.Printf("stream.end: ended=%v reason=%s\n", ended, reason)
 	fmt.Printf("isDaemonTurnEnd: %v\n", appkit.IsDaemonTurnEndEvent(reason))

@@ -104,7 +104,7 @@ func TestClassifier_StreamEnd_OptInGated(t *testing.T) {
 		t.Fatalf("premature stream.end must continue, got %v", r.Terminal)
 	}
 
-	gate.Observe(soothe.StatusResponse{State: "running", LoopID: "L1"})
+	gate.Observe(soothe.StatusResponse{State: "running", LoopID: "L1", TurnID: "loop-1:1"})
 	chunk := eventMessageFromJSON(t, streamingChunkEvent("Dali weather"))
 	_ = cl.ClassifyTurn(chunk, "", gate)
 	if !gate.SawTurnProgress {
@@ -125,7 +125,9 @@ func TestClassifier_StreamEnd_OptInGated(t *testing.T) {
 
 func TestClassifier_StreamEnd_DefaultOff(t *testing.T) {
 	cl := defaultClassifier()
-	gate := &TurnLifecycleGate{SawRunning: true, SawTurnProgress: true, SawStreamPayload: true}
+	gate := &TurnLifecycleGate{
+		SawRunning: true, SawTurnProgress: true, ExpectedTurnID: "loop-1:1",
+	}
 	r := cl.ClassifyTurn(eventMessageFromJSON(t, streamEndTurnEvent()), "enough accumulated reply text here", gate)
 	if r.Terminal != ChatEventContinue {
 		t.Fatalf("default must ignore stream.end, got %v", r.Terminal)
@@ -161,9 +163,9 @@ func TestClassifier_StatusIdle_GatedIgnoresPreRunning(t *testing.T) {
 		t.Fatalf("pre-running idle must continue when gated, got %v", r.Terminal)
 	}
 
-	gate.Observe(soothe.StatusResponse{State: "running"})
+	gate.Observe(soothe.StatusResponse{State: "running", TurnID: "loop-1:1"})
 	_ = cl.ClassifyTurn(eventMessageFromJSON(t, streamingChunkEvent("full weather reply text")), "", gate)
-	r = cl.ClassifyTurn(soothe.StatusResponse{State: "idle"}, "full weather reply text for Dali county", gate)
+	r = cl.ClassifyTurn(soothe.StatusResponse{State: "idle", TurnID: "loop-1:1"}, "full weather reply text for Dali county", gate)
 	if r.Terminal != ChatEventDeliverableComplete {
 		t.Fatalf("post-running idle should deliver when gated, got %v", r.Terminal)
 	}
@@ -172,7 +174,7 @@ func TestClassifier_StatusIdle_GatedIgnoresPreRunning(t *testing.T) {
 func TestTurnRunner_StreamEndSoftComplete(t *testing.T) {
 	// TurnBoundary ends the turn even when the classifier has no stream.end flags.
 	store := newMemStore()
-	running := soothe.StatusResponse{State: "running", LoopID: "loop-1"}
+	running := soothe.StatusResponse{State: "running", LoopID: "loop-1", TurnID: "loop-1:1"}
 	chunk := eventMessageFromJSON(t, streamingChunkEvent("enough accumulated reply text"))
 	end := eventMessageFromJSON(t, streamEndTurnEvent())
 	fake := newFakeClient(running, chunk, end)
@@ -196,9 +198,9 @@ func TestTurnRunner_StreamEndSoftComplete(t *testing.T) {
 
 func TestTurnRunner_GatedIdleSoftComplete(t *testing.T) {
 	store := newMemStore()
-	running := soothe.StatusResponse{State: "running", LoopID: "loop-1"}
+	running := soothe.StatusResponse{State: "running", LoopID: "loop-1", TurnID: "loop-1:1"}
 	chunk := eventMessageFromJSON(t, streamingChunkEvent("enough accumulated reply text"))
-	idle := soothe.StatusResponse{State: "idle", LoopID: "loop-1"}
+	idle := soothe.StatusResponse{State: "idle", LoopID: "loop-1", TurnID: "loop-1:1"}
 	fake := newFakeClient(running, chunk, idle)
 	pool := newTestPool(t, store, fake)
 	tr := NewTurnRunner(pool, NewQueryGate(), defaultClassifier(), store, NewSSEBroadcaster(), TurnConfig{
@@ -224,10 +226,10 @@ func TestTurnBoundary_IgnoresPreRunningIdle(t *testing.T) {
 	if ended {
 		t.Fatal("pre-running idle must not end the turn")
 	}
-	b.Feed(soothe.StatusResponse{State: "running"})
+	b.Feed(soothe.StatusResponse{State: "running", TurnID: "loop-1:1"})
 	chunk := eventMessageFromJSON(t, streamingChunkEvent("progress"))
 	b.Feed(chunk)
-	ended, reason := b.Feed(soothe.StatusResponse{State: "idle"})
+	ended, reason := b.Feed(soothe.StatusResponse{State: "idle", TurnID: "loop-1:1"})
 	if !ended || reason != TurnEndIdle {
 		t.Fatalf("got ended=%v reason=%q", ended, reason)
 	}

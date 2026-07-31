@@ -95,10 +95,10 @@ func TestDaemonSession_IterTurnChunks_StreamEnd(t *testing.T) {
 				subID := "sub-1" // unused; stream frames are unsolicited maps for ReadEvent
 				_ = subID
 				writeJSON(conn, map[string]interface{}{
-					"type": "status", "state": "running", "loop_id": "loop-test-1",
+					"type": "status", "state": "running", "loop_id": "loop-test-1", "turn_id": "loop-test-1:1",
 				})
 				writeJSON(conn, map[string]interface{}{
-					"type": "event", "mode": "messages", "loop_id": "loop-test-1",
+					"type": "event", "mode": "messages", "loop_id": "loop-test-1", "turn_id": "loop-test-1:1",
 					"namespace": []interface{}{},
 					"data": []interface{}{
 						map[string]interface{}{"type": "ai", "content": "hi"},
@@ -106,10 +106,10 @@ func TestDaemonSession_IterTurnChunks_StreamEnd(t *testing.T) {
 					},
 				})
 				writeJSON(conn, map[string]interface{}{
-					"type": "event", "mode": "custom", "loop_id": "loop-test-1",
+					"type": "event", "mode": "custom", "loop_id": "loop-test-1", "turn_id": "loop-test-1:1",
 					"namespace": []interface{}{},
 					"data": map[string]interface{}{
-						"type": "soothe.stream.end", "scope": "turn",
+						"type": "soothe.stream.end", "scope": "turn", "turn_id": "loop-test-1:1",
 					},
 				})
 				continue

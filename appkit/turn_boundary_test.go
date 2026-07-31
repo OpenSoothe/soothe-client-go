@@ -18,7 +18,7 @@ func TestTurnBoundary_StreamEndRequiresRunningAndProgress(t *testing.T) {
 		t.Fatal("stream.end before running must not end")
 	}
 
-	b.Feed(soothe.StatusResponse{State: "running"})
+	b.Feed(soothe.StatusResponse{State: "running", TurnID: "loop-1:1"})
 	ended, _ = b.Feed(end)
 	if ended {
 		t.Fatal("stream.end before turn progress must not end")
@@ -37,8 +37,8 @@ func TestTurnBoundary_StoppedAfterRunning(t *testing.T) {
 	if ended {
 		t.Fatal("stopped before running must not end")
 	}
-	b.Feed(soothe.StatusResponse{State: "running"})
-	ended, reason := b.Feed(soothe.StatusResponse{State: "stopped"})
+	b.Feed(soothe.StatusResponse{State: "running", TurnID: "loop-1:1"})
+	ended, reason := b.Feed(soothe.StatusResponse{State: "stopped", TurnID: "loop-1:1"})
 	if !ended || reason != TurnEndStopped {
 		t.Fatalf("got ended=%v reason=%q", ended, reason)
 	}
@@ -46,15 +46,28 @@ func TestTurnBoundary_StoppedAfterRunning(t *testing.T) {
 
 func TestTurnBoundary_IdempotentAfterEnd(t *testing.T) {
 	b := &TurnBoundary{}
-	b.Feed(soothe.StatusResponse{State: "running"})
+	b.Feed(soothe.StatusResponse{State: "running", TurnID: "loop-1:1"})
 	b.Feed(eventMessageFromJSON(t, streamingChunkEvent("x")))
 	ended, reason := b.Feed(eventMessageFromJSON(t, streamEndTurnEvent()))
 	if !ended {
 		t.Fatal("expected end")
 	}
-	ended2, reason2 := b.Feed(soothe.StatusResponse{State: "idle"})
+	ended2, reason2 := b.Feed(soothe.StatusResponse{State: "idle", TurnID: "loop-1:1"})
 	if !ended2 || reason2 != reason {
 		t.Fatalf("idempotent end: ended=%v reason=%q want %q", ended2, reason2, reason)
+	}
+}
+
+func TestTurnBoundary_RejectsAbsentTurnID(t *testing.T) {
+	b := &TurnBoundary{}
+	b.Feed(soothe.StatusResponse{State: "running", TurnID: "loop-1:1"})
+	b.Feed(eventMessageFromJSON(t, streamingChunkEvent("x")))
+	ended, _ := b.Feed(eventMessageFromJSON(t, `{
+		"proto":"1","type":"event","mode":"custom","loop_id":"loop-1",
+		"data":{"type":"soothe.stream.end","scope":"turn"}
+	}`))
+	if ended {
+		t.Fatal("absent turn_id stream.end must not end")
 	}
 }
 
@@ -71,10 +84,10 @@ func TestIsDaemonTurnEndEvent(t *testing.T) {
 
 func TestTurnRunner_BoundaryEmptyContentFails(t *testing.T) {
 	store := newMemStore()
-	running := soothe.StatusResponse{State: "running", LoopID: "loop-1"}
+	running := soothe.StatusResponse{State: "running", LoopID: "loop-1", TurnID: "loop-1:1"}
 	// Progress without extractable assistant text (custom plan step).
 	progress := eventMessageFromJSON(t, `{
-		"proto":"1","type":"event","mode":"custom",
+		"proto":"1","type":"event","mode":"custom","turn_id":"loop-1:1",
 		"data":{"type":"soothe.cognition.strange_loop.step.started","step_id":"s1"},
 		"loop_id":"loop-1"
 	}`)
