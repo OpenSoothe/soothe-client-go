@@ -332,6 +332,14 @@ func (md *MockDaemon) handleRPC(conn *websocket.Conn, id, method string, params 
 			"total_goals":     0,
 			"source":          "autopilot_service",
 		})
+	case "autopilot_top":
+		md.sendResponse(conn, id, map[string]interface{}{
+			"running":      true,
+			"dreaming":     false,
+			"loop_pool":    map[string]interface{}{"active": 0, "idle": 0, "total": 0, "max": 4},
+			"generated_at": "2026-08-04T00:00:00Z",
+			"jobs":         []interface{}{},
+		})
 
 	// --- Cron -------------------------------------------------------------
 	case "cron_add":

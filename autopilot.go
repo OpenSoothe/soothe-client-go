@@ -121,3 +121,10 @@ func (c *Client) AutopilotGetJob(ctx context.Context, jobID string, timeout time
 		"job_id": jobID,
 	}, "autopilot_get_job", autopilotTimeout(timeout))
 }
+
+// AutopilotTop returns the active-only jobs → goals → loops snapshot for CLI top.
+func (c *Client) AutopilotTop(ctx context.Context, timeout time.Duration) (map[string]interface{}, error) {
+	return c.RequestResponse(ctx, map[string]interface{}{
+		"type": "autopilot_top",
+	}, "autopilot_top", autopilotTimeout(timeout))
+}

@@ -201,6 +201,10 @@ func testRequestResponseHandler(w http.ResponseWriter, r *http.Request) {
 			testSendResponse(conn, id, map[string]interface{}{
 				"job": map[string]interface{}{"id": params["job_id"]},
 			})
+		case "autopilot_top":
+			testSendResponse(conn, id, map[string]interface{}{
+				"running": true, "jobs": []interface{}{},
+			})
 		default:
 			testSendResponse(conn, id, map[string]interface{}{"echoed": method})
 		}
