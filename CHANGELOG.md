@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.13] - 2026-08-05
+
+### Added
+- `AutopilotTop` sends `include_terminal` (default `false`) for CLI `top` parity
+- Handshake `ClientVersion` reports `0.4.13`
+
 ## [0.4.12] - 2026-07-31
 
 ### Changed
