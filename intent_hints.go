@@ -1,10 +1,5 @@
 package soothe
 
-import (
-	"fmt"
-	"strings"
-)
-
 // Daemon loop_input intent_hint values (non-agent turns).
 
 const (
@@ -17,23 +12,6 @@ const (
 	// IntentHintEmbed runs the configured embedding role (text-only; JSON vector).
 	IntentHintEmbed = "embed"
 )
-
-// RemovedIntentHints are legacy loop_input intent_hint values rejected by the daemon.
-var RemovedIntentHints = map[string]string{
-	"direct_llm":   "intent_hint direct_llm is removed; use text_completion (text-only) or image_to_text (with attachments)",
-	"quiz":         "intent_hint quiz is removed; omit intent_hint and let intake classify the turn",
-	"direct_model": "intent_hint direct_model is removed; use text_completion, image_to_text, ocr, or embed",
-}
-
-// ValidateLoopInputIntentHint returns an error for removed legacy hints.
-// Pass-through agent hints (e.g. resume_clarification, skill:foo) are allowed.
-func ValidateLoopInputIntentHint(hint string) error {
-	key := strings.ToLower(strings.TrimSpace(hint))
-	if msg, ok := RemovedIntentHints[key]; ok {
-		return fmt.Errorf("%s", msg)
-	}
-	return nil
-}
 
 // DefaultDeliverablePhases returns the default set of loop message phases that
 // may end a query with a user-facing reply (quiz, goal_completion, chitchat,

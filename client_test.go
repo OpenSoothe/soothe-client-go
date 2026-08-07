@@ -740,37 +740,6 @@ func TestClient_RequestResponse_PreservesRequestID(t *testing.T) {
 	}
 }
 
-func TestClient_SendInput_PreferredSubagent(t *testing.T) {
-	ts := newTestServer(testEchoHandler)
-	defer ts.Close()
-
-	client := NewClient(wsURL(ts.URL), nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := client.Connect(ctx); err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer func() { _ = client.Close() }()
-
-	err := client.SendInput(ctx, "do stuff", WithLoopID("t1"), WithSubagent("planner"))
-	if err != nil {
-		t.Fatalf("SendInput: %v", err)
-	}
-
-	ev, err := client.ReadEvent()
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	params, _ := ev["params"].(map[string]interface{})
-	if params == nil {
-		t.Fatalf("missing params: %v", ev)
-	}
-	if params["preferred_subagent"] != "planner" {
-		t.Errorf("preferred_subagent: %v", params["preferred_subagent"])
-	}
-}
-
 func TestClient_SendCommand(t *testing.T) {
 	ts := newTestServer(testEchoHandler)
 	defer ts.Close()

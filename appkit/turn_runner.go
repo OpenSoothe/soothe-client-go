@@ -227,9 +227,6 @@ func idleTimeoutForTurn(cfg TurnConfig, hasAttachments bool) time.Duration {
 // caller (SSE subscribers receive it). Returns nil on success, an error on
 // failure (ErrQueryTimeout, ErrIdleTimeout, context.Canceled, or a daemon/processing error).
 func (r *TurnRunner) Execute(ctx context.Context, appKey, message, userID, workspaceID string, attachments []map[string]interface{}, opts *InputOpts) error {
-	if err := r.validateOpts(opts); err != nil {
-		return err
-	}
 	conn, err := r.pool.Acquire(ctx, appKey, workspaceID, userID)
 	if err != nil {
 		r.persistFailed(ctx, appKey, "", err)
@@ -267,9 +264,6 @@ func (r *TurnRunner) Execute(ctx context.Context, appKey, message, userID, works
 // It replaces the cancel with a timeout-derived cancel, registers sendCancel,
 // and Releases the gate on exit.
 func (r *TurnRunner) ExecuteReserved(ctx context.Context, appKey, message, userID, workspaceID string, attachments []map[string]interface{}, opts *InputOpts) error {
-	if err := r.validateOpts(opts); err != nil {
-		return err
-	}
 	if r.gate == nil || !r.gate.IsActive(appKey) {
 		return fmt.Errorf("appkit: ExecuteReserved requires an active QueryGate reservation for %s", appKey)
 	}
@@ -294,18 +288,6 @@ func (r *TurnRunner) ExecuteReserved(ctx context.Context, appKey, message, userI
 	defer r.gate.Release(appKey)
 
 	return r.runTurn(ctx, timeoutCtx, conn, appKey, loopID, message, attachments, opts)
-}
-
-func (r *TurnRunner) validateOpts(opts *InputOpts) error {
-	if opts == nil {
-		return nil
-	}
-	if h := strings.TrimSpace(opts.IntentHint); h != "" {
-		if err := soothe.ValidateLoopInputIntentHint(h); err != nil {
-			return fmt.Errorf("appkit: %w", err)
-		}
-	}
-	return nil
 }
 
 func (r *TurnRunner) runTurn(

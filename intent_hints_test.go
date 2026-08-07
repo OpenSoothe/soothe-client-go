@@ -19,9 +19,9 @@ func TestDefaultDeliverablePhases_IncludesIntentHints(t *testing.T) {
 			t.Errorf("DefaultDeliverablePhases missing %q", want)
 		}
 	}
-	for _, removed := range []string{"direct_model", "direct_llm", "trivial"} {
-		if phases[removed] {
-			t.Fatalf("%s must not be a deliverable phase", removed)
+	for _, absent := range []string{"direct_model", "direct_llm", "trivial"} {
+		if phases[absent] {
+			t.Fatalf("%s must not be a deliverable phase", absent)
 		}
 	}
 }
