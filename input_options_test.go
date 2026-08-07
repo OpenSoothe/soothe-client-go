@@ -62,7 +62,6 @@ func TestSendInputClarificationOptions(t *testing.T) {
 		"type":       "loop_input",
 		"loop_id":    opts.loopID,
 		"content":    "test input",
-		"autonomous": false,
 	}
 
 	if opts.clarificationMode != "" {

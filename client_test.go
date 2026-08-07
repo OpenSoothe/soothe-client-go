@@ -740,7 +740,7 @@ func TestClient_RequestResponse_PreservesRequestID(t *testing.T) {
 	}
 }
 
-func TestClient_SendInput_Autonomous(t *testing.T) {
+func TestClient_SendInput_PreferredSubagent(t *testing.T) {
 	ts := newTestServer(testEchoHandler)
 	defer ts.Close()
 
@@ -753,8 +753,7 @@ func TestClient_SendInput_Autonomous(t *testing.T) {
 	}
 	defer func() { _ = client.Close() }()
 
-	maxIter := 5
-	err := client.SendInput(ctx, "do stuff", WithLoopID("t1"), WithAutonomous(&maxIter))
+	err := client.SendInput(ctx, "do stuff", WithLoopID("t1"), WithSubagent("planner"))
 	if err != nil {
 		t.Fatalf("SendInput: %v", err)
 	}
@@ -767,11 +766,8 @@ func TestClient_SendInput_Autonomous(t *testing.T) {
 	if params == nil {
 		t.Fatalf("missing params: %v", ev)
 	}
-	if params["autonomous"] != true {
-		t.Errorf("autonomous: %v", params["autonomous"])
-	}
-	if params["max_iterations"] != float64(5) {
-		t.Errorf("max_iterations: %v", params["max_iterations"])
+	if params["preferred_subagent"] != "planner" {
+		t.Errorf("preferred_subagent: %v", params["preferred_subagent"])
 	}
 }
 

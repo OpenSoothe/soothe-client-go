@@ -37,37 +37,6 @@ func Example_sendInputBasic() {
 	// Input sent
 }
 
-// Example_sendInputAutonomous enables autonomous mode with a max-iterations cap.
-// The daemon runs the agent graph without streaming intermediate steps.
-func Example_sendInputAutonomous() {
-	md := NewMockDaemon(nil)
-	defer md.Close()
-
-	client := soothe.NewClient(md.URL, nil)
-	ctx := context.Background()
-
-	if err := client.Connect(ctx); err != nil {
-		fmt.Printf("Connect error: %v\n", err)
-		return
-	}
-	defer func() { _ = client.Close() }()
-
-	loopID := "existing-loop-id"
-	maxIter := 10
-
-	err := client.SendInput(ctx, "Refactor the auth module for better testability",
-		soothe.WithLoopID(loopID),
-		soothe.WithAutonomous(&maxIter),
-	)
-	if err != nil {
-		fmt.Printf("SendInput error: %v\n", err)
-	} else {
-		fmt.Println("Autonomous input sent")
-	}
-	// Output:
-	// Autonomous input sent
-}
-
 // Example_sendInputWithModel overrides the provider:model for this turn
 // and passes extra model parameters.
 func Example_sendInputWithModel() {

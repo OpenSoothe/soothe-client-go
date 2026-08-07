@@ -89,8 +89,7 @@ type InputOpts struct {
 // The returned map is suitable for Client.SendMessage (same shape as SendInput).
 func InputMessageForLoop(text, loopID string, attachments []map[string]interface{}, opts *InputOpts) map[string]interface{} {
 	params := map[string]interface{}{
-		"content":    text,
-		"autonomous": false,
+		"content": text,
 	}
 	if loopID != "" {
 		params["loop_id"] = loopID

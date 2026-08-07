@@ -12,7 +12,7 @@ import (
 
 // SendInput sends user input to the daemon as a loop_input notification.
 func (c *Client) SendInput(ctx context.Context, text string, opts ...InputOption) error {
-	o := &inputOptions{autonomous: false}
+	o := &inputOptions{}
 	for _, opt := range opts {
 		opt(o)
 	}
@@ -20,12 +20,8 @@ func (c *Client) SendInput(ctx context.Context, text string, opts ...InputOption
 		return fmt.Errorf("SendInput requires WithLoopID(loopID)")
 	}
 	params := map[string]interface{}{
-		"loop_id":    strings.TrimSpace(o.loopID),
-		"content":    text,
-		"autonomous": o.autonomous,
-	}
-	if o.maxIterations != nil {
-		params["max_iterations"] = *o.maxIterations
+		"loop_id": strings.TrimSpace(o.loopID),
+		"content": text,
 	}
 	if o.preferredSubagent != "" {
 		params["preferred_subagent"] = o.preferredSubagent
@@ -71,8 +67,6 @@ type InputOption func(*inputOptions)
 
 type inputOptions struct {
 	loopID               string
-	autonomous           bool
-	maxIterations        *int
 	preferredSubagent    string
 	model                string
 	modelParams          map[string]interface{}
@@ -88,14 +82,6 @@ type inputOptions struct {
 
 func WithLoopID(loopID string) InputOption {
 	return func(o *inputOptions) { o.loopID = loopID }
-}
-
-// WithAutonomous enables autonomous mode.
-func WithAutonomous(maxIterations *int) InputOption {
-	return func(o *inputOptions) {
-		o.autonomous = true
-		o.maxIterations = maxIterations
-	}
 }
 
 // WithSubagent sets the preferred_subagent hint.

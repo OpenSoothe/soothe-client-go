@@ -205,8 +205,6 @@ func (s *DaemonSession) Detach(ctx context.Context) error {
 
 // SendTurnOptions configures SendTurn.
 type SendTurnOptions struct {
-	Autonomous          bool
-	MaxIterations       *int
 	PreferredSubagent   string
 	Model               string
 	ModelParams         map[string]interface{}
@@ -225,9 +223,6 @@ func (s *DaemonSession) SendTurn(ctx context.Context, text string, opts *SendTur
 	var inputOpts []soothe.InputOption
 	inputOpts = append(inputOpts, soothe.WithLoopID(loopID))
 	if opts != nil {
-		if opts.Autonomous || opts.MaxIterations != nil {
-			inputOpts = append(inputOpts, soothe.WithAutonomous(opts.MaxIterations))
-		}
 		if opts.PreferredSubagent != "" {
 			inputOpts = append(inputOpts, soothe.WithSubagent(opts.PreferredSubagent))
 		}
