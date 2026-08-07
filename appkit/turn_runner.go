@@ -79,6 +79,7 @@ type TurnConfig struct {
 type InputOpts struct {
 	IntentHint           string
 	PreferredSubagent    string
+	IntakeScope          string
 	ResponseSchema       map[string]interface{}
 	ResponseSchemaName   string
 	ResponseSchemaStrict *bool
@@ -103,6 +104,9 @@ func InputMessageForLoop(text, loopID string, attachments []map[string]interface
 		}
 		if s := strings.TrimSpace(opts.PreferredSubagent); s != "" {
 			params["preferred_subagent"] = s
+		}
+		if s := strings.TrimSpace(opts.IntakeScope); s != "" {
+			params["intake_scope"] = s
 		}
 		if len(opts.ResponseSchema) > 0 {
 			params["response_schema"] = opts.ResponseSchema

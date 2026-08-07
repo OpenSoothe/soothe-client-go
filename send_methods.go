@@ -26,6 +26,9 @@ func (c *Client) SendInput(ctx context.Context, text string, opts ...InputOption
 	if o.preferredSubagent != "" {
 		params["preferred_subagent"] = o.preferredSubagent
 	}
+	if o.intakeScope != "" {
+		params["intake_scope"] = o.intakeScope
+	}
 	if o.attachments != nil {
 		params["attachments"] = o.attachments
 	}
@@ -65,6 +68,7 @@ type InputOption func(*inputOptions)
 type inputOptions struct {
 	loopID               string
 	preferredSubagent    string
+	intakeScope          string
 	model                string
 	modelParams          map[string]interface{}
 	attachments          []map[string]interface{}
@@ -84,6 +88,12 @@ func WithLoopID(loopID string) InputOption {
 // WithSubagent sets the preferred_subagent hint.
 func WithSubagent(name string) InputOption {
 	return func(o *inputOptions) { o.preferredSubagent = name }
+}
+
+// WithIntakeScope sets intake_scope on loop_input (trivial|simple|complex).
+// When set, the daemon skips Pass 1 and Pass 2 LLM intake.
+func WithIntakeScope(scope string) InputOption {
+	return func(o *inputOptions) { o.intakeScope = scope }
 }
 
 // WithAttachments sets optional image attachments (mime_type + base64 data).
