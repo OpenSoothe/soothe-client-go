@@ -46,10 +46,38 @@ func (cc *CommandClient) JobStatus(ctx context.Context, jobID string) (map[strin
 	})
 }
 
+// JobPause pauses a running job via a fresh connection.
+func (cc *CommandClient) JobPause(ctx context.Context, jobID string) (map[string]interface{}, error) {
+	return cc.withClient(ctx, func(ctx context.Context, c *Client) (map[string]interface{}, error) {
+		return c.JobPause(ctx, jobID, cc.Timeout)
+	})
+}
+
+// JobResume resumes a paused job via a fresh connection.
+func (cc *CommandClient) JobResume(ctx context.Context, jobID string) (map[string]interface{}, error) {
+	return cc.withClient(ctx, func(ctx context.Context, c *Client) (map[string]interface{}, error) {
+		return c.JobResume(ctx, jobID, cc.Timeout)
+	})
+}
+
 // JobCancel cancels a job via a fresh connection.
 func (cc *CommandClient) JobCancel(ctx context.Context, jobID string) (map[string]interface{}, error) {
 	return cc.withClient(ctx, func(ctx context.Context, c *Client) (map[string]interface{}, error) {
 		return c.JobCancel(ctx, jobID, cc.Timeout)
+	})
+}
+
+// JobDag gets the job goal DAG via a fresh connection.
+func (cc *CommandClient) JobDag(ctx context.Context, jobID string) (map[string]interface{}, error) {
+	return cc.withClient(ctx, func(ctx context.Context, c *Client) (map[string]interface{}, error) {
+		return c.JobDag(ctx, jobID, cc.Timeout)
+	})
+}
+
+// JobGuidance sends guidance text to a job via a fresh connection.
+func (cc *CommandClient) JobGuidance(ctx context.Context, jobID, text, goalID string) (map[string]interface{}, error) {
+	return cc.withClient(ctx, func(ctx context.Context, c *Client) (map[string]interface{}, error) {
+		return c.JobGuidance(ctx, jobID, text, goalID, cc.Timeout)
 	})
 }
 
@@ -130,6 +158,14 @@ func (cc *CommandClient) AutopilotGetJob(ctx context.Context, jobID string) (map
 	})
 }
 
+// AutopilotTop returns the jobs → goals → loops snapshot for CLI top
+// via a fresh connection.
+func (cc *CommandClient) AutopilotTop(ctx context.Context) (map[string]interface{}, error) {
+	return cc.withClient(ctx, func(ctx context.Context, c *Client) (map[string]interface{}, error) {
+		return c.AutopilotTop(ctx, cc.Timeout)
+	})
+}
+
 // CronAdd creates a scheduled job via a fresh connection.
 func (cc *CommandClient) CronAdd(ctx context.Context, text string, priority int) (map[string]interface{}, error) {
 	return cc.withClient(ctx, func(ctx context.Context, c *Client) (map[string]interface{}, error) {
@@ -141,6 +177,20 @@ func (cc *CommandClient) CronAdd(ctx context.Context, text string, priority int)
 func (cc *CommandClient) CronList(ctx context.Context, status string) (map[string]interface{}, error) {
 	return cc.withClient(ctx, func(ctx context.Context, c *Client) (map[string]interface{}, error) {
 		return c.CronList(ctx, status, cc.Timeout)
+	})
+}
+
+// CronShow shows a specific scheduled job via a fresh connection.
+func (cc *CommandClient) CronShow(ctx context.Context, jobID string) (map[string]interface{}, error) {
+	return cc.withClient(ctx, func(ctx context.Context, c *Client) (map[string]interface{}, error) {
+		return c.CronShow(ctx, jobID, cc.Timeout)
+	})
+}
+
+// CronCancel cancels a scheduled job via a fresh connection.
+func (cc *CommandClient) CronCancel(ctx context.Context, jobID string) (map[string]interface{}, error) {
+	return cc.withClient(ctx, func(ctx context.Context, c *Client) (map[string]interface{}, error) {
+		return c.CronCancel(ctx, jobID, cc.Timeout)
 	})
 }
 

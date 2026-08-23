@@ -373,6 +373,13 @@ func (c *Client) SendLoopHistoryFetch(ctx context.Context, loopID string, reques
 	return c.SendMessage(ctx, NewRequestEnvelopeWithID("loop_history_fetch", map[string]interface{}{"loop_id": loopID}, rid))
 }
 
+// SendLoopExecutionStateFetch requests a focused execution-progress snapshot
+// (plan, step_index, iteration, status) for the loop's bound checkpoint thread.
+func (c *Client) SendLoopExecutionStateFetch(ctx context.Context, loopID string, requestID ...string) error {
+	rid := optRequestID(requestID)
+	return c.SendMessage(ctx, NewRequestEnvelopeWithID("loop_execution_state_fetch", map[string]interface{}{"loop_id": loopID}, rid))
+}
+
 // SendConfigReload requests a config reload on the daemon (request envelope).
 func (c *Client) SendConfigReload(ctx context.Context, requestID ...string) error {
 	rid := optRequestID(requestID)

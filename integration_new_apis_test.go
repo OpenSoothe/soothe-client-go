@@ -536,3 +536,77 @@ func TestIntegration_SendMCPStatus(t *testing.T) {
 
 	t.Logf("Sent mcp_status request: %s", requestID)
 }
+
+func TestIntegration_LoopHistoryFetch(t *testing.T) {
+	skipIfNoDaemon(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
+	client := NewClient("ws://localhost:8765", integrationTestConfig())
+
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("Failed to connect: %v", err)
+	}
+	defer func() { _ = client.Close() }()
+
+	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
+		t.Fatalf("Daemon not ready: %v", err)
+	}
+
+	// Create a loop
+	newResp, err := client.LoopNew(ctx, 15*time.Second)
+	if err != nil {
+		t.Fatalf("Failed to create loop: %v", err)
+	}
+	loopID, ok := newResp["loop_id"].(string)
+	if !ok || loopID == "" {
+		t.Skip("No loop_id in LoopNew response")
+	}
+	t.Logf("Created test loop: %s", loopID)
+
+	// Request loop history
+	historyResp, err := client.LoopHistoryFetch(ctx, loopID, 15*time.Second)
+	if err != nil {
+		t.Logf("LoopHistoryFetch error: %v", err)
+	} else {
+		t.Logf("LoopHistoryFetch response: %v", historyResp)
+	}
+}
+
+func TestIntegration_LoopExecutionStateFetch(t *testing.T) {
+	skipIfNoDaemon(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
+	client := NewClient("ws://localhost:8765", integrationTestConfig())
+
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("Failed to connect: %v", err)
+	}
+	defer func() { _ = client.Close() }()
+
+	if _, err := client.WaitForDaemonReady(10 * time.Second); err != nil {
+		t.Fatalf("Daemon not ready: %v", err)
+	}
+
+	// Create a loop
+	newResp, err := client.LoopNew(ctx, 15*time.Second)
+	if err != nil {
+		t.Fatalf("Failed to create loop: %v", err)
+	}
+	loopID, ok := newResp["loop_id"].(string)
+	if !ok || loopID == "" {
+		t.Skip("No loop_id in LoopNew response")
+	}
+	t.Logf("Created test loop: %s", loopID)
+
+	// Request execution state snapshot
+	stateResp, err := client.LoopExecutionStateFetch(ctx, loopID, 15*time.Second)
+	if err != nil {
+		t.Logf("LoopExecutionStateFetch error: %v", err)
+	} else {
+		t.Logf("LoopExecutionStateFetch response: %v", stateResp)
+	}
+}

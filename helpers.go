@@ -127,6 +127,21 @@ func FetchLoopHistory(ctx context.Context, client *Client, loopID string, timeou
 	}, "loop_history_fetch_response", timeout)
 }
 
+// FetchLoopExecutionState requests a focused execution-progress snapshot
+// (plan, step_index, iteration, status) for the loop's bound checkpoint thread.
+func FetchLoopExecutionState(ctx context.Context, client *Client, loopID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	if loopID == "" {
+		return nil, fmt.Errorf("loop_id is required")
+	}
+	return client.RequestResponse(ctx, map[string]interface{}{
+		"type":    "loop_execution_state_fetch",
+		"loop_id": loopID,
+	}, "loop_execution_state_fetch_response", timeout)
+}
+
 // RequestAuth submits access_key/secret_key credentials to the daemon via RPC.
 func RequestAuth(ctx context.Context, client *Client, accessKey, secretKey string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {

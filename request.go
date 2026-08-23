@@ -719,3 +719,28 @@ func (c *Client) MCPStatus(ctx context.Context, timeout time.Duration) (map[stri
 		"type": "mcp_status",
 	}, "mcp_status_response", timeout)
 }
+
+// LoopHistoryFetch requests the loop's replayable history (goal display
+// snapshots + live card tail) and waits for the response.
+func (c *Client) LoopHistoryFetch(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	return c.RequestResponse(ctx, map[string]interface{}{
+		"type":    "loop_history_fetch",
+		"loop_id": loopID,
+	}, "loop_history_fetch_response", timeout)
+}
+
+// LoopExecutionStateFetch requests a focused execution-progress snapshot
+// (plan, step_index, iteration, status) for the loop's bound checkpoint
+// thread and waits for the response.
+func (c *Client) LoopExecutionStateFetch(ctx context.Context, loopID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	return c.RequestResponse(ctx, map[string]interface{}{
+		"type":    "loop_execution_state_fetch",
+		"loop_id": loopID,
+	}, "loop_execution_state_fetch_response", timeout)
+}

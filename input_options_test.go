@@ -59,9 +59,9 @@ func TestSendInputClarificationOptions(t *testing.T) {
 
 	// Build the payload manually to verify structure
 	payload := map[string]interface{}{
-		"type":       "loop_input",
-		"loop_id":    opts.loopID,
-		"content":    "test input",
+		"type":    "loop_input",
+		"loop_id": opts.loopID,
+		"content": "test input",
 	}
 
 	if opts.clarificationMode != "" {

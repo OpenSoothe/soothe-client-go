@@ -125,8 +125,14 @@ func (c *Client) AutopilotGetJob(ctx context.Context, jobID string, timeout time
 // AutopilotTop returns the jobs → goals → loops snapshot for CLI top
 // (active-only forest; include_terminal defaults false on the wire).
 func (c *Client) AutopilotTop(ctx context.Context, timeout time.Duration) (map[string]interface{}, error) {
+	return c.AutopilotTopWithTerminal(ctx, false, timeout)
+}
+
+// AutopilotTopWithTerminal returns the jobs → goals → loops snapshot,
+// optionally including terminal goals/jobs when includeTerminal is true.
+func (c *Client) AutopilotTopWithTerminal(ctx context.Context, includeTerminal bool, timeout time.Duration) (map[string]interface{}, error) {
 	return c.RequestResponse(ctx, map[string]interface{}{
 		"type":             "autopilot_top",
-		"include_terminal": false,
+		"include_terminal": includeTerminal,
 	}, "autopilot_top", autopilotTimeout(timeout))
 }
