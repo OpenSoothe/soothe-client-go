@@ -210,6 +210,7 @@ type SendTurnOptions struct {
 	ModelParams         map[string]interface{}
 	Attachments         []map[string]interface{}
 	ClarificationMode   string
+	InteractionMode      string
 	ClarificationAnswer bool
 	IntentHint          string
 }
@@ -238,6 +239,9 @@ func (s *DaemonSession) SendTurn(ctx context.Context, text string, opts *SendTur
 		if opts.ClarificationMode != "" {
 			inputOpts = append(inputOpts, soothe.WithClarificationMode(opts.ClarificationMode))
 		}
+		if opts.InteractionMode != "" {
+			inputOpts = append(inputOpts, soothe.WithInteractionMode(opts.InteractionMode))
+		}
 		if opts.ClarificationAnswer {
 			inputOpts = append(inputOpts, soothe.WithClarificationAnswer())
 		}
@@ -246,6 +250,15 @@ func (s *DaemonSession) SendTurn(ctx context.Context, text string, opts *SendTur
 		}
 	}
 	return s.client.SendInput(ctx, text, inputOpts...)
+}
+
+// InvokeSkill resolves a skill on the stream socket (required for turn enqueue)
+// and waits for the echo response. interactionMode sets the CoreAgent
+// interaction mode ("agent" / "ask"); pass "" for the daemon default.
+func (s *DaemonSession) InvokeSkill(ctx context.Context, skill, args, interactionMode string) (map[string]interface{}, error) {
+	s.readMu.Lock()
+	defer s.readMu.Unlock()
+	return s.client.InvokeSkill(ctx, skill, args, interactionMode, 120*time.Second)
 }
 
 // CancelActiveTurn requests remote cancel via slash_command.
@@ -309,6 +322,15 @@ func (s *DaemonSession) iterTurnChunksLocked(ctx context.Context, maxWait time.D
 	s.LastTurnEndState = ""
 	s.LastTurnCancelSeen = false
 	s.LastTurnErrorMessage = ""
+
+	// Capture the inbound-drop counter at turn start so the delta can be
+	// attributed to this turn (mirrors Python's inbound_dropped_baseline).
+	inboundBaseline := s.client.InboundDropped()
+	defer func() {
+		if s.TurnEventStats != nil {
+			s.TurnEventStats.InboundDropped = max(0, s.client.InboundDropped()-inboundBaseline)
+		}
+	}()
 
 	queryStarted := false
 	expectedLoopID := s.LoopID()

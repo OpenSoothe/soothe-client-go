@@ -116,7 +116,7 @@ func Example_invokeSkill() {
 
 	// InvokeSkill resolves a skill by name and passes args as a string.
 	// The default timeout is 120s (skills may be long-running).
-	result, err := client.InvokeSkill(ctx, "code_reviewer", "review main.go", 120*time.Second)
+	result, err := client.InvokeSkill(ctx, "code_reviewer", "review main.go", "", 120*time.Second)
 	if err != nil {
 		fmt.Printf("InvokeSkill error: %v\n", err)
 		return

@@ -941,7 +941,7 @@ func TestClient_InvokeSkill(t *testing.T) {
 	}
 	defer func() { _ = client.Close() }()
 
-	resp, err := client.InvokeSkill(ctx, "research", "search for X", 3*time.Second)
+	resp, err := client.InvokeSkill(ctx, "research", "search for X", "", 3*time.Second)
 	if err != nil {
 		t.Fatalf("InvokeSkill: %v", err)
 	}

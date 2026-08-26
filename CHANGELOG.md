@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.16] - 2026-08-07
+
+### Added
+- `interaction_mode` parameter ("agent" / "ask") on `SendInput` (`WithInteractionMode`), `InvokeSkill`, `InputOpts`/`InputMessageForLoop`, and `DaemonSession.SendTurn`/`InvokeSkill` (Feature Set B)
+- Blocking RPC helpers `LoopTree`, `LoopPrune`, `LoopDelete`, `LoopReattach` in `helpers.go` (Feature Set A gap)
+- `TurnEventStats` expanded to full 12-field surface (total, messages, updates, custom, skipped, filtered_early, tool_calls, tool_results, text_chunks, heartbeats_dropped, post_idle_drained, inbound_dropped) matching the Python client (Feature Set C)
+- `InboundDropped` delta attributed per turn in `iterTurnChunksLocked`
+- `DaemonSession.InvokeSkill` method forwarding to the stream socket
+
+### Changed
+- `Client.InvokeSkill` signature gains `interactionMode string` parameter (positional callers updated)
+- Handshake `ClientVersion` reports `0.4.16`
+
 ## [0.4.14] - 2026-08-07
 
 ### Changed

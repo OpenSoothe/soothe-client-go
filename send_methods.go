@@ -53,6 +53,9 @@ func (c *Client) SendInput(ctx context.Context, text string, opts ...InputOption
 	if o.clarificationMode != "" {
 		params["clarification_mode"] = o.clarificationMode
 	}
+	if o.interactionMode != "" {
+		params["interaction_mode"] = o.interactionMode
+	}
 	if o.clarificationAnswer {
 		params["clarification_answer"] = true
 	}
@@ -77,6 +80,7 @@ type inputOptions struct {
 	responseSchemaName   string
 	responseSchemaStrict *bool
 	clarificationMode    string
+	interactionMode      string
 	clarificationAnswer  bool
 	clarificationAnswers []string
 }
@@ -137,6 +141,12 @@ func WithResponseSchemaStrict(strict bool) InputOption {
 // WithClarificationMode sets clarification relay mode ("auto" / "manual").
 func WithClarificationMode(mode string) InputOption {
 	return func(o *inputOptions) { o.clarificationMode = mode }
+}
+
+// WithInteractionMode sets the CoreAgent interaction mode ("agent" / "ask").
+// When empty the daemon falls back to its configured default.
+func WithInteractionMode(mode string) InputOption {
+	return func(o *inputOptions) { o.interactionMode = mode }
 }
 
 // WithClarificationAnswer marks this input as the answer to a pending clarification interrupt.

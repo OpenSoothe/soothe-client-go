@@ -155,15 +155,21 @@ func (c *Client) ListModels(ctx context.Context, timeout time.Duration) (map[str
 }
 
 // InvokeSkill resolves a skill on the daemon host and receives echo.
-func (c *Client) InvokeSkill(ctx context.Context, skill, args string, timeout time.Duration) (map[string]interface{}, error) {
+// interactionMode sets the CoreAgent interaction mode ("agent" / "ask") for
+// the synthetic turn; pass "" to let the daemon fall back to its default.
+func (c *Client) InvokeSkill(ctx context.Context, skill, args, interactionMode string, timeout time.Duration) (map[string]interface{}, error) {
 	if timeout <= 0 {
 		timeout = 120 * time.Second
 	}
-	return c.RequestResponse(ctx, map[string]interface{}{
+	payload := map[string]interface{}{
 		"type":  "invoke_skill",
 		"skill": skill,
 		"args":  args,
-	}, "invoke_skill_response", timeout)
+	}
+	if interactionMode != "" {
+		payload["interaction_mode"] = interactionMode
+	}
+	return c.RequestResponse(ctx, payload, "invoke_skill_response", timeout)
 }
 
 // WaitForDaemonReady waits for the protocol-1 connection_ack handshake to

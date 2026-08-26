@@ -80,6 +80,7 @@ type InputOpts struct {
 	IntentHint           string
 	PreferredSubagent    string
 	IntakeScope          string
+	InteractionMode      string
 	ResponseSchema       map[string]interface{}
 	ResponseSchemaName   string
 	ResponseSchemaStrict *bool
@@ -107,6 +108,9 @@ func InputMessageForLoop(text, loopID string, attachments []map[string]interface
 		}
 		if s := strings.TrimSpace(opts.IntakeScope); s != "" {
 			params["intake_scope"] = s
+		}
+		if m := strings.TrimSpace(opts.InteractionMode); m != "" {
+			params["interaction_mode"] = m
 		}
 		if len(opts.ResponseSchema) > 0 {
 			params["response_schema"] = opts.ResponseSchema

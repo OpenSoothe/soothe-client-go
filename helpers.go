@@ -164,3 +164,64 @@ func RequestAuthRefresh(ctx context.Context, client *Client, refreshToken string
 		"refresh_token": refreshToken,
 	}, "auth_refresh_response", timeout)
 }
+
+// LoopTree fetches a loop's checkpoint tree via blocking RPC.
+func LoopTree(ctx context.Context, client *Client, loopID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	if loopID == "" {
+		return nil, fmt.Errorf("loop_id is required")
+	}
+	return client.RequestResponse(ctx, map[string]interface{}{
+		"type":    "loop_tree",
+		"loop_id": loopID,
+	}, "loop_tree_response", timeout)
+}
+
+// LoopPrune prunes old checkpoints from a loop via blocking RPC.
+// keepLatest specifies how many recent checkpoints to preserve (minimum 1).
+func LoopPrune(ctx context.Context, client *Client, loopID string, keepLatest int, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	if loopID == "" {
+		return nil, fmt.Errorf("loop_id is required")
+	}
+	params := map[string]interface{}{
+		"type":    "loop_prune",
+		"loop_id": loopID,
+	}
+	if keepLatest > 0 {
+		params["keep_latest"] = keepLatest
+	}
+	return client.RequestResponse(ctx, params, "loop_prune_response", timeout)
+}
+
+// LoopDelete deletes a loop and its checkpoints via blocking RPC.
+func LoopDelete(ctx context.Context, client *Client, loopID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	if loopID == "" {
+		return nil, fmt.Errorf("loop_id is required")
+	}
+	return client.RequestResponse(ctx, map[string]interface{}{
+		"type":    "loop_delete",
+		"loop_id": loopID,
+	}, "loop_delete_response", timeout)
+}
+
+// LoopReattach reattaches to an existing loop via blocking RPC.
+func LoopReattach(ctx context.Context, client *Client, loopID string, timeout time.Duration) (map[string]interface{}, error) {
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	if loopID == "" {
+		return nil, fmt.Errorf("loop_id is required")
+	}
+	return client.RequestResponse(ctx, map[string]interface{}{
+		"type":    "loop_reattach",
+		"loop_id": loopID,
+	}, "loop_reattach_response", timeout)
+}
