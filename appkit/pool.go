@@ -26,9 +26,7 @@ type PoolConfig struct {
 	HealthCheckInterval time.Duration
 }
 
-// DefaultPoolConfig returns conservative pool defaults suitable for most apps.
-// MaxIdleTime is enforced on Acquire (idle sessions are released and rebuilt).
-// HealthCheckInterval is reserved for future background sweeps; unused today.
+// DefaultPoolConfig returns conservative pool defaults.
 func DefaultPoolConfig() *PoolConfig {
 	return &PoolConfig{
 		PoolSize:            1000,
@@ -94,10 +92,8 @@ type ConnectionPool struct {
 	nextSlotID  int
 }
 
-// NewConnectionPool constructs a pool for daemonURL. If cfg is nil,
-// DefaultPoolConfig is used; if scfg is nil, soothe.DefaultConfig is used; nil
-// factory falls back to DefaultClientFactory. The pool is pre-seeded with
-// cfg.PoolSize idle slots, each built via factory(daemonURL, scfg).
+// NewConnectionPool constructs a pool for daemonURL. Nil cfg/scfg/factory
+// fall back to defaults. The pool is pre-seeded with cfg.PoolSize idle slots.
 func NewConnectionPool(daemonURL string, store LoopSessionStore, cfg *PoolConfig, scfg *soothe.Config, factory ClientFactory) *ConnectionPool {
 	if cfg == nil {
 		cfg = DefaultPoolConfig()
@@ -129,8 +125,7 @@ func NewConnectionPool(daemonURL string, store LoopSessionStore, cfg *PoolConfig
 	return p
 }
 
-// WithClientFactory overrides the client factory (useful for test fakes or apps
-// that wrap *soothe.Client with logging/metrics).
+// WithClientFactory overrides the client factory.
 func (p *ConnectionPool) WithClientFactory(f ClientFactory) *ConnectionPool {
 	if f != nil {
 		p.factory = f
@@ -138,8 +133,7 @@ func (p *ConnectionPool) WithClientFactory(f ClientFactory) *ConnectionPool {
 	return p
 }
 
-// WithBootstrap overrides the loop bootstrap function (useful for test fakes
-// or apps that build *soothe.Client wrappers).
+// WithBootstrap overrides the loop bootstrap function.
 func (p *ConnectionPool) WithBootstrap(f BootstrapFunc) *ConnectionPool {
 	if f != nil {
 		p.bootstrap = f

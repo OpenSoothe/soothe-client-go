@@ -15,10 +15,8 @@ type LoopSessionOptions struct {
 }
 
 // BootstrapLoopSession runs (loop_new or reuse resumeLoopID) → loop_subscribe.
-// The protocol-1 connection_init/connection_ack handshake is performed in
-// Connect(); this function assumes it has already completed. It mirrors
-// soothe_sdk.client.session.bootstrap_loop_session and returns the loop id.
-// Call this before starting a concurrent ReceiveMessages reader on the same connection.
+// Assumes the protocol-1 handshake has already completed in Connect().
+// Call this before starting a concurrent ReceiveMessages reader.
 func BootstrapLoopSession(
 	ctx context.Context,
 	client *Client,

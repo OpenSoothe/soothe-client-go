@@ -54,7 +54,7 @@ type Client struct {
 	deliveryAckedSeq map[string]int
 }
 
-// NewClient creates a new Soothe daemon WebSocket client.
+// NewClient creates a daemon WebSocket client.
 func NewClient(url string, cfg *Config) *Client {
 	if cfg == nil {
 		cfg = DefaultConfig()
@@ -70,11 +70,10 @@ func NewClient(url string, cfg *Config) *Client {
 	}
 }
 
-// Disconnected returns a channel that is closed exactly once when the
-// connection drops. The cause value readable before close distinguishes a
-// clean disconnect notification (loops keep running server-side) from an
-// unclean loss (read/write error or missed pong; in-flight queries are cancelled).
-// Returns nil if the client was never connected.
+// Disconnected returns a channel closed once on connection drop. The buffered
+// cause distinguishes a clean disconnect (loops keep running server-side) from
+// an unclean loss (read/write error or missed pong; in-flight queries are
+// cancelled). Returns nil if never connected.
 func (c *Client) Disconnected() <-chan DisconnectCause {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -116,10 +115,9 @@ func NewClientWithHeartbeat(url string, cfg *Config) *Client {
 	return c
 }
 
-// Connect dials the Soothe daemon WebSocket and completes the protocol-1
-// connection_init/connection_ack handshake. Returns an error
-// if the daemon does not report readiness_state "ready" within the configured
-// DaemonReadyTimeout.
+// Connect dials the daemon and completes the protocol-1
+// connection_init/connection_ack handshake. Returns an error if the daemon
+// does not report readiness_state "ready" within DaemonReadyTimeout.
 func (c *Client) Connect(ctx context.Context) error {
 	dialer := websocket.Dialer{
 		HandshakeTimeout: 10 * time.Second,
@@ -278,9 +276,9 @@ func (c *Client) ReadinessState() string {
 	return c.readinessState
 }
 
-// Close shuts down the WebSocket connection. It fires Disconnected() so
-// consumers blocked on the signal unblock; the cause is unclean because an
-// explicit teardown does not guarantee server-side loop continuity.
+// Close shuts down the WebSocket connection. Fires Disconnected() so consumers
+// blocked on the signal unblock; the cause is unclean because an explicit
+// teardown does not guarantee server-side loop continuity.
 func (c *Client) Close() error {
 	c.mu.Lock()
 	if c.closed || c.conn == nil {
@@ -302,9 +300,8 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// Reconnect re-dials the daemon and re-handshakes after a connection drop.
-// It does not re-establish loop subscriptions; follow with
-// ReattachAndProbe to resume a loop session. The caller should invoke this
+// Reconnect re-dials and re-handshakes after a drop. Does not re-establish loop
+// subscriptions; follow with ReattachAndProbe to resume a loop session. Call
 // after Disconnected() fires. Reuses the same Client, resetting the disconnect
 // signal and multiplexer.
 func (c *Client) Reconnect(ctx context.Context) error {
@@ -324,14 +321,10 @@ func (c *Client) Reconnect(ctx context.Context) error {
 	return c.Connect(ctx)
 }
 
-// ReattachAndProbe resumes an existing loop after a reconnect: it issues
-// loop_reattach, re-subscribes to loop_events, then runs a loop_get liveness
-// probe to detect stale loops that accept the handshake but silently drop
-// input. Returns *StaleLoopError when the probe fails; callers should fall
-// back to a fresh loop_new bootstrap.
-//
-// Connection-level readiness is the handshake's readiness_state
-// (+ daemon_status); loop_get is a loop-scoped probe only, not a readiness probe.
+// ReattachAndProbe resumes an existing loop after a reconnect: loop_reattach,
+// re-subscribe to loop_events, then a loop_get liveness probe.
+// Returns *StaleLoopError when the probe fails; callers should fall back
+// to a fresh loop_new bootstrap.
 func (c *Client) ReattachAndProbe(ctx context.Context, loopID string) error {
 	if loopID == "" {
 		return fmt.Errorf("soothe: ReattachAndProbe requires a loop id")
@@ -594,7 +587,6 @@ func (c *Client) sendDeliveryAck(loopID string, seq int) {
 }
 
 // EnableHeartbeatTracking enables automatic heartbeat tracking for daemon health monitoring.
-// The tracker will process heartbeat events as they are received.
 func (c *Client) EnableHeartbeatTracking() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -707,11 +699,9 @@ func (c *Client) isControlFrame(msg interface{}) bool {
 	return false
 }
 
-// ReceiveMessages starts reading frames from the daemon and returns decoded
-// messages on the returned channel. The channel is closed when the connection
-// ends or the context is cancelled.
-// If heartbeat tracking is enabled, heartbeat events are automatically processed
-// before being forwarded to the channel.
+// ReceiveMessages starts reading frames and returns decoded messages on the
+// returned channel. The channel is closed when the connection ends or the
+// context is cancelled. Heartbeat events are auto-processed before forwarding.
 func (c *Client) ReceiveMessages(ctx context.Context) (<-chan interface{}, error) {
 	c.mu.Lock()
 	if c.conn == nil || c.closed {
@@ -810,13 +800,12 @@ func (c *Client) ReceiveMessages(ctx context.Context) (<-chan interface{}, error
 	return ch, nil
 }
 
-// ReadEvent reads a single event from the daemon. Returns nil, nil on normal connection close.
-// After a timeout error, the connection enters a failed state and subsequent reads will panic.
-// Callers should NOT retry ReadEvent after receiving a timeout error.
+// ReadEvent reads a single event. Returns nil, nil on normal close.
+// After a timeout error, subsequent reads will panic; do not retry.
 //
-// ReadEvent consults the multiplexer: a frame matching another pending RPC or
-// subscription waiter is routed to that waiter (and skipped), so concurrent
-// in-flight RPCs on a shared reader no longer discard each other's responses.
+// Frames matching a pending RPC or subscription waiter are routed to that
+// waiter (and skipped), so concurrent in-flight RPCs on a shared reader
+// do not discard each other's responses.
 func (c *Client) ReadEvent() (map[string]interface{}, error) {
 	c.mu.Lock()
 	if len(c.pendingEvents) > 0 {

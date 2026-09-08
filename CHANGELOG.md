@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.17] - 2026-09-08
+
+### Added
+- `DaemonSession.SetClarificationMode(ctx, mode, interactionMode)` — hot-swap the clarification mode on a running goal (Python `DaemonSession.set_clarification_mode` parity). Sends `loop_set_clarification_mode` on the RPC sidecar with `mode` ("auto"/"manual") and an optional `interactionMode` ("bypass" swaps to the bypass graph; `""` omits the field to match the Python "omit when None" semantics). Returns `applied=true` when the swap lands on a live goal, `false` when no `loop_id` is bound or no goal is running.
+
+### Changed
+- Handshake `ClientVersion` reports `0.4.17`
+
 ## [0.4.16] - 2026-08-07
 
 ### Added

@@ -9,10 +9,9 @@ import (
 
 // ManagedClient is the subset of the core Client that appkit's ConnectionPool
 // and TurnRunner depend on. The concrete *soothe.Client satisfies it; tests
-// supply a fake. Defining it as an interface lets appkit be unit-tested
-// without a live WebSocket daemon.
+// supply a fake.
 //
-// Note: loop bootstrap (loop_new + subscribe) is performed via a separate
+// Loop bootstrap (loop_new + subscribe) is performed via a separate
 // BootstrapFunc (see DefaultBootstrapFunc) because soothe.BootstrapLoopSession
 // is a package-level function, not a method on *Client.
 type ManagedClient interface {
@@ -35,8 +34,7 @@ type ManagedClient interface {
 }
 
 // ClientFactory builds a fresh ManagedClient for a daemon URL and config.
-// ConnectionPool calls it per pooled connection. Applications may supply a
-// custom factory (e.g. wrapping *soothe.Client with logging/metrics).
+// ConnectionPool calls it per pooled connection.
 type ClientFactory func(url string, cfg *soothe.Config) ManagedClient
 
 // DefaultClientFactory returns a ClientFactory that builds a *soothe.Client.
@@ -48,11 +46,6 @@ func DefaultClientFactory() ClientFactory {
 
 // BootstrapFunc creates a new loop (loop_new + subscribe) on a connected
 // client and returns the new loop id.
-//
-// Parameters match daemon loop_new scope (workspace + user), not an
-// application conversation key. When a product needs its AppKey during
-// bootstrap (e.g. Triarch ephemeral chat_type lookup), read it from ctx via
-// AppKeyFromContext — ConnectionPool always attaches it before calling.
 type BootstrapFunc func(ctx context.Context, client ManagedClient, workspaceID, userID string, cfg *soothe.Config) (string, error)
 
 // DefaultBootstrapFunc calls soothe.BootstrapLoopSession on the underlying

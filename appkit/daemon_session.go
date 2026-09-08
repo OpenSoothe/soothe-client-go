@@ -24,7 +24,7 @@ type TurnChunk struct {
 // EarlyDropFn filters non-actionable stream chunks before yield.
 type EarlyDropFn func(namespace []interface{}, mode string, data interface{}) bool
 
-// DaemonSession is a dual-socket loop session (Python/TS DaemonSession parity).
+// DaemonSession is a dual-socket loop session.
 // Stream socket carries turns/events; RPC sidecar handles metadata RPCs.
 type DaemonSession struct {
 	wsURL                string
@@ -210,7 +210,7 @@ type SendTurnOptions struct {
 	ModelParams         map[string]interface{}
 	Attachments         []map[string]interface{}
 	ClarificationMode   string
-	InteractionMode      string
+	InteractionMode     string
 	ClarificationAnswer bool
 	IntentHint          string
 }
@@ -252,9 +252,7 @@ func (s *DaemonSession) SendTurn(ctx context.Context, text string, opts *SendTur
 	return s.client.SendInput(ctx, text, inputOpts...)
 }
 
-// InvokeSkill resolves a skill on the stream socket (required for turn enqueue)
-// and waits for the echo response. interactionMode sets the CoreAgent
-// interaction mode ("agent" / "ask"); pass "" for the daemon default.
+// InvokeSkill resolves a skill on the stream socket and waits for the echo.
 func (s *DaemonSession) InvokeSkill(ctx context.Context, skill, args, interactionMode string) (map[string]interface{}, error) {
 	s.readMu.Lock()
 	defer s.readMu.Unlock()
@@ -298,6 +296,34 @@ func (s *DaemonSession) FetchLoopHistory(ctx context.Context, loopID string) (ma
 		return nil, err
 	}
 	return soothe.FetchLoopHistory(ctx, s.rpcClient, loopID, 30*time.Second)
+}
+
+// SetClarificationMode hot-swaps the agent mode on the running goal.
+// Returns applied=true when the swap landed on a live goal, false otherwise.
+func (s *DaemonSession) SetClarificationMode(ctx context.Context, mode, interactionMode string) (bool, error) {
+	loopID := s.LoopID()
+	if loopID == "" {
+		return false, nil
+	}
+	s.rpcMu.Lock()
+	defer s.rpcMu.Unlock()
+	if err := s.ensureRPCConnectedLocked(ctx); err != nil {
+		return false, err
+	}
+	payload := map[string]interface{}{
+		"type":    "loop_set_clarification_mode",
+		"loop_id": loopID,
+		"mode":    mode,
+	}
+	if interactionMode != "" {
+		payload["interaction_mode"] = interactionMode
+	}
+	result, err := s.rpcClient.RequestResponse(ctx, payload, "loop_set_clarification_mode_response", 5*time.Second)
+	if err != nil {
+		return false, err
+	}
+	applied, _ := result["applied"].(bool)
+	return applied, nil
 }
 
 // IterTurnChunks streams turn chunks until idle/stopped/stream.end.

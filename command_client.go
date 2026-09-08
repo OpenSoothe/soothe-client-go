@@ -7,7 +7,7 @@ import (
 )
 
 // CommandClient performs ephemeral one-shot RPCs (jobs / cron / autopilot)
-// without holding a streaming subscription. Mirrors Python CommandClient.
+// without holding a streaming subscription.
 type CommandClient struct {
 	URL     string
 	Timeout time.Duration
